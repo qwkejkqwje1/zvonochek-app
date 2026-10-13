@@ -1,0 +1,26 @@
+# Binaries
+zvonochek
+zvonochek.exe
+zvonochek-relay
+zvonochek-relay.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Keys & Secrets (Never commit private node identity keys)
+*.key
+identity.key
+relay_identity.key
+
+# Downloads & Temp
+downloads/
+zvonochek_uploads/
+*.part
+*.tmp
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
