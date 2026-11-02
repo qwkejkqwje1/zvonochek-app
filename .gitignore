@@ -1,21 +1,19 @@
-# Binaries
+# Build output
+/dist/
 /zvonochek
-zvonochek.exe
 /zvonochek-relay
-zvonochek-relay.exe
 *.exe
 *.dll
 *.so
 *.dylib
+*.test
+*.out
 
-# Keys & Secrets (Never commit private node identity keys)
+# Keys & secrets (never commit node identity keys)
 *.key
-identity.key
-relay_identity.key
 
-# Downloads & Temp
+# Downloads & temp
 downloads/
-zvonochek_uploads/
 *.part
 *.tmp
 

@@ -1,48 +1,43 @@
 @echo off
-chcp 65001 >nul
-echo ========================================================
-echo   Сборка и проверка Звоночек 2.2 (Клиент + Relay + Тесты)
-echo ========================================================
+rem Build Zvonochek for Windows (requires Go 1.26+ from https://go.dev/dl/).
+rem   build_windows.bat        tests + build
+rem   build_windows.bat fast   build only
+setlocal EnableExtensions
+cd /d "%~dp0"
 
-set GOOS=windows
-set GOARCH=amd64
-
-echo [1/4] Загрузка и проверка зависимостей (go mod tidy)...
-go mod tidy
-if %ERRORLEVEL% NEQ 0 (
-    echo [ОШИБКА] Не удалось выполнить go mod tidy.
-    pause
-    exit /b 1
+where go >nul 2>nul
+if errorlevel 1 (
+  echo Go is not installed. Download it from https://go.dev/dl/ and run this script again.
+  pause
+  exit /b 1
 )
 
-echo [2/4] Запуск модульных тестов менеджера соединений и протокола (go test ./...)...
-go test -v ./internal/...
-if %ERRORLEVEL% NEQ 0 (
-    echo [ОШИБКА] Модульные тесты не прошли!
-    pause
-    exit /b 1
-)
+set CGO_ENABLED=0
+set COMMIT=dev
+for /f %%i in ('git rev-parse --short HEAD 2^>nul') do set COMMIT=%%i
+set LDFLAGS=-s -w -X zvonochek2/internal/version.Commit=%COMMIT%
 
-echo [3/4] Компиляция клиента zvonochek.exe...
-go build -ldflags="-s -w" -o zvonochek.exe ./cmd/zvonochek
-if %ERRORLEVEL% NEQ 0 (
-    echo [ОШИБКА] Не удалось собрать zvonochek.exe
-    pause
-    exit /b 1
-)
+if /i "%~1"=="fast" goto build
+echo [1/3] go vet + go test
+go vet ./...
+if errorlevel 1 goto fail
+go test -count=1 ./...
+if errorlevel 1 goto fail
 
-echo [4/4] Компиляция ретранслятора zvonochek-relay.exe...
-go build -ldflags="-s -w" -o zvonochek-relay.exe ./cmd/relay
-if %ERRORLEVEL% NEQ 0 (
-    echo [ОШИБКА] Не удалось собрать zvonochek-relay.exe
-    pause
-    exit /b 1
-)
-
+:build
+if not exist dist mkdir dist
+echo [2/3] dist\zvonochek.exe
+go build -trimpath -ldflags "%LDFLAGS% -H windowsgui" -o dist\zvonochek.exe ./cmd/zvonochek
+if errorlevel 1 goto fail
+echo [3/3] dist\zvonochek-relay.exe
+go build -trimpath -ldflags "%LDFLAGS%" -o dist\zvonochek-relay.exe ./cmd/zvonochek-relay
+if errorlevel 1 goto fail
 echo.
-echo ========================================================
-echo [УСПЕХ] Тесты пройдены, сборка успешно завершена!
-echo   - Клиент:        zvonochek.exe
-echo   - Relay-сервер:  zvonochek-relay.exe
-echo ========================================================
+echo Done: %~dp0dist\zvonochek.exe
+exit /b 0
+
+:fail
+echo.
+echo BUILD FAILED
 pause
+exit /b 1
