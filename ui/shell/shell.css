@@ -523,6 +523,10 @@ h2 {
   color: var(--text-3);
   font-size: 12.5px;
 }
+.set .t small.warn {
+  color: var(--warn);
+  margin-top: 3px;
+}
 .set .field {
   max-width: 280px;
 }

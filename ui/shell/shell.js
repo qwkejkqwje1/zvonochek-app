@@ -572,6 +572,8 @@ function renderSettings() {
   $('#setP2p').checked = s.p2p !== false;
   $('#setReceipts').checked = s.readReceipts !== false;
   $('#setAutoImg').checked = s.autoImages !== false;
+  $('#setNotify').checked = s.notifications !== false;
+  $('#notifyTest').disabled = s.notifications === false;
   if (document.activeElement !== $('#setWorker')) $('#setWorker').value = s.workerUrl || '';
   for (const b of $$('#setTheme button')) b.classList.toggle('on', b.dataset.v === (s.theme || 'auto'));
 }
@@ -625,13 +627,80 @@ $('#setAutostart').addEventListener('change', async (e) => {
     toast('Не удалось: ' + (err.message || err));
   }
 });
+$('#setNotify').addEventListener('change', async (e) => {
+  try {
+    await call('host_notify_set', { enabled: e.target.checked });
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    toast('Не удалось: ' + (err.message || err));
+  }
+});
+$('#notifyTest').addEventListener('click', () =>
+  call('host_notify_test').then(
+    () =>
+      toast(
+        'Уведомление отправлено. Не появилось — проверьте «Параметры Windows → Система → Уведомления» и режим «Не беспокоить» Windows',
+        8000
+      ),
+    (e) => toast('Не показалось: ' + (e.message || e))
+  )
+);
+$('#dataOpen').addEventListener('click', () =>
+  call('host_open_data').catch((e) => toast('Не открылось: ' + (e.message || e)))
+);
+$('#oldDataDel').addEventListener('click', async () => {
+  if (
+    !(await confirmDialog(
+      'Удалить копию прежней версии?',
+      `Удалятся ${S.hostInfo.oldData || 'данные в AppData'} и профиль WebView2 прежней версии. Всё нужное уже скопировано рядом с программой. Не удаляйте, если ещё пользуетесь установленной версией ZVONochek.`,
+      'Удалить',
+      true
+    ))
+  )
+    return;
+  try {
+    await call('host_old_data_remove');
+    $('#rowOldData').classList.add('hidden');
+    toast('Копия прежней версии удалена');
+  } catch (e) {
+    toast('Не удалилось: ' + (e.message || e), 8000);
+  }
+});
+$('#cleanupBtn').addEventListener('click', async () => {
+  if (
+    !(await confirmDialog(
+      'Убрать следы и выйти?',
+      'Снимем автозапуск, ссылки zvonochek:// и регистрацию уведомлений Windows, затем ZVONochek закроется. Папка ZVONochek-data рядом с программой останется. Если снова запустить ZVONochek на этом компьютере, ссылки и уведомления зарегистрируются заново.',
+      'Убрать и выйти',
+      true
+    ))
+  )
+    return;
+  try {
+    const r = await call('host_cleanup');
+    toast('Убрано: ' + ((r && r.done) || []).join(', '), 4000);
+    setTimeout(() => call('host_quit').catch(() => {}), 1500);
+  } catch (e) {
+    toast('Не получилось: ' + (e.message || e), 8000);
+  }
+});
 $('#updBtn').addEventListener('click', async () => {
   const btn = $('#updBtn');
   btn.disabled = true;
   try {
     const r = await call('host_update_check');
     if (!r || !r.available) toast('Установлена последняя версия');
-    else if (
+    else if (S.hostInfo.updateMode === 'replace') {
+      // переносная версия: обновление — новый ZVONochek.exe вместо старого
+      if (
+        await confirmDialog(
+          `Доступна версия ${r.version}`,
+          'Скачайте новый ZVONochek.exe со страницы релизов, закройте ZVONochek (значок в трее → Выход) и положите новый файл вместо старого. Папку ZVONochek-data не трогайте — в ней ваши данные.',
+          'Открыть страницу'
+        )
+      )
+        call('host_open_external', { url: RELEASES }).catch((e) => toast('Не открылось: ' + (e.message || e)));
+    } else if (
       await confirmDialog(`Доступна версия ${r.version}`, r.notes || 'Установить обновление сейчас? Приложение перезапустится.', 'Обновить')
     ) {
       toast('Загрузка обновления…', 60000);
@@ -965,6 +1034,26 @@ function setupMobile() {
   };
 }
 
+// ---------- ПК: где данные (переносная версия — рядом с exe), уведомления Windows ----------
+function setupDesktopData() {
+  const hi = S.hostInfo;
+  if (hi.winNotify) $('#rowNotify').classList.remove('hidden');
+  if (hi.dataDir) {
+    $('#rowData').classList.remove('hidden');
+    $('#dataTitle').textContent = hi.portable ? 'Данные рядом с программой' : 'Папка с данными';
+    $('#setDataDir').textContent = hi.dataDir;
+  }
+  if (hi.dataWarning) {
+    $('#setDataWarn').textContent = hi.dataWarning;
+    $('#setDataWarn').classList.remove('hidden');
+  }
+  if (hi.oldData) {
+    $('#rowOldData').classList.remove('hidden');
+    $('#setOldDir').textContent = hi.oldData;
+  }
+  if (hi.cleanup) $('#rowCleanup').classList.remove('hidden');
+}
+
 // ---------- старт ----------
 async function start() {
   hydrateIcons();
@@ -975,7 +1064,7 @@ async function start() {
   }
   S.info = await call('app_info');
   $('#brandVer').textContent = `версия ${S.info.version}`;
-  $('#aboutVer').textContent = `Версия ${S.info.version} · ${S.info.platform}${S.info.protected ? ' · данные защищены DPAPI' : ''}`;
+  $('#aboutVer').textContent = `Версия ${S.info.version} · ${S.info.platform}${S.hostInfo.portable ? ' · переносная' : ''}${S.info.protected ? ' · данные защищены DPAPI' : ''}`;
   $('#aboutWeb').textContent = `Веб-клиент v${S.info.webVersion}`;
   await Promise.all([loadSettings(), loadLinks(), loadHistory()]);
   await initContacts({
@@ -1007,6 +1096,7 @@ async function start() {
     S.hostInfo.autostart = false;
   }
   if (S.hostInfo.mobile) setupMobile();
+  else setupDesktopData();
   // входящие поверх окна — если у хоста нет отдельного всплывающего окна
   if (!S.hostInfo.incomingWindow) mountIncoming($('#incOverlay'), { mobile: !!S.hostInfo.mobile });
   if (!S.settings.onboarded) onboarding();

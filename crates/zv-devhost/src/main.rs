@@ -27,6 +27,8 @@ struct App {
     pick: std::sync::Mutex<Vec<String>>,
     /// Что «открыли» через `host_open_path` (тесты читают через `dev_opened`).
     opened: std::sync::Mutex<Vec<Value>>,
+    /// Папка данных (как у переносной версии на Windows — «рядом с программой»).
+    data: PathBuf,
 }
 
 fn arg(name: &str) -> Option<String> {
@@ -108,6 +110,7 @@ async fn main() -> anyhow::Result<()> {
         ui,
         pick: Default::default(),
         opened: Default::default(),
+        data: data.clone(),
     });
     let router = axum::Router::new()
         .route("/ipc", get(ipc))
@@ -185,11 +188,38 @@ async fn client(app: Arc<App>, ws: WebSocket) {
         // команды хоста: в devhost окна — это вкладки, их открывает сама страница
         let host = match cmd.as_str() {
             // --mobile: оболочка в режиме телефона (как Android: нижние вкладки, «Назад», без трея)
+            // ПК — как переносная версия Windows: папка данных, уведомления, «Убрать следы»;
+            // `old` в папке данных — будто копия прежней версии в AppData
             "host_info" => Some(Ok(if std::env::args().any(|a| a == "--mobile") {
                 json!({"host": "devhost", "mobile": true, "background": true})
             } else {
-                json!({"host": "devhost"})
+                let old = app.data.join("old");
+                json!({"host": "devhost", "portable": true, "updateMode": "replace",
+                    "dataDir": app.data.display().to_string(), "winNotify": true, "cleanup": true,
+                    "oldData": old.is_dir().then(|| old.display().to_string())})
             })),
+            "host_notify_set" => {
+                let on = args.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+                app.opened.lock().unwrap().push(json!({"notify": on}));
+                Some(
+                    app.core
+                        .dispatch_sync("settings_set", &json!({"patch": {"notifications": on}}))
+                        .unwrap_or_else(|| Err("нет команды".into()))
+                        .map(|_| json!({"enabled": on})),
+                )
+            }
+            "host_notify_test" | "host_open_data" | "host_quit" => {
+                app.opened.lock().unwrap().push(json!({"host": cmd}));
+                Some(Ok(Value::Null))
+            }
+            "host_cleanup" => {
+                app.opened.lock().unwrap().push(json!({"host": cmd}));
+                Some(Ok(json!({"done": ["ссылки zvonochek://", "уведомления Windows"]})))
+            }
+            "host_old_data_remove" => {
+                let old = app.data.join("old");
+                Some(std::fs::remove_dir_all(&old).map(|_| json!({"removed": [old.display().to_string()]})).map_err(|e| e.to_string()))
+            }
             "host_open_call" => Some(Ok(host_open_call(&args))),
             "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" => Some(Ok(Value::Null)),
             // как в приложении: путь берём у ядра (только файлы чатов), но не открываем — запоминаем

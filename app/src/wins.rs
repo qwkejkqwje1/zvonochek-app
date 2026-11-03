@@ -40,8 +40,12 @@ fn base<'a>(
 ) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
     let nav_app = app.clone();
     let win_app = app.clone();
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
-        .additional_browser_args(BROWSER_ARGS)
+    let mut b = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()));
+    // переносная версия: профиль WebView2 — в папке данных рядом с exe (иначе Tauri берёт %LOCALAPPDATA%)
+    if let Some(dir) = crate::portable::get().and_then(|p| p.webview.clone()) {
+        b = b.data_directory(dir);
+    }
+    b.additional_browser_args(BROWSER_ARGS)
         .use_https_scheme(true)
         .on_navigation(move |u| {
             if is_app_url(u) {
@@ -60,12 +64,13 @@ pub fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow
     if let Some(w) = app.get_webview_window("main") {
         return Ok(w);
     }
-    base(app, "main", "shell/index.html")
+    // создаём скрытым: сначала прежние размер и место, потом показываем (без прыжка из центра)
+    let w = base(app, "main", "shell/index.html")
         .title("ZVONochek")
         .inner_size(980.0, 680.0)
         .min_inner_size(400.0, 520.0)
         .center()
-        .visible(visible)
+        .visible(false)
         .initialization_script(PRELOAD)
         .on_permission_request(|_, kind| match kind {
             PermissionKind::Autoplay | PermissionKind::ClipboardRead => PermissionResponse::Allow,
@@ -74,7 +79,81 @@ pub fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow
             }
             _ => PermissionResponse::Default,
         })
-        .build()
+        .build()?;
+    let max = restore_main_state(app, &w);
+    if visible {
+        let _ = w.show();
+        if max {
+            let _ = w.maximize();
+        }
+        let _ = w.set_focus();
+    }
+    Ok(w)
+}
+
+/// Размер и место главного окна (window.json в папке данных; физические пиксели, как у системы).
+#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Copy)]
+struct WinState {
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    max: bool,
+}
+
+fn load_main_state() -> Option<WinState> {
+    let raw = std::fs::read(crate::portable::window_file()?).ok()?;
+    serde_json::from_slice(&raw).ok()
+}
+
+/// Прежние размер и место — если окно попадёт на один из мониторов (монитор могли отключить).
+/// Возвращает, было ли окно развёрнуто.
+fn restore_main_state(app: &AppHandle, w: &WebviewWindow) -> bool {
+    let Some(s) = load_main_state() else {
+        return false;
+    };
+    let visible = app
+        .available_monitors()
+        .map(|ms| {
+            ms.iter().any(|m| {
+                let (p, z) = (m.position(), m.size());
+                let (r, b) = (p.x + z.width as i32, p.y + z.height as i32);
+                // заголовок окна должен быть на экране: за него окно и перетаскивают
+                s.x + s.w as i32 > p.x + 80 && s.x < r - 80 && s.y >= p.y - 8 && s.y < b - 40
+            })
+        })
+        .unwrap_or(false);
+    if s.w >= 300 && s.h >= 300 && visible {
+        let _ = w.set_size(tauri::PhysicalSize::new(s.w, s.h));
+        let _ = w.set_position(tauri::PhysicalPosition::new(s.x, s.y));
+    }
+    s.max
+}
+
+/// Запомнить размер и место главного окна (при закрытии и выходе).
+pub fn save_main_state(app: &AppHandle) {
+    let (Some(w), Some(file)) = (
+        app.get_webview_window("main"),
+        crate::portable::window_file(),
+    ) else {
+        return;
+    };
+    if w.is_minimized().unwrap_or(false) {
+        return;
+    }
+    let mut s = load_main_state().unwrap_or_default();
+    s.max = w.is_maximized().unwrap_or(false);
+    // развёрнутое — запоминаем только флаг, обычный размер остаётся прежним
+    if !s.max
+        && let (Ok(p), Ok(z)) = (w.outer_position(), w.inner_size())
+    {
+        (s.x, s.y, s.w, s.h) = (p.x, p.y, z.width, z.height);
+    }
+    if let Ok(json) = serde_json::to_vec(&s)
+        && let Err(e) = std::fs::write(&file, json)
+    {
+        tracing::warn!("{}: {e}", file.display());
+    }
 }
 
 /// Показать главное окно (создать, если закрыто).
@@ -84,7 +163,9 @@ pub fn show_main(app: &AppHandle) {
     tauri::async_runtime::spawn(async move {
         match build_main(&app, true) {
             Ok(w) => {
-                let _ = w.unminimize();
+                if w.is_minimized().unwrap_or(false) {
+                    let _ = w.unminimize();
+                }
                 let _ = w.show();
                 let _ = w.set_focus();
             }
@@ -329,6 +410,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
             if st.quitting.load(Ordering::SeqCst) {
                 return;
             }
+            save_main_state(app);
             let s = st.core.settings();
             if s.close_to_tray {
                 api.prevent_close();

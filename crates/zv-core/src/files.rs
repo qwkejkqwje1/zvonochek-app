@@ -745,7 +745,9 @@ impl Inner {
             return Err("нет предпросмотра".into());
         }
         let path = self.local_file(&r).ok_or("файл недоступен")?;
-        let data = tokio::fs::read(&path).await.map_err(|_| "файл недоступен")?;
+        let data = tokio::fs::read(&path)
+            .await
+            .map_err(|_| "файл недоступен")?;
         Ok(
             json!({"url": format!("data:{};base64,{}", r.mime, base64::engine::general_purpose::STANDARD.encode(data))}),
         )

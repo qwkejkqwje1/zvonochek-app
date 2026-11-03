@@ -10,6 +10,7 @@
 #[cfg(target_os = "android")]
 mod android;
 mod host;
+mod portable;
 #[cfg(desktop)]
 mod wins;
 #[cfg(mobile)]
@@ -328,18 +329,11 @@ fn chat_preview(m: &Value) -> String {
     }
 }
 
-/// Папка загрузок чатов: ПК — «Загрузки\ZVONochek»; Android — внутри данных приложения
-/// (общая «Download» без MediaStore недоступна; картинки показываются в чате, файлы — «Поделиться»).
-fn downloads_dir(app: &AppHandle, data_dir: &std::path::Path) -> Option<std::path::PathBuf> {
-    if cfg!(mobile) {
-        return Some(data_dir.join("Downloads"));
-    }
-    app.path().download_dir().ok().map(|d| d.join("ZVONochek"))
-}
-
 pub fn quit(app: &AppHandle) {
     let st = app.state::<AppState>();
     st.quitting.store(true, Ordering::SeqCst);
+    #[cfg(desktop)]
+    wins::save_main_state(app);
     app.exit(0);
 }
 
@@ -399,33 +393,44 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
         ))
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(
-            tauri_plugin_window_state::Builder::new()
-                .with_filter(|label| label == "main")
-                .with_state_flags(
-                    tauri_plugin_window_state::StateFlags::SIZE
-                        | tauri_plugin_window_state::StateFlags::POSITION
-                        | tauri_plugin_window_state::StateFlags::MAXIMIZED,
-                )
-                .build(),
-        );
+        .plugin(tauri_plugin_updater::Builder::new().build());
     let builder = builder
         .invoke_handler(tauri::generate_handler![zv, zv_sync])
         .setup(move |app| {
             let handle = app.handle().clone();
-            let data_dir = app.path().app_data_dir()?;
-            let log_dir = app
-                .path()
-                .app_log_dir()
-                .unwrap_or_else(|_| data_dir.join("logs"));
+            // Windows: данные рядом с exe (папка ZVONochek-data), иначе — каталоги приложения
+            let paths = portable::init(app.handle())?;
+            let data_dir = paths.data.clone();
+            let log_dir = paths.logs.clone();
             init_logging(&log_dir);
             tracing::info!(
-                "ZVONochek {} ({}) — данные в {}",
+                "ZVONochek {} ({}) — данные в {}{}",
                 env!("CARGO_PKG_VERSION"),
                 platform(),
-                data_dir.display()
+                data_dir.display(),
+                if paths.portable {
+                    " (переносная версия)"
+                } else {
+                    ""
+                }
             );
+            for n in &paths.notes {
+                tracing::info!("{n}");
+            }
+            if let Some(w) = &paths.warning {
+                tracing::warn!("{w}");
+            }
+            // папку принесли с другого компьютера / из-под другой учётной записи: секреты под DPAPI тут не
+            // открыть, а ядро начало бы с чистого профиля — объясняем и не запускаемся
+            #[cfg(windows)]
+            if paths.portable && portable::foreign_profile(&data_dir) {
+                tracing::error!(
+                    "{}: профиль защищён DPAPI другой учётной записи или другого компьютера",
+                    data_dir.display()
+                );
+                portable::error_box(&portable::foreign_text(&data_dir));
+                std::process::exit(1);
+            }
             let opts = CoreOptions {
                 data_dir: data_dir.clone(),
                 app_version: app.package_info().version.to_string(),
@@ -434,7 +439,7 @@ pub fn run() {
                 dev: cfg!(debug_assertions),
                 signal: None,
                 p2p_n0: true,
-                downloads_dir: downloads_dir(app.handle(), &data_dir),
+                downloads_dir: paths.downloads.clone(),
             };
             let core = tauri::async_runtime::block_on(async { Core::start(opts) })?;
             app.manage(AppState {
@@ -452,6 +457,8 @@ pub fn run() {
                 unread: std::sync::atomic::AtomicU64::new(0),
             });
             tauri::async_runtime::spawn(forward_events(handle.clone()));
+            #[cfg(windows)]
+            portable::on_start(&handle);
             #[cfg(desktop)]
             wins::build_tray(&handle)?;
             #[cfg(target_os = "android")]

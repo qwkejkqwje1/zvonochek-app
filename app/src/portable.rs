@@ -8,13 +8,16 @@
 //! записью Windows; на другой компьютер профиль переносится файлом («Перенос на другое устройство»).
 //! В реестр пишется только то, что без него не работает: ссылки `zvonochek://`, автозапуск (если включён) и
 //! регистрация для уведомлений Windows (если включены); «Убрать следы» снимает всё это.
-//! Android и прочие — каталоги приложения, как раньше.
+//! Установленная версия (рядом uninstall.exe), Android и прочие — каталоги приложения, как раньше.
 
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
-pub const DIR_NAME: &str = "ZVONochek-data";
+#[cfg(windows)]
+const DIR_NAME: &str = "ZVONochek-data";
 #[cfg(windows)]
 const MIGRATED: &str = "migrated-from.txt";
 
@@ -23,6 +26,7 @@ pub struct Paths {
     pub data: PathBuf,
     pub logs: PathBuf,
     /// Профиль WebView2; `None` — по умолчанию Tauri (%LOCALAPPDATA%).
+    #[cfg_attr(mobile, allow(dead_code))]
     pub webview: Option<PathBuf>,
     /// Полученные файлы чатов.
     pub downloads: Option<PathBuf>,
@@ -39,6 +43,12 @@ static PATHS: OnceLock<Paths> = OnceLock::new();
 
 pub fn get() -> Option<&'static Paths> {
     PATHS.get()
+}
+
+/// Размер и место главного окна.
+#[cfg(desktop)]
+pub fn window_file() -> Option<PathBuf> {
+    get().map(|p| p.data.join("window.json"))
 }
 
 pub fn init(app: &AppHandle) -> anyhow::Result<&'static Paths> {
@@ -85,6 +95,14 @@ fn resolve(app: &AppHandle) -> anyhow::Result<Paths> {
     let Some(dir) = exe.parent().map(Path::to_path_buf) else {
         return legacy(app);
     };
+    // установленная версия (установщик кладёт рядом uninstall.exe) — как раньше, AppData:
+    // так работают её автообновление и удаление через «Установленные приложения»
+    if dir.join("uninstall.exe").is_file() {
+        let mut p = legacy(app)?;
+        p.notes
+            .push("установленная версия — данные в AppData".into());
+        return Ok(p);
+    }
     let data = dir.join(DIR_NAME);
     let fallback = |app: &AppHandle, why: String, warning: &str| -> anyhow::Result<Paths> {
         let mut p = legacy(app)?;
@@ -96,7 +114,10 @@ fn resolve(app: &AppHandle) -> anyhow::Result<Paths> {
         if let Err(e) = probe(&dir) {
             return fallback(
                 app,
-                format!("рядом с exe нельзя писать ({}): {e} — данные в AppData", dir.display()),
+                format!(
+                    "рядом с exe нельзя писать ({}): {e} — данные в AppData",
+                    dir.display()
+                ),
                 "Рядом с ZVONochek.exe нельзя сохранять файлы, поэтому данные хранятся в AppData. Чтобы всё было \
                  рядом с программой, переложите ZVONochek.exe в обычную папку (например, «Документы» или на флешку).",
             );
@@ -123,7 +144,10 @@ fn resolve(app: &AppHandle) -> anyhow::Result<Paths> {
                     let _ = std::fs::remove_dir_all(&part);
                     return fallback(
                         app,
-                        format!("копирование из {}: {e} — пока данные в AppData", old.data.display()),
+                        format!(
+                            "копирование из {}: {e} — пока данные в AppData",
+                            old.data.display()
+                        ),
                         "Не удалось скопировать данные рядом с программой, поэтому пока ZVONochek работает с AppData. \
                          Попробует снова при следующем запуске.",
                     );
@@ -187,6 +211,7 @@ fn in_temp(dir: &Path) -> bool {
     canon(dir).starts_with(canon(&std::env::temp_dir()))
 }
 
+#[cfg(windows)]
 fn has_profile(dir: &Path) -> bool {
     dir.join("identity.dat").is_file() || dir.join("settings.json").is_file()
 }
@@ -203,11 +228,18 @@ fn migrate(app: &AppHandle, old: &Path, new: &Path) -> anyhow::Result<usize> {
     if let Ok(local) = app.path().app_local_data_dir() {
         let wv = local.join("EBWebView");
         if wv.is_dir() {
-            n += copy_dir(&wv, &new.join("webview").join("EBWebView"), &|name: &str| {
-                !(name.ends_with("Cache")
-                    || name.ends_with("cache")
-                    || matches!(name, "Crashpad" | "BrowserMetrics" | "Service Worker" | "LOCK" | "lockfile"))
-            })?;
+            n += copy_dir(
+                &wv,
+                &new.join("webview").join("EBWebView"),
+                &|name: &str| {
+                    !(name.ends_with("Cache")
+                        || name.ends_with("cache")
+                        || matches!(
+                            name,
+                            "Crashpad" | "BrowserMetrics" | "Service Worker" | "LOCK" | "lockfile"
+                        ))
+                },
+            )?;
         }
     }
     std::fs::write(new.join(MIGRATED), format!("{}\n", old.display()))?;
@@ -239,12 +271,47 @@ fn copy_dir(from: &Path, to: &Path, keep: &dyn Fn(&str) -> bool) -> anyhow::Resu
 /// не открываются. Ядро в таком случае начало бы с чистого профиля — поэтому не запускаемся и объясняем.
 #[cfg(windows)]
 pub fn foreign_profile(data: &Path) -> bool {
-    ["identity.dat", "contacts.dat", "links.dat"].iter().any(|f| {
-        std::fs::read(data.join(f))
-            .ok()
-            .filter(|raw| raw.starts_with(b"ZVP1"))
-            .is_some_and(|raw| zv_core::protect::open(&raw[4..]).is_err())
-    })
+    ["identity.dat", "contacts.dat", "links.dat"]
+        .iter()
+        .any(|f| {
+            std::fs::read(data.join(f))
+                .ok()
+                .filter(|raw| raw.starts_with(b"ZVP1"))
+                .is_some_and(|raw| zv_core::protect::open(&raw[4..]).is_err())
+        })
+}
+
+/// Текст для `error_box`, когда папка данных с другого компьютера (см. `foreign_profile`).
+#[cfg(windows)]
+pub fn foreign_text(data: &Path) -> String {
+    format!(
+        "Папка с данными ZVONochek создана на другом компьютере или под другой учётной записью Windows:\n{}\n\n\
+         Ключ устройства, контакты и ссылки в ней защищены Windows (DPAPI) и открываются только там, где их \
+         сохранили. Поэтому ZVONochek не запускается с этой папкой — чтобы ничего не потерять.\n\n\
+         Как перенести профиль сюда:\n\
+         1) на прежнем компьютере: Настройки → «Перенос на другое устройство» → Сохранить;\n\
+         2) здесь: переименуйте или удалите папку ZVONochek-data рядом с программой, запустите ZVONochek \
+         и загрузите файл: Настройки → «Перенос на другое устройство» → Загрузить.",
+        data.display()
+    )
+}
+
+/// Запуск на Windows: регистрация для уведомлений (по настройке) и путь автозапуска — exe могли переложить.
+#[cfg(windows)]
+pub fn on_start(app: &AppHandle) {
+    use tauri_plugin_autostart::ManagerExt;
+    if get().is_some_and(|p| p.portable) {
+        let on = app.state::<crate::AppState>().core.settings().notifications;
+        if let Err(e) = toasts_register(app, on) {
+            tracing::warn!("регистрация для уведомлений Windows: {e}");
+        }
+    }
+    let a = app.autolaunch();
+    if a.is_enabled().unwrap_or(false)
+        && let Err(e) = a.enable()
+    {
+        tracing::warn!("обновление пути автозапуска: {e}");
+    }
 }
 
 /// Системное окно с ошибкой до запуска интерфейса.
@@ -253,7 +320,11 @@ pub fn error_box(text: &str) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         MB_ICONERROR, MB_OK, MB_SETFOREGROUND, MessageBoxW,
     };
-    let w = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let w = |s: &str| {
+        s.encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
     let (t, c) = (w(text), w("ZVONochek"));
     unsafe {
         MessageBoxW(
@@ -292,7 +363,7 @@ pub fn toasts_register(app: &AppHandle, on: bool) -> Result<(), String> {
 fn icon_file() -> Option<PathBuf> {
     const PNG: &[u8] = include_bytes!("../icons/128x128.png");
     let f = get()?.data.join("icon.png");
-    if std::fs::metadata(&f).map(|m| m.len() as usize) .ok() != Some(PNG.len()) {
+    if std::fs::metadata(&f).ok().map(|m| m.len()) != Some(PNG.len() as u64) {
         std::fs::write(&f, PNG).ok()?;
     }
     Some(f)
@@ -336,7 +407,9 @@ pub fn remove_old(app: &AppHandle) -> Result<Vec<String>, String> {
     let mut removed = Vec::new();
     for d in dirs {
         // только каталоги приложения (…\com.zvonochek.app) и никогда — папка рядом с exe
-        if d.file_name().map(|n| n.to_string_lossy() != id.as_str()).unwrap_or(true)
+        if d.file_name()
+            .map(|n| n.to_string_lossy() != id.as_str())
+            .unwrap_or(true)
             || d.starts_with(&p.data)
             || !d.is_dir()
         {

@@ -36,9 +36,14 @@ zv-signal = { path = "../crates/zv-signal" }
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 
-# только ПК: трей и автозапуск, один экземпляр, автообновление, размер окна
+# только ПК: трей и автозапуск, один экземпляр, автообновление
+# (размер окна — свой window.json в папке данных: плагин window-state писал бы в AppData)
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2"
-tauri-plugin-window-state = "2"
+
+# Windows, переносная версия: окно ошибки до запуска интерфейса, регистрация для уведомлений без установщика
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6.1"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }

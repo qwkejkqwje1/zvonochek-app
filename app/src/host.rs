@@ -7,6 +7,11 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 
 pub fn notify(app: &AppHandle, title: &str, body: &str) {
     use tauri_plugin_notification::NotificationExt;
+    // ПК: уведомления Windows можно выключить в настройках
+    #[cfg(desktop)]
+    if !app.state::<AppState>().core.settings().notifications {
+        return;
+    }
     if let Err(e) = app.notification().builder().title(title).body(body).show() {
         tracing::warn!("уведомление: {e}");
     }
@@ -28,6 +33,8 @@ pub async fn command(
             } else {
                 None
             };
+            let paths = crate::portable::get();
+            let portable = paths.is_some_and(|p| p.portable);
             // ПК: отдельное окно входящего, автозапуск, автообновление, трей. Android — ничего из этого.
             Ok(json!({
                 "host": "tauri",
@@ -40,6 +47,17 @@ pub async fn command(
                 "background": cfg!(target_os = "android"),
                 "pendingUrl": pending,
                 "logDir": st.log_dir.display().to_string(),
+                // Windows: переносная версия — данные рядом с exe, обновление — заменой exe
+                "portable": portable,
+                "updateMode": if portable { "replace" } else { "install" },
+                "dataDir": paths.filter(|_| cfg!(desktop)).map(|p| p.data.display().to_string()),
+                "dataWarning": paths.and_then(|p| p.warning.clone()),
+                "oldData": paths
+                    .and_then(|p| p.migrated_from.as_ref())
+                    .filter(|d| d.is_dir())
+                    .map(|d| d.display().to_string()),
+                "winNotify": cfg!(windows),
+                "cleanup": cfg!(windows) && portable,
             }))
         }
         "host_open_call" => {
@@ -83,6 +101,46 @@ pub async fn command(
             Ok(Value::Null)
         }
         #[cfg(desktop)]
+        "host_open_data" => {
+            use tauri_plugin_opener::OpenerExt;
+            let p = crate::portable::get().ok_or("нет папки данных")?;
+            app.opener()
+                .open_path(p.data.display().to_string(), None::<&str>)
+                .map_err(|e| e.to_string())?;
+            Ok(Value::Null)
+        }
+        // уведомления Windows: настройка + регистрация в реестре (переносной версии без неё Windows их не покажет)
+        #[cfg(desktop)]
+        "host_notify_set" => {
+            let on = args
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            #[cfg(windows)]
+            if crate::portable::get().is_some_and(|p| p.portable) {
+                crate::portable::toasts_register(app, on)?;
+            }
+            st.core
+                .dispatch_sync("settings_set", &json!({"patch": {"notifications": on}}))
+                .unwrap_or_else(|| Err("нет команды".into()))?;
+            Ok(json!({"enabled": on}))
+        }
+        #[cfg(desktop)]
+        "host_notify_test" => {
+            use tauri_plugin_notification::NotificationExt;
+            app.notification()
+                .builder()
+                .title("ZVONochek")
+                .body("Проверка: уведомления работают")
+                .show()
+                .map_err(|e| e.to_string())?;
+            Ok(Value::Null)
+        }
+        #[cfg(windows)]
+        "host_cleanup" => Ok(json!({"done": crate::portable::cleanup(app)})),
+        #[cfg(windows)]
+        "host_old_data_remove" => Ok(json!({"removed": crate::portable::remove_old(app)?})),
+        #[cfg(desktop)]
         "host_autostart_get" => {
             use tauri_plugin_autostart::ManagerExt;
             let on = app.autolaunch().is_enabled().map_err(|e| e.to_string())?;
@@ -116,6 +174,9 @@ pub async fn command(
         #[cfg(desktop)]
         "host_update_install" => {
             use tauri_plugin_updater::UpdaterExt;
+            if crate::portable::get().is_some_and(|p| p.portable) {
+                return Err("переносная версия обновляется заменой ZVONochek.exe".into());
+            }
             let upd = app
                 .updater()
                 .map_err(|e| e.to_string())?
@@ -294,9 +355,8 @@ pub async fn command(
             Ok(Value::Null)
         }
         #[cfg(mobile)]
-        "host_autostart_get" | "host_autostart_set" | "host_open_logs" => {
-            Err("на телефоне недоступно".into())
-        }
+        "host_autostart_get" | "host_autostart_set" | "host_open_logs" | "host_open_data"
+        | "host_notify_set" | "host_notify_test" => Err("на телефоне недоступно".into()),
         #[cfg(mobile)]
         "host_update_check" | "host_update_install" => {
             Err("на Android обновление — новый APK со страницы релизов".into())
