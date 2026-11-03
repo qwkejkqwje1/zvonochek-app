@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Что ZVONochek может открыть в другом приложении или отправить («Поделиться»): -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- полученные в чатах файлы (Android/data/…/files/Download) -->
+  <external-files-path name="downloads" path="." />
+  <!-- то же, если внешнее хранилище недоступно -->
+  <files-path name="files" path="." />
+  <!-- копии выбранных файлов и сохранённый профиль -->
+  <cache-path name="cache" path="." />
+</paths>

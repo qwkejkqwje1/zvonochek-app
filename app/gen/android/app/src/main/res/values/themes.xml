@@ -1,0 +1,7 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Тёмная тема, как у оболочки (фон #0e1621): без белой вспышки при запуске. -->
+    <style name="Theme.zvonochek" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/zv_bg</item>
+        <item name="colorPrimary">@color/zv_accent</item>
+    </style>
+</resources>

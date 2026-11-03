@@ -1,7 +1,7 @@
 //! zv-devhost — ядро без окна + IPC по WebSocket + раздача `ui/` (разработка и автотесты в Chromium).
 //!
 //! zv-devhost [--port 8790] [--ui ui] [--data /tmp/zvdev] [--local mqtt=ws://127.0.0.1:9001,worker=http://127.0.0.1:8787]
-//!            [--p2p-local] [--mock-worker 8799]
+//!            [--p2p-local] [--mock-worker 8799] [--mobile]
 //!
 //! `--mock-worker PORT` — поднять заглушку Worker (ChatRoom для почтовых ящиков) на 127.0.0.1:PORT;
 //! второй devhost подключается к ней через `--local worker=http://127.0.0.1:PORT`.
@@ -184,7 +184,12 @@ async fn client(app: Arc<App>, ws: WebSocket) {
         };
         // команды хоста: в devhost окна — это вкладки, их открывает сама страница
         let host = match cmd.as_str() {
-            "host_info" => Some(Ok(json!({"host": "devhost"}))),
+            // --mobile: оболочка в режиме телефона (как Android: нижние вкладки, «Назад», без трея)
+            "host_info" => Some(Ok(if std::env::args().any(|a| a == "--mobile") {
+                json!({"host": "devhost", "mobile": true, "background": true})
+            } else {
+                json!({"host": "devhost"})
+            })),
             "host_open_call" => Some(Ok(host_open_call(&args))),
             "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" => Some(Ok(Value::Null)),
             // как в приложении: путь берём у ядра (только файлы чатов), но не открываем — запоминаем

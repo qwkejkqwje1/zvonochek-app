@@ -150,7 +150,7 @@ pub fn open_call(app: &AppHandle, secret: &str, boot: Value) -> Result<Value, St
 }
 
 /// Всплывающее окно входящего звонка — внизу справа, поверх всех, без кражи фокуса.
-pub fn show_incoming(app: &AppHandle) {
+pub fn show_incoming(app: &AppHandle, _call_id: &str, _text: &str) {
     if let Some(w) = app.get_webview_window("incoming") {
         let _ = w.show();
         return;
@@ -182,6 +182,16 @@ pub fn show_incoming(app: &AppHandle) {
         tracing::error!("окно входящего: {e}");
     }
 }
+
+/// Окно звонка сообщило, что звонок закончен: закрыть его.
+pub fn call_done(_app: &AppHandle, window: &WebviewWindow) {
+    if window.label().starts_with("call-") {
+        let _ = window.close();
+    }
+}
+
+/// ПК: звонок — в своём окне, загрузка оболочки его не касается.
+pub fn shell_loaded(_app: &AppHandle, _window: &WebviewWindow) {}
 
 pub fn close_incoming(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("incoming") {

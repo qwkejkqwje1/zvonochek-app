@@ -3,8 +3,13 @@ name = "zvonochek"
 version.workspace = true
 edition.workspace = true
 publish.workspace = true
-description = "ZVONochek для ПК — звонки по ссылке"
+description = "ZVONochek — звонки и чаты (ПК и Android)"
 default-run = "zvonochek"
+
+# Android собирает библиотеку (cdylib) и запускает её из MainActivity; ПК — бинарник zvonochek поверх неё.
+[lib]
+name = "zvonochek_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -14,14 +19,10 @@ anyhow = "1.0.104"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.154"
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-autostart = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
-tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
-tauri-plugin-updater = "2"
-tauri-plugin-window-state = "2"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "time", "sync"] }
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
@@ -30,3 +31,14 @@ url = "2.5.7"
 zv-core = { path = "../crates/zv-core" }
 zv-proto = { path = "../crates/zv-proto" }
 zv-signal = { path = "../crates/zv-signal" }
+
+# Android: вызовы из Kotlin в ядро (та же версия, что у tao/wry)
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+# только ПК: трей и автозапуск, один экземпляр, автообновление, размер окна
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-updater = "2"
+tauri-plugin-window-state = "2"
