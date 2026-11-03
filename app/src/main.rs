@@ -233,9 +233,19 @@ async fn forward_events(app: AppHandle) {
                         .as_str()
                         .filter(|n| !n.is_empty())
                         .unwrap_or("Новое сообщение");
-                    host::notify(&app, name, &chat_preview(m));
+                    // группа: заголовок — название группы, в тексте — кто написал
+                    let body = match p["who"].as_str().filter(|w| !w.is_empty()) {
+                        Some(who) => format!("{who}: {}", chat_preview(m)),
+                        None => chat_preview(m),
+                    };
+                    host::notify(&app, name, &body);
                     wins::flash_main(&app);
                 }
+            }
+            "group:joined" => {
+                let name = ev.payload["name"].as_str().unwrap_or("");
+                let by = ev.payload["by"].as_str().filter(|b| !b.is_empty()).unwrap_or("Контакт");
+                host::notify(&app, "Новая группа", &format!("{by} добавил(а) вас в группу «{name}»"));
             }
             "chat:unread" => {
                 let n = ev.payload["total"].as_u64().unwrap_or(0);

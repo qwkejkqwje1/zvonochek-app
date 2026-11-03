@@ -1,6 +1,6 @@
-// Чаты с контактами: список слева, переписка справа (в узком окне — по очереди).
-// Сообщения, статусы, очередь доставки (P2P → комната контакта → почтовый ящик) и файлы — в ядре:
-// crates/zv-core/src/chats.rs, files.rs. Здесь — только страница «Чаты».
+// Чаты с контактами и группы: список слева, переписка справа (в узком окне — по очереди).
+// Сообщения, статусы, очередь доставки (P2P → комната контакта/группы → почтовый ящик) и файлы — в ядре:
+// crates/zv-core/src/chats.rs, groups.rs, files.rs. Здесь — только страница «Чаты».
 import {
   $,
   h,
@@ -17,13 +17,23 @@ import {
   copyText,
   dialog,
   confirmDialog,
+  promptDialog,
   menu,
   openCall,
 } from './lib.js';
-import { C as CT, callContact, contactById, safetyDialog, inviteDialog, addDialog } from './contacts.js';
+import {
+  C as CT,
+  callContact,
+  contactById,
+  contactByPeer,
+  safetyDialog,
+  inviteDialog,
+  addDialog,
+  offerContact,
+} from './contacts.js';
 
 export const CH = {
-  list: [], // чаты (по одному на контакт): chats_list
+  list: [], // чаты (по одному на контакт) и группы (group: true): chats_list
   unread: 0,
   cur: null, // открытый чат (id контакта)
   visible: false, // страница «Чаты» на экране
@@ -56,17 +66,43 @@ const byId = (id) => CH.msgs.find((m) => m.id === id);
 const isImage = (f) => !!f && /^image\/(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.mime || '');
 const cmp = (a, b) => a.lc - b.lc || a.ts - b.ts || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const wide = () => matchMedia('(min-width: 821px)').matches;
+const isGroup = (c) => !!(c && c.group);
+const GROUP_MAX = 6;
+const plural = (n, one, few, many) => {
+  const a = n % 10;
+  const b = n % 100;
+  return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
+};
+const NAME_COLORS = ['#c2185b', '#7b1fa2', '#1565c0', '#00838f', '#2e7d32', '#ef6c00', '#6d4c41', '#ad1457'];
+const nameColor = (id = '') => {
+  let x = 0;
+  for (const ch of id) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+  return NAME_COLORS[x % NAME_COLORS.length];
+};
+const avatar = (c) => (isGroup(c) ? h('div.av.grp', icon('users')) : h('div.av', initials(c.name)));
+const typingText = (c) => {
+  if (!isGroup(c)) return 'печатает…';
+  const w = (c.typingWho || []).filter(Boolean);
+  if (!w.length) return 'печатает…';
+  return w.length === 1 ? `${w[0]} печатает…` : `${w.slice(0, 2).join(', ')}${w.length > 2 ? ' и др.' : ''} печатают…`;
+};
 
 // ---------- загрузка и события ----------
 export async function loadChats() {
   const list = await call('chats_list').catch(() => null);
   if (!Array.isArray(list)) return;
+  const was = chatInfo(CH.cur);
+  const wasLeft = !!(was && was.left);
   CH.list = list;
   CH.unread = list.reduce((n, c) => n + (c.unread || 0), 0);
   onUnread(CH.unread);
   renderList();
-  if (CH.cur && !chatInfo(CH.cur)) closeChat(); // контакт удалён
-  else if (CH.cur) renderHead();
+  const now = chatInfo(CH.cur);
+  if (CH.cur && !now) closeChat(); // контакт или группа удалены
+  else if (CH.cur && isGroup(now) && !!now.left !== wasLeft) {
+    renderConv();
+    renderMsgs({ bottom: true });
+  } else if (CH.cur) renderHead();
 }
 const reloadList = () => {
   clearTimeout(listT);
@@ -114,6 +150,11 @@ function wire() {
     }
     reloadList();
   });
+  on('group:', (ev, p) => {
+    p = p || {};
+    if (ev === 'group:joined') toast(`${p.by || 'Контакт'} добавил(а) вас в группу «${p.name || ''}»`, 4000);
+    reloadList();
+  });
   on('p2p:', () => renderP2p());
   on('host:', (ev, p) => {
     if (ev === 'host:drag') dragShow(!!(p && p.on));
@@ -126,6 +167,7 @@ function wire() {
   document.addEventListener('visibilitychange', syncFocus);
   addEventListener('focus', syncFocus);
   addEventListener('blur', syncFocus);
+  $('#chNewGroup')?.addEventListener('click', () => newGroupDialog());
   $('#chSearch').addEventListener('input', renderList);
   $('#chSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -242,6 +284,7 @@ function onTyping(p) {
   const c = chatInfo(p.chat);
   if (!c) return;
   c.typing = !!p.on;
+  if (isGroup(c)) c.typingWho = p.who || [];
   renderList();
   if (p.chat === CH.cur) renderHead();
 }
@@ -287,10 +330,13 @@ function previewText(m, you = false) {
   let t;
   if (m.deleted) t = 'Сообщение удалено';
   else if (m.kind === 'file' && m.file) t = `${isImage(m.file) ? '🖼' : '📎'} ${m.body || m.file.name}`;
+  else if (m.kind === 'call') t = `${m.file && m.file.video ? '🎥' : '📞'} Групповой звонок`;
   else t = m.body || '';
   t = t.replace(/\s+/g, ' ').trim();
   if (t.length > 120) t = t.slice(0, 120) + '…';
-  return you && m.out ? `Вы: ${t}` : t;
+  if (m.kind === 'sys') return t;
+  if (you && m.out) return `Вы: ${t}`;
+  return you && m.senderName ? `${m.senderName}: ${t}` : t;
 }
 function tick(st) {
   if (st >= 3) return h('span.tk.read', { title: 'Прочитано' }, icon('tick2'));
@@ -345,12 +391,13 @@ function listRow(c) {
         if (e.key === 'Enter') openChat(c.chat);
       },
     },
-    h('div.av-wrap', h('div.av', initials(c.name)), h('span.pres', { class: pc, title: pt })),
+    h('div.av-wrap', avatar(c), isGroup(c) ? null : h('span.pres', { class: pc, title: pt })),
     h(
       'div.body',
       h(
         'div.top',
         h('b', c.name),
+        isGroup(c) && c.left ? h('span.muted.sm', 'вы вышли') : null,
         c.verified ? h('span.vbadge', { title: 'Код безопасности сверен' }, icon('shield', 'sm')) : null,
         h('span.grow'),
         last && last.out && !last.deleted ? tick(last.st) : null,
@@ -359,7 +406,7 @@ function listRow(c) {
       h(
         'div.bot',
         c.typing
-          ? h('span.prev.typing', 'печатает…')
+          ? h('span.prev.typing', typingText(c))
           : h('span.prev', last ? previewText(last, true) : 'Нет сообщений'),
         c.unread ? h('span.pill', c.unread > 99 ? '99+' : String(c.unread)) : null,
       ),
@@ -441,6 +488,7 @@ function renderConv() {
   }
   const ta = h('textarea.field#chInput', { rows: 1, maxlength: 16000, placeholder: 'Сообщение', spellcheck: 'true' });
   const sc = h('div.ch-scroll#chScroll', h('div.ch-msgs#chMsgs'));
+  const readOnly = isGroup(c) && c.left;
   pane.replaceChildren(
     h('div.ch-top#chTop'),
     sc,
@@ -457,16 +505,22 @@ function renderConv() {
       h('span.pill.hidden'),
     ),
     h('div.ch-drop.hidden#chDrop', h('div', icon('clip', 'lg'), h('b', 'Отпустите, чтобы отправить'))),
-    h(
-      'div.ch-compose',
-      h('div.ch-ctx.hidden#chCtx'),
-      h(
-        'div.ch-row',
-        h('button.btn.ghost.icon#chAttach', { title: 'Прикрепить файл', onclick: attach }, icon('clip')),
-        ta,
-        h('button.btn.primary.icon#chSend', { title: 'Отправить (Enter)', onclick: send }, icon('send')),
-      ),
-    ),
+    readOnly
+      ? h(
+          'div.ch-compose.ch-left',
+          h('span', 'Вы больше не участник этой группы — переписка осталась только для чтения.'),
+          h('button.btn.sm', { onclick: () => deleteGroup(c) }, icon('trash', 'sm'), 'Удалить группу'),
+        )
+      : h(
+          'div.ch-compose',
+          h('div.ch-ctx.hidden#chCtx'),
+          h(
+            'div.ch-row',
+            h('button.btn.ghost.icon#chAttach', { title: 'Прикрепить файл', onclick: attach }, icon('clip')),
+            ta,
+            h('button.btn.primary.icon#chSend', { title: 'Отправить (Enter)', onclick: send }, icon('send')),
+          ),
+        ),
   );
   // черновик
   const d = drafts.get(c.chat);
@@ -493,7 +547,7 @@ function renderConv() {
   });
   pane.addEventListener('drop', (e) => {
     const files = [...(e.dataTransfer?.files || [])];
-    if (!files.length) return;
+    if (!files.length || readOnly) return;
     e.preventDefault();
     dragShow(false);
     offerFiles(files.map((f) => ({ file: f, name: f.name, size: f.size })));
@@ -507,6 +561,36 @@ function renderHead() {
   const top = $('#chTop');
   const c = chatInfo(CH.cur);
   if (!top || !c) return;
+  if (isGroup(c)) {
+    const n = (c.members || []).length;
+    const sub = c.typing
+      ? typingText(c)
+      : c.left
+        ? 'вы больше не участник'
+        : `${n} ${plural(n, 'участник', 'участника', 'участников')}`;
+    const canCall = !c.left && n > 1;
+    top.replaceChildren(
+      h('button.btn.ghost.icon.ch-back', { title: 'К списку чатов', onclick: closeChat }, icon('back')),
+      h('div.av-wrap', avatar(c)),
+      h(
+        'div.who.click',
+        { role: 'button', tabindex: '0', title: 'Участники', onclick: () => membersDialog(c.chat) },
+        h('b', c.name),
+        h('small', { class: c.typing ? 'typing' : '' }, sub),
+      ),
+      h(
+        'div.acts',
+        canCall
+          ? h('button.btn.ghost.icon', { title: 'Групповой звонок', onclick: () => callGroup(c, false) }, icon('phone'))
+          : null,
+        canCall
+          ? h('button.btn.ghost.icon', { title: 'Групповой видеозвонок', onclick: () => callGroup(c, true) }, icon('video'))
+          : null,
+        h('button.btn.ghost.icon', { title: 'Ещё', onclick: (e) => groupMenu(e.currentTarget, c) }, icon('more')),
+      ),
+    );
+    return;
+  }
   const [pc, pt] = c.typing ? ['ok', 'печатает…'] : presenceOf(c);
   const ct = contactById(c.chat);
   top.replaceChildren(
@@ -556,6 +640,254 @@ function chatMenu(anchor, c) {
   ]);
 }
 
+// ---------- группы ----------
+async function callGroup(c, video) {
+  try {
+    const r = await call('group_call', { chat: c.chat, video: !!video });
+    // без boot.contact: окно звонка не завершается, когда уходит один из участников
+    await openCall(r.secret, { dir: 'out', peer: r.name, video: !!video });
+  } catch (e) {
+    toast('Не удалось позвонить: ' + (e.message || e), 4000);
+  }
+}
+async function joinGroupCall(m) {
+  try {
+    const r = await call('group_call_join', { chat: m.chat, id: m.id });
+    await openCall(r.secret, { dir: 'in', peer: r.name, video: !!r.video });
+  } catch (e) {
+    toast(e.message || String(e), 4000);
+  }
+}
+
+function groupMenu(anchor, c) {
+  menu(anchor, [
+    { icon: 'users', label: 'Участники', run: () => membersDialog(c.chat) },
+    c.admin &&
+      !c.left && {
+        icon: 'edit',
+        label: 'Переименовать',
+        run: async () => {
+          const n = await promptDialog('Название группы', c.name, { label: 'Новое название увидят все участники.' });
+          if (n && n.trim() && n.trim() !== c.name)
+            call('group_rename', { chat: c.chat, name: n.trim() }).catch((e) => toast(e.message || e));
+        },
+      },
+    {
+      icon: 'trash',
+      label: 'Очистить историю',
+      run: async () => {
+        if (
+          await confirmDialog(
+            `Очистить переписку группы «${c.name}»?`,
+            'Сообщения и файлы удалятся только на этом компьютере. У участников переписка останется.',
+            'Очистить',
+            true,
+          )
+        )
+          call('chat_clear', { chat: c.chat }).catch((e) => toast(e.message || e));
+      },
+    },
+    !c.left && {
+      icon: 'out',
+      label: 'Выйти из группы',
+      danger: true,
+      run: async () => {
+        if (
+          await confirmDialog(
+            `Выйти из группы «${c.name}»?`,
+            c.admin
+              ? 'Вы администратор — группу продолжит вести другой участник. Переписка останется у вас только для чтения.'
+              : 'Новые сообщения перестанут приходить. Переписка останется у вас только для чтения.',
+            'Выйти',
+            true,
+          )
+        )
+          call('group_leave', { chat: c.chat }).catch((e) => toast(e.message || e));
+      },
+    },
+    { icon: 'trash', label: 'Удалить группу', danger: true, run: () => deleteGroup(c) },
+  ]);
+}
+
+async function deleteGroup(c) {
+  const ok = await confirmDialog(
+    `Удалить группу «${c.name}»?`,
+    c.left
+      ? 'Переписка и файлы группы удалятся с этого компьютера.'
+      : 'Вы выйдете из группы, а переписка и файлы удалятся с этого компьютера. У остальных участников группа останется.',
+    'Удалить',
+    true,
+  );
+  if (ok) call('group_delete', { chat: c.chat }).catch((e) => toast(e.message || e));
+}
+
+/** Участники: кто в сети, администратор; администратору — добавить/исключить. */
+async function membersDialog(chat) {
+  let info;
+  try {
+    info = await call('group_info', { chat });
+  } catch (e) {
+    toast(e.message || e);
+    return;
+  }
+  dialog((b, close) => {
+    const list = h('div.gm-list');
+    const draw = () => {
+      list.replaceChildren(
+        ...info.members.map((m) =>
+          h(
+            'div.gm-row',
+            h('div.av-wrap', h('div.av.sm', initials(m.name)), h('span.pres', { class: m.online ? 'ok' : 'off' })),
+            h(
+              'div.grow',
+              h('b', m.me ? `${m.name} (вы)` : m.name),
+              h(
+                'small',
+                [m.admin ? 'администратор' : '', !m.me && !m.contactId ? 'не в контактах' : '']
+                  .filter(Boolean)
+                  .join(' · ') || (m.online ? 'в сети' : ''),
+              ),
+            ),
+            !m.me && !m.contactId
+              ? h(
+                  'button.btn.ghost.icon.sm',
+                  { title: 'Добавить в контакты', onclick: () => offerContact(m.id, m.selfName || m.name) },
+                  icon('userplus', 'sm'),
+                )
+              : null,
+            info.admin && !info.left && !m.me
+              ? h(
+                  'button.btn.ghost.icon.sm',
+                  {
+                    title: 'Исключить из группы',
+                    onclick: async () => {
+                      if (
+                        !(await confirmDialog(
+                          `Исключить «${m.name}» из группы?`,
+                          'Участник больше не получит новых сообщений: у группы сменится ключ.',
+                          'Исключить',
+                          true,
+                        ))
+                      )
+                        return;
+                      try {
+                        await call('group_remove', { chat, member: m.id });
+                        info = await call('group_info', { chat });
+                        draw();
+                      } catch (e) {
+                        toast(e.message || e);
+                      }
+                    },
+                  },
+                  icon('x', 'sm'),
+                )
+              : null,
+          ),
+        ),
+      );
+    };
+    draw();
+    const free = (info.max || GROUP_MAX) - info.members.length;
+    b.append(
+      h('h3', info.name),
+      h('p.muted', `${info.members.length} из ${info.max || GROUP_MAX} участников. Сообщения и звонки идут напрямую между устройствами.`),
+      list,
+      h(
+        'div.actions',
+        info.admin && !info.left && free > 0
+          ? h(
+              'button.btn',
+              {
+                onclick: () => {
+                  close();
+                  pickContacts({
+                    title: 'Добавить в группу',
+                    exclude: info.members.map((m) => m.id),
+                    max: free,
+                    okLabel: 'Добавить',
+                  }).then((ids) => {
+                    if (ids && ids.length)
+                      call('group_add', { chat, members: ids }).catch((e) => toast(e.message || e, 4000));
+                  });
+                },
+              },
+              icon('userplus', 'sm'),
+              'Добавить',
+            )
+          : null,
+        h('span.grow'),
+        h('button.btn.primary', { onclick: () => close() }, 'Готово'),
+      ),
+    );
+  });
+}
+
+/** Выбор контактов (до `max`): Promise<id[] | null>. */
+function pickContacts({ title, exclude = [], max = GROUP_MAX - 1, okLabel = 'Готово', withName = false } = {}) {
+  return new Promise((res) => {
+    const chosen = new Set();
+    let done = false;
+    dialog(
+      (b, close) => {
+        const name = withName ? h('input.field', { placeholder: 'Название группы', maxlength: 60 }) : null;
+        const items = CT.list.filter((c) => !exclude.includes(c.peer));
+        const ok = h('button.btn.primary', { disabled: true }, okLabel);
+        const hint = h('small.muted');
+        const upd = () => {
+          ok.disabled = !chosen.size || (withName && !name.value.trim());
+          hint.textContent = `Выбрано ${chosen.size} из ${max}`;
+        };
+        const rows = items.map((c) => {
+          const cb = h('input', { type: 'checkbox' });
+          cb.addEventListener('change', () => {
+            if (cb.checked && chosen.size >= max) {
+              cb.checked = false;
+              toast(`Можно выбрать до ${max}`);
+              return;
+            }
+            if (cb.checked) chosen.add(c.id);
+            else chosen.delete(c.id);
+            upd();
+          });
+          return h('label.gm-row.pick', cb, h('div.av.sm', initials(c.name)), h('div.grow', h('b', c.name)));
+        });
+        ok.addEventListener('click', () => {
+          done = true;
+          close();
+          res(withName ? { name: name.value.trim(), ids: [...chosen] } : [...chosen]);
+        });
+        if (name) name.addEventListener('input', upd);
+        b.append(
+          h('h3', title),
+          name,
+          items.length
+            ? h('div.gm-list', ...rows)
+            : h('p.muted', 'Некого добавить: сначала добавьте людей в контакты.'),
+          h('div.actions', hint, h('span.grow'), h('button.btn.ghost', { onclick: () => close() }, 'Отмена'), ok),
+        );
+        upd();
+      },
+      { onClose: () => !done && res(null) },
+    );
+  });
+}
+
+export async function newGroupDialog() {
+  if (!CT.list.length) {
+    toast('Сначала добавьте людей в контакты — из них собирается группа');
+    return;
+  }
+  const r = await pickContacts({ title: 'Новая группа', withName: true, okLabel: 'Создать' });
+  if (!r) return;
+  try {
+    const g = await call('group_create', { name: r.name, members: r.ids });
+    await loadChats();
+    openChat(g.chat);
+  } catch (e) {
+    toast(e.message || e, 4000);
+  }
+}
+
 // ---------- сообщения ----------
 function renderMsgs({ keep = false, bottom = false } = {}) {
   const sc = $('#chScroll');
@@ -579,20 +911,28 @@ function renderMsgs({ keep = false, bottom = false } = {}) {
       kids.push(h('div.ch-unread', h('span', 'Непрочитанные сообщения')));
       prev = null;
     }
-    const grp = !!prev && prev.out === m.out && m.ts - prev.ts < 5 * 60e3 && !prev.deleted;
+    if (m.kind === 'sys' || m.kind === 'call') {
+      kids.push(m.kind === 'sys' ? sysNode(m) : callNode(m));
+      prev = null;
+      continue;
+    }
+    const grp =
+      !!prev && prev.out === m.out && (prev.sender || '') === (m.sender || '') && m.ts - prev.ts < 5 * 60e3 && !prev.deleted;
     kids.push(msgNode(m, grp));
     prev = m;
   }
-  if (!CH.msgs.length) {
+  if (!CH.msgs.some((m) => m.kind !== 'sys')) {
     const c = chatInfo(CH.cur);
     kids.push(
       h(
         'div.ch-hello',
-        icon('chat', 'lg'),
+        icon(isGroup(c) ? 'users' : 'chat', 'lg'),
         h('b', 'Напишите первое сообщение'),
         h(
           'small',
-          `Переписка с «${c ? c.name : 'собеседником'}» идёт напрямую между устройствами и хранится только у вас двоих.`,
+          isGroup(c)
+            ? `Переписка группы «${c.name}» идёт напрямую между участниками и хранится только у них.`
+            : `Переписка с «${c ? c.name : 'собеседником'}» идёт напрямую между устройствами и хранится только у вас двоих.`,
         ),
       ),
     );
@@ -652,7 +992,9 @@ async function jumpTo(id) {
 
 function msgNode(m, grp) {
   const f = m.file || {};
-  const sig = [m.st, m.edited, m.deleted, grp, m.body, f.st, f.done, f.err, m.reply && !!byId(m.reply)].join('|');
+  const sig = [m.st, m.edited, m.deleted, grp, m.body, f.st, f.done, f.err, m.reply && !!byId(m.reply), m.senderName].join(
+    '|',
+  );
   const hit = nodes.get(m.id);
   if (hit && hit.sig === sig) return hit.node;
   const b = h('div.bubble');
@@ -661,6 +1003,7 @@ function msgNode(m, grp) {
     b.classList.add('del');
     b.append(h('div.txt', icon('trash', 'sm'), m.out ? 'Вы удалили сообщение' : 'Сообщение удалено', spacer(44)));
   } else {
+    if (!m.out && m.senderName && !grp) b.append(h('div.who', { style: { color: nameColor(m.sender) } }, m.senderName));
     if (m.reply) b.append(quoteNode(m.reply));
     const img = m.kind === 'file' && isImage(m.file) && (m.out || f.st === 'done') && f.size <= IMG_PREVIEW_MAX;
     if (m.kind === 'file' && m.file) b.append(img ? imageNode(m) : fileCard(m));
@@ -697,13 +1040,45 @@ function msgNode(m, grp) {
 }
 const spacer = (w) => h('span.spacer', { style: { width: w + 'px' } });
 
+/** Служебная строка группы: «Аня добавила Веру», «Название изменено…». */
+function sysNode(m) {
+  const sig = 'sys|' + m.body;
+  const hit = nodes.get(m.id);
+  if (hit && hit.sig === sig) return hit.node;
+  const node = h('div.ch-sys', { 'data-id': m.id }, h('span', { title: new Date(m.ts).toLocaleString('ru-RU') }, m.body));
+  nodes.set(m.id, { sig, node });
+  return node;
+}
+
+/** Групповой звонок в ленте: «Присоединиться», пока звонок идёт (до 2 ч). */
+function callNode(m) {
+  const f = m.file || {};
+  const sig = ['call', f.joinable, f.ended, m.senderName].join('|');
+  const hit = nodes.get(m.id);
+  if (hit && hit.sig === sig) return hit.node;
+  const who = m.out ? 'Вы' : m.senderName || 'Участник';
+  const node = h(
+    'div.ch-call',
+    { 'data-id': m.id, class: f.joinable ? 'live' : '' },
+    h('div.ci', icon(f.video ? 'video' : 'phone')),
+    h(
+      'div.cb',
+      h('b', f.video ? 'Групповой видеозвонок' : 'Групповой звонок'),
+      h('small', `${who} · ${fmtTime(m.ts)}${f.joinable ? '' : ' · завершён'}`),
+    ),
+    f.joinable ? h('button.btn.sm.primary', { onclick: () => joinGroupCall(m) }, 'Присоединиться') : null,
+  );
+  nodes.set(m.id, { sig, node });
+  return node;
+}
+
 function quoteNode(id) {
   const q = byId(id);
   const c = chatInfo(CH.cur);
   return h(
     'div.quote',
     { title: 'Перейти к сообщению', onclick: () => jumpTo(id) },
-    h('b', q ? (q.out ? 'Вы' : (c && c.name) || 'Собеседник') : 'Ответ'),
+    h('b', q ? (q.out ? 'Вы' : q.senderName || (c && c.name) || 'Собеседник') : 'Ответ'),
     h('span', q ? previewText(q) : 'сообщение выше'),
   );
 }
@@ -990,7 +1365,12 @@ function renderCtx() {
     icon(CH.edit ? 'edit' : 'reply'),
     h(
       'div.grow',
-      h('b', CH.edit ? 'Изменение сообщения' : `Ответ ${m && m.out ? 'на своё сообщение' : `«${(c && c.name) || ''}»`}`),
+      h(
+        'b',
+        CH.edit
+          ? 'Изменение сообщения'
+          : `Ответ ${m && m.out ? 'на своё сообщение' : `«${(m && m.senderName) || (c && c.name) || ''}»`}`,
+      ),
       h('small', m ? previewText(m) : '…'),
     ),
     h(
@@ -1050,7 +1430,7 @@ function deleteMsg(m) {
             'label.row',
             { style: { cursor: 'pointer', gap: '10px' } },
             h('span.switch', cb, h('span')),
-            `Удалить и у «${(c && c.name) || 'собеседника'}»`,
+            isGroup(c) ? 'Удалить у всех участников' : `Удалить и у «${(c && c.name) || 'собеседника'}»`,
           )
         : null,
       h(
