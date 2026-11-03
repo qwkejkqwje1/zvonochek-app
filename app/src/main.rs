@@ -244,8 +244,15 @@ async fn forward_events(app: AppHandle) {
             }
             "group:joined" => {
                 let name = ev.payload["name"].as_str().unwrap_or("");
-                let by = ev.payload["by"].as_str().filter(|b| !b.is_empty()).unwrap_or("Контакт");
-                host::notify(&app, "Новая группа", &format!("{by} добавил(а) вас в группу «{name}»"));
+                let by = ev.payload["by"]
+                    .as_str()
+                    .filter(|b| !b.is_empty())
+                    .unwrap_or("Контакт");
+                host::notify(
+                    &app,
+                    "Новая группа",
+                    &format!("{by} добавил(а) вас в группу «{name}»"),
+                );
             }
             "chat:unread" => {
                 let n = ev.payload["total"].as_u64().unwrap_or(0);
