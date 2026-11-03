@@ -88,6 +88,10 @@ jobs:
           TAG: ${{ inputs.release_tag }}
           FILE: ${{ steps.apk.outputs.file }}
         run: |
+          case "$FILE" in *-unsigned.apk)
+            echo "::warning::APK без подписи (нет секретов ANDROID_KEYSTORE_*) — в релиз не кладу: установить его нельзя"
+            exit 0;;
+          esac
           # черновик создаёт release.yml (publish) там же, где exe: ZV_RELEASE_REPO или этот репозиторий
           find_id() { gh api "repos/$REPO/releases?per_page=30" --jq ".[] | select(.tag_name==\"$TAG\") | .id" | head -1; }
           ID=$(find_id)
