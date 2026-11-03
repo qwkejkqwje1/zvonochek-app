@@ -44,9 +44,20 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - run: cargo clippy -p zvonochek --target ${{ matrix.target }} -- -D warnings
-      - run: cargo build -p zvonochek --release --target ${{ matrix.target }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install -g @tauri-apps/cli@2.12.4
+      # Тестовый установщик NSIS для ручной проверки. Без файлов автообновления:
+      # ключ подписи обновлений нужен только релизу (release.yml).
+      - name: Установщик NSIS (тестовый)
+        working-directory: app
+        shell: bash
+        run: |
+          tauri build --target ${{ matrix.target }} --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
       - uses: actions/upload-artifact@v4
         with:
-          name: zvonochek-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/zvonochek.exe
-          retention-days: 7
+          name: zvonochek-setup-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14
