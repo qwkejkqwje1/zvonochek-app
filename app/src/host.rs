@@ -35,21 +35,26 @@ pub async fn command(
             };
             let paths = crate::portable::get();
             let portable = paths.is_some_and(|p| p.portable);
-            // ПК: отдельное окно входящего, автозапуск, автообновление, трей. Android — ничего из этого.
+            // ПК: отдельное окно входящего, автозапуск, трей; Windows — самообновление. Android — ничего из этого.
+            #[cfg(windows)]
+            let update_ready = crate::selfupdate::ready();
+            #[cfg(not(windows))]
+            let update_ready: Option<String> = None;
             Ok(json!({
                 "host": "tauri",
                 "mobile": cfg!(mobile),
                 "incomingWindow": cfg!(desktop),
                 "autostart": cfg!(desktop),
-                "updates": cfg!(desktop),
+                "updates": cfg!(windows),
+                "updateReady": update_ready,
                 "tray": cfg!(desktop),
                 // Android: кнопка «Работа в фоне» (ограничения батареи)
                 "background": cfg!(target_os = "android"),
                 "pendingUrl": pending,
                 "logDir": st.log_dir.display().to_string(),
-                // Windows: переносная версия — данные рядом с exe, обновление — заменой exe
+                // Windows: переносная версия — данные рядом с exe, обновление — заменой exe (само)
                 "portable": portable,
-                "updateMode": if portable { "replace" } else { "install" },
+                "updateMode": "self",
                 "dataDir": paths.filter(|_| cfg!(desktop)).map(|p| p.data.display().to_string()),
                 "dataWarning": paths.and_then(|p| p.warning.clone()),
                 "oldData": paths
@@ -157,40 +162,24 @@ pub async fn command(
             if on { a.enable() } else { a.disable() }.map_err(|e| e.to_string())?;
             Ok(json!({"enabled": on}))
         }
-        #[cfg(desktop)]
+        // обновление (Windows): найти → скачать и поставить на место exe → перезапустить
+        #[cfg(windows)]
         "host_update_check" => {
-            use tauri_plugin_updater::UpdaterExt;
-            let upd = app
-                .updater()
-                .map_err(|e| e.to_string())?
-                .check()
-                .await
-                .map_err(|e| e.to_string())?;
-            Ok(match upd {
-                Some(u) => json!({"available": true, "version": u.version, "notes": u.body}),
-                None => json!({"available": false}),
-            })
+            let mut c = st.core.dispatch("update_check", Value::Null).await?;
+            c["ready"] = json!(crate::selfupdate::ready());
+            Ok(c)
         }
-        #[cfg(desktop)]
-        "host_update_install" => {
-            use tauri_plugin_updater::UpdaterExt;
-            if crate::portable::get().is_some_and(|p| p.portable) {
-                return Err("переносная версия обновляется заменой ZVONochek.exe".into());
-            }
-            let upd = app
-                .updater()
-                .map_err(|e| e.to_string())?
-                .check()
-                .await
-                .map_err(|e| e.to_string())?;
-            let Some(u) = upd else {
-                return Ok(json!({"installed": false}));
-            };
-            u.download_and_install(|_, _| {}, || {})
-                .await
-                .map_err(|e| e.to_string())?;
-            st.quitting.store(true, Ordering::SeqCst);
-            app.restart();
+        #[cfg(windows)]
+        "host_update_install" => crate::selfupdate::download_install(app).await,
+        #[cfg(windows)]
+        "host_update_restart" => crate::selfupdate::restart(app),
+        #[cfg(not(windows))]
+        "host_update_check" | "host_update_install" | "host_update_restart" => {
+            Err(if cfg!(mobile) {
+                "на Android обновление — новый APK со страницы релизов".into()
+            } else {
+                "обновление — только в версии для Windows".into()
+            })
         }
         // выбрать файлы для отправки в чат (системный диалог; отмена — пустой список)
         // `{profile: true}` — один файл профиля `.zvp` (перенос с другого компьютера)
@@ -357,16 +346,18 @@ pub async fn command(
         #[cfg(mobile)]
         "host_autostart_get" | "host_autostart_set" | "host_open_logs" | "host_open_data"
         | "host_notify_set" | "host_notify_test" => Err("на телефоне недоступно".into()),
-        #[cfg(mobile)]
-        "host_update_check" | "host_update_install" => {
-            Err("на Android обновление — новый APK со страницы релизов".into())
-        }
         _ => Err(format!("неизвестная команда хоста {cmd}")),
     }
 }
 
 /// Перезапуск приложения (ядро применит подготовленный перенос профиля при старте).
-#[cfg(not(target_os = "android"))]
+/// Windows: новый процесс ждёт выхода этого (`--wait-pid`), иначе «один экземпляр» отдал бы запуск сюда же.
+#[cfg(windows)]
+async fn restart(app: &AppHandle) -> Result<Value, String> {
+    crate::selfupdate::restart(app)
+}
+
+#[cfg(not(any(windows, target_os = "android")))]
 async fn restart(app: &AppHandle) -> Result<Value, String> {
     app.restart()
 }

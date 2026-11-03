@@ -1,18 +1,17 @@
 //! Где хранятся данные.
 //!
-//! Windows — переносная версия: всё лежит в папке `ZVONochek-data` рядом с ZVONochek.exe — настройки, ссылки, контакты,
-//! история, переписка, журналы, профиль WebView2, размер окна, полученные файлы («Загрузки»). Переносите exe вместе
-//! с папкой. Если рядом с exe писать нельзя (Program Files, носитель только для чтения, защита папок Windows) —
-//! как раньше, AppData. Первый запуск копирует данные прежней версии из AppData (оригинал остаётся там же).
-//! Секреты (ключ устройства, контакты, ссылки) — как и раньше под DPAPI: папка открывается под той же учётной
-//! записью Windows; на другой компьютер профиль переносится файлом («Перенос на другое устройство»).
+//! Windows — только переносная версия: всё лежит в папке `ZVONochek-data` рядом с ZVONochek.exe — настройки, ссылки,
+//! контакты, история, переписка, журналы, профиль WebView2, размер окна, полученные файлы («Загрузки»), скачанные
+//! обновления. Переносите exe вместе с папкой. Если рядом с exe писать нельзя (Program Files, носитель только для
+//! чтения) — объясняем и не запускаемся. Первый запуск копирует данные прежней (установленной) версии из AppData
+//! (оригинал остаётся там же).
+//! Секреты (ключ устройства, контакты, ссылки) зашифрованы ключом данных профиля (zv-core vault.rs): без пароля
+//! профиля он запомнен только на этом компьютере (DPAPI), с паролем папку можно открыть и на другом.
 //! В реестр пишется только то, что без него не работает: ссылки `zvonochek://`, автозапуск (если включён) и
 //! регистрация для уведомлений Windows (если включены); «Убрать следы» снимает всё это.
-//! Установленная версия (рядом uninstall.exe), Android и прочие — каталоги приложения, как раньше.
+//! Android и прочие — каталоги приложения.
 
-#[cfg(windows)]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
@@ -23,6 +22,9 @@ const MIGRATED: &str = "migrated-from.txt";
 
 #[derive(Debug, Clone)]
 pub struct Paths {
+    /// Запущенный exe (путь на момент запуска: при обновлении сам файл переименовывается).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    pub exe: PathBuf,
     pub data: PathBuf,
     pub logs: PathBuf,
     /// Профиль WebView2; `None` — по умолчанию Tauri (%LOCALAPPDATA%).
@@ -73,6 +75,7 @@ fn legacy(app: &AppHandle) -> anyhow::Result<Paths> {
         app.path().download_dir().ok().map(|d| d.join("ZVONochek"))
     };
     Ok(Paths {
+        exe: std::env::current_exe().unwrap_or_default(),
         data,
         logs,
         webview: None,
@@ -92,35 +95,21 @@ fn resolve(app: &AppHandle) -> anyhow::Result<Paths> {
 #[cfg(windows)]
 fn resolve(app: &AppHandle) -> anyhow::Result<Paths> {
     let exe = std::env::current_exe()?;
-    let Some(dir) = exe.parent().map(Path::to_path_buf) else {
-        return legacy(app);
-    };
-    // установленная версия (установщик кладёт рядом uninstall.exe) — как раньше, AppData:
-    // так работают её автообновление и удаление через «Установленные приложения»
-    if dir.join("uninstall.exe").is_file() {
-        let mut p = legacy(app)?;
-        p.notes
-            .push("установленная версия — данные в AppData".into());
-        return Ok(p);
-    }
+    let dir = exe
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| anyhow::anyhow!("нет папки программы"))?;
     let data = dir.join(DIR_NAME);
-    let fallback = |app: &AppHandle, why: String, warning: &str| -> anyhow::Result<Paths> {
-        let mut p = legacy(app)?;
-        p.notes.push(why);
-        p.warning = Some(warning.into());
-        Ok(p)
-    };
+    let mut notes = Vec::new();
+    let mut migrated_from = None;
     if !data.is_dir() {
         if let Err(e) = probe(&dir) {
-            return fallback(
-                app,
-                format!(
-                    "рядом с exe нельзя писать ({}): {e} — данные в AppData",
-                    dir.display()
-                ),
-                "Рядом с ZVONochek.exe нельзя сохранять файлы, поэтому данные хранятся в AppData. Чтобы всё было \
-                 рядом с программой, переложите ZVONochek.exe в обычную папку (например, «Документы» или на флешку).",
-            );
+            fatal(&format!(
+                "Рядом с ZVONochek.exe нельзя сохранять файлы:\n{}\n({e})\n\nZVONochek хранит все данные в папке \
+                 ZVONochek-data рядом с программой. Переложите ZVONochek.exe в обычную папку — например, \
+                 «Документы» или на флешку — и запустите снова.",
+                dir.display()
+            ));
         }
         // первый запуск переносной версии: данные прежней — копией, сначала во временную папку рядом
         let old = legacy(app)?;
@@ -132,49 +121,59 @@ fn resolve(app: &AppHandle) -> anyhow::Result<Paths> {
                 Ok(n)
             }) {
                 Ok(n) => {
-                    let mut p = portable_paths(&dir, &data);
-                    p.notes.push(format!(
+                    notes.push(format!(
                         "скопированы данные прежней версии из {} ({n} файлов)",
                         old.data.display()
                     ));
-                    p.migrated_from = Some(old.data);
-                    return Ok(finish(p, &dir));
+                    migrated_from = Some(old.data);
                 }
                 Err(e) => {
                     let _ = std::fs::remove_dir_all(&part);
-                    return fallback(
-                        app,
-                        format!(
-                            "копирование из {}: {e} — пока данные в AppData",
-                            old.data.display()
-                        ),
-                        "Не удалось скопировать данные рядом с программой, поэтому пока ZVONochek работает с AppData. \
-                         Попробует снова при следующем запуске.",
-                    );
+                    let go = ask_box(&format!(
+                        "Не удалось скопировать данные прежней версии ZVONochek из\n{}\n({e})\n\n\
+                         Запустить без них, с чистого профиля? Прежние данные останутся на месте — их можно \
+                         будет перенести файлом профиля.\n\n«Нет» — выйти, ничего не меняя.",
+                        old.data.display()
+                    ));
+                    if !go {
+                        std::process::exit(1);
+                    }
+                    notes.push(format!(
+                        "копирование из {}: {e} — запуск без прежних данных",
+                        old.data.display()
+                    ));
                 }
             }
         }
         std::fs::create_dir_all(&data)?;
     } else if let Err(e) = probe(&data) {
-        return fallback(
-            app,
-            format!("в {} нельзя писать: {e} — данные в AppData", data.display()),
-            "В папку ZVONochek-data нельзя записывать (только для чтения?), поэтому данные хранятся в AppData.",
-        );
+        fatal(&format!(
+            "В папку данных ZVONochek нельзя записывать:\n{}\n({e})\n\nВозможно, флешка или папка только для \
+             чтения. Разрешите запись или переложите ZVONochek.exe вместе с папкой ZVONochek-data в другое место.",
+            data.display()
+        ));
     }
-    let mut p = portable_paths(&dir, &data);
-    if let Ok(s) = std::fs::read_to_string(data.join(MIGRATED)) {
-        let old = PathBuf::from(s.trim());
-        if old.is_dir() {
-            p.migrated_from = Some(old);
-        }
+    let mut p = portable_paths(&exe, &data);
+    p.notes = notes;
+    p.migrated_from = migrated_from.or_else(|| {
+        std::fs::read_to_string(data.join(MIGRATED))
+            .ok()
+            .map(|s| PathBuf::from(s.trim()))
+            .filter(|d| d.is_dir())
+    });
+    if in_temp(&dir) {
+        const TEMP: &str = "ZVONochek запущен из временной папки — похоже, прямо из архива. Распакуйте ZVONochek.exe \
+                            в постоянную папку, иначе данные пропадут при очистке временных файлов.";
+        warn_box(TEMP);
+        p.warning = Some(TEMP.into());
     }
-    Ok(finish(p, &dir))
+    Ok(p)
 }
 
 #[cfg(windows)]
-fn portable_paths(_dir: &Path, data: &Path) -> Paths {
+fn portable_paths(exe: &Path, data: &Path) -> Paths {
     Paths {
+        exe: exe.to_path_buf(),
         data: data.to_path_buf(),
         logs: data.join("logs"),
         webview: Some(data.join("webview")),
@@ -184,18 +183,6 @@ fn portable_paths(_dir: &Path, data: &Path) -> Paths {
         warning: None,
         notes: Vec::new(),
     }
-}
-
-#[cfg(windows)]
-fn finish(mut p: Paths, dir: &Path) -> Paths {
-    if in_temp(dir) {
-        p.warning = Some(
-            "ZVONochek запущен из временной папки — похоже, прямо из архива. Распакуйте ZVONochek.exe в постоянную \
-             папку, иначе данные пропадут при очистке временных файлов."
-                .into(),
-        );
-    }
-    p
 }
 
 #[cfg(windows)]
@@ -267,33 +254,81 @@ fn copy_dir(from: &Path, to: &Path, keep: &dyn Fn(&str) -> bool) -> anyhow::Resu
     Ok(n)
 }
 
-/// Папка данных создана под другой учётной записью Windows или на другом компьютере: секреты под DPAPI здесь
-/// не открываются. Ядро в таком случае начало бы с чистого профиля — поэтому не запускаемся и объясняем.
-#[cfg(windows)]
-pub fn foreign_profile(data: &Path) -> bool {
-    ["identity.dat", "contacts.dat", "links.dat"]
-        .iter()
-        .any(|f| {
-            std::fs::read(data.join(f))
-                .ok()
-                .filter(|raw| raw.starts_with(b"ZVP1"))
-                .is_some_and(|raw| zv_core::protect::open(&raw[4..]).is_err())
-        })
-}
-
-/// Текст для `error_box`, когда папка данных с другого компьютера (см. `foreign_profile`).
-#[cfg(windows)]
+/// Текст для `fatal`, когда папка данных с другого компьютера, а пароль профиля не задан (vault `Foreign`).
 pub fn foreign_text(data: &Path) -> String {
     format!(
-        "Папка с данными ZVONochek создана на другом компьютере или под другой учётной записью Windows:\n{}\n\n\
-         Ключ устройства, контакты и ссылки в ней защищены Windows (DPAPI) и открываются только там, где их \
-         сохранили. Поэтому ZVONochek не запускается с этой папкой — чтобы ничего не потерять.\n\n\
-         Как перенести профиль сюда:\n\
-         1) на прежнем компьютере: Настройки → «Перенос на другое устройство» → Сохранить;\n\
-         2) здесь: переименуйте или удалите папку ZVONochek-data рядом с программой, запустите ZVONochek \
-         и загрузите файл: Настройки → «Перенос на другое устройство» → Загрузить.",
+        "Папка с данными ZVONochek перенесена с другого компьютера (или из-под другой учётной записи Windows), \
+         а пароль профиля не задан:\n{}\n\n\
+         Без пароля профиль открывается только там, где его создали. ZVONochek не запускается с этой папкой — \
+         чтобы ничего не потерять.\n\n\
+         Как открыть профиль здесь:\n\
+         1) на прежнем компьютере запустите ZVONochek и задайте пароль: Настройки → «Пароль профиля»;\n\
+         2) перенесите папку ZVONochek-data сюда снова — ZVONochek спросит пароль.\n\n\
+         Или перенесите профиль файлом: Настройки → «Перенос на другое устройство».",
         data.display()
     )
+}
+
+/// Ошибка до запуска интерфейса: окно с текстом (Windows) и выход.
+pub fn fatal(text: &str) -> ! {
+    #[cfg(windows)]
+    message_box(text, MB_ERROR);
+    #[cfg(not(windows))]
+    eprintln!("ZVONochek: {text}");
+    std::process::exit(1);
+}
+
+#[cfg(windows)]
+const MB_ERROR: u32 = windows_sys::Win32::UI::WindowsAndMessaging::MB_ICONERROR
+    | windows_sys::Win32::UI::WindowsAndMessaging::MB_OK;
+
+#[cfg(windows)]
+fn message_box(text: &str, flags: u32) -> i32 {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_SETFOREGROUND, MessageBoxW};
+    let w = |s: &str| {
+        s.encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
+    let (t, c) = (w(text), w("ZVONochek"));
+    unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            t.as_ptr(),
+            c.as_ptr(),
+            flags | MB_SETFOREGROUND,
+        )
+    }
+}
+
+/// Предупреждение до запуска интерфейса.
+#[cfg(windows)]
+fn warn_box(text: &str) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK};
+    message_box(text, MB_ICONWARNING | MB_OK);
+}
+
+/// Вопрос «Да/Нет» до запуска интерфейса.
+#[cfg(windows)]
+fn ask_box(text: &str) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IDYES, MB_ICONWARNING, MB_YESNO};
+    message_box(text, MB_ICONWARNING | MB_YESNO) == IDYES
+}
+
+/// Нет WebView2: объяснить и предложить страницу загрузки Microsoft.
+#[cfg(windows)]
+pub fn webview2_missing(app: &AppHandle) {
+    use tauri_plugin_opener::OpenerExt;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IDYES, MB_ICONERROR, MB_YESNO};
+    const URL: &str = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+    let text = "Для работы ZVONochek нужен компонент Windows «Microsoft Edge WebView2». На этом компьютере он не \
+                найден (обычно он уже есть в Windows 10 и 11).\n\nОткрыть страницу загрузки Microsoft? После \
+                установки запустите ZVONochek снова.";
+    if message_box(text, MB_ICONERROR | MB_YESNO) == IDYES
+        && let Err(e) = app.opener().open_url(URL, None::<&str>)
+    {
+        tracing::warn!("не открыть {URL}: {e}");
+    }
 }
 
 /// Запуск на Windows: регистрация для уведомлений (по настройке) и путь автозапуска — exe могли переложить.
@@ -311,28 +346,6 @@ pub fn on_start(app: &AppHandle) {
         && let Err(e) = a.enable()
     {
         tracing::warn!("обновление пути автозапуска: {e}");
-    }
-}
-
-/// Системное окно с ошибкой до запуска интерфейса.
-#[cfg(windows)]
-pub fn error_box(text: &str) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        MB_ICONERROR, MB_OK, MB_SETFOREGROUND, MessageBoxW,
-    };
-    let w = |s: &str| {
-        s.encode_utf16()
-            .chain(std::iter::once(0))
-            .collect::<Vec<u16>>()
-    };
-    let (t, c) = (w(text), w("ZVONochek"));
-    unsafe {
-        MessageBoxW(
-            std::ptr::null_mut(),
-            t.as_ptr(),
-            c.as_ptr(),
-            MB_OK | MB_ICONERROR | MB_SETFOREGROUND,
-        );
     }
 }
 

@@ -91,6 +91,18 @@ pub fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow
     Ok(w)
 }
 
+/// Окно пароля профиля (zv-core vault.rs) — до запуска ядра; верный пароль → `zv_unlock` запускает остальное.
+pub fn build_unlock(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    base(app, "unlock", "shell/unlock.html")
+        .title("ZVONochek — пароль профиля")
+        .inner_size(440.0, 460.0)
+        .resizable(false)
+        .maximizable(false)
+        .center()
+        .focused(true)
+        .build()
+}
+
 /// Размер и место главного окна (window.json в папке данных; физические пиксели, как у системы).
 #[derive(serde::Serialize, serde::Deserialize, Default, Clone, Copy)]
 struct WinState {
@@ -403,7 +415,13 @@ pub fn set_unread_badge(app: &AppHandle, n: u64) {
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
     let app = window.app_handle();
-    let st = app.state::<AppState>();
+    let Some(st) = app.try_state::<AppState>() else {
+        // профиль ещё закрыт паролем: закрыли окно пароля — выход
+        if matches!(event, WindowEvent::Destroyed) && window.label() == "unlock" {
+            app.exit(0);
+        }
+        return;
+    };
     let label = window.label().to_string();
     match event {
         WindowEvent::CloseRequested { api, .. } if label == "main" => {

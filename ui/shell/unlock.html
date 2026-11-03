@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZVONochek — пароль профиля</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="shell.css">
+<style>
+  body { display: flex; align-items: center; justify-content: center; overflow: auto; }
+  .unlock { width: 100%; max-width: 380px; padding: 28px 24px; display: flex; flex-direction: column; gap: 12px; }
+  .unlock .logo { width: 48px; height: 48px; align-self: center; }
+  .unlock h1 { font-size: 19px; margin: 4px 0 0; text-align: center; }
+  .unlock p { margin: 0; color: var(--text-2); font-size: 13px; text-align: center; }
+  .unlock .row { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 13.5px; }
+  .unlock .row small { display: block; color: var(--text-3); font-size: 12px; }
+  .unlock .hint { margin-top: 0; text-align: center; }
+  .unlock details { font-size: 12.5px; color: var(--text-3); }
+  .unlock details summary { cursor: pointer; color: var(--accent-ink); text-align: center; list-style: none; }
+  .unlock details p { text-align: left; margin-top: 8px; color: var(--text-3); font-size: 12.5px; }
+</style>
+<script type="module" src="unlock.js"></script>
+</head>
+<body>
+<form class="unlock" id="form" autocomplete="off">
+  <img class="logo" src="icon.svg" alt="">
+  <h1>Пароль профиля</h1>
+  <p>Профиль ZVONochek защищён паролем. Введите его, чтобы открыть контакты, чаты и ссылки.</p>
+  <input class="field lg" type="password" id="pw" placeholder="Пароль" autocomplete="current-password" autofocus>
+  <label class="row">
+    <span class="switch"><input type="checkbox" id="remember"><span></span></span>
+    <span>Запомнить на этом компьютере<small>Здесь пароль больше спрашиваться не будет</small></span>
+  </label>
+  <div class="hint bad" id="err" role="alert"></div>
+  <button class="btn primary lg" type="submit" id="go">Открыть</button>
+  <details>
+    <summary>Забыли пароль?</summary>
+    <p>Пароль нигде не хранится, и восстановить его нельзя. Если профиль запомнен на другом компьютере —
+      откройте ZVONochek там и смените пароль: Настройки → «Пароль профиля». Иначе можно начать с чистого профиля:
+      закройте это окно и переименуйте папку ZVONochek-data рядом с ZVONochek.exe (данные в ней останутся
+      зашифрованными).</p>
+  </details>
+</form>
+</body>
+</html>

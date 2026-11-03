@@ -6,11 +6,15 @@
 //! «Закрывать в трей»).
 //! Android: одно окно — оболочка и звонок в нём по очереди (wins_mobile.rs), входящие — поверх оболочки и
 //! уведомлением; трея, автозапуска и автообновления нет (обновление — новый APK).
+//! Windows: переносная версия (portable.rs), самообновление заменой exe (selfupdate.rs); если профиль закрыт
+//! паролем (zv-core vault.rs), сначала окно «unlock», ядро и остальные окна — после верного пароля.
 
 #[cfg(target_os = "android")]
 mod android;
 mod host;
 mod portable;
+#[cfg(windows)]
+mod selfupdate;
 #[cfg(desktop)]
 mod wins;
 #[cfg(mobile)]
@@ -103,7 +107,9 @@ fn init_logging(dir: &std::path::Path) {
 
 /// Аргумент командной строки или deep link: ссылка звонка → в оболочку.
 pub fn handle_url(app: &AppHandle, url: &str) {
-    let st = app.state::<AppState>();
+    let Some(st) = app.try_state::<AppState>() else {
+        return;
+    };
     {
         let mut last = st.last_url.lock().unwrap();
         if last.0 == url && last.1.elapsed().as_secs() < 3 {
@@ -330,11 +336,134 @@ fn chat_preview(m: &Value) -> String {
 }
 
 pub fn quit(app: &AppHandle) {
-    let st = app.state::<AppState>();
-    st.quitting.store(true, Ordering::SeqCst);
-    #[cfg(desktop)]
-    wins::save_main_state(app);
+    if let Some(st) = app.try_state::<AppState>() {
+        st.quitting.store(true, Ordering::SeqCst);
+        #[cfg(desktop)]
+        wins::save_main_state(app);
+    }
     app.exit(0);
+}
+
+/// Ядро и окна запущены (один раз: после старта или после верного пароля профиля).
+static STARTED: AtomicBool = AtomicBool::new(false);
+
+/// Аргументы повторных запусков, пока профиль закрыт паролем (ссылки откроются после входа).
+#[cfg(desktop)]
+static LOCKED_ARGV: Mutex<Vec<Vec<String>>> = Mutex::new(Vec::new());
+
+/// Окно пароля профиля: открыть ключ данных и запустить приложение.
+#[tauri::command]
+async fn zv_unlock(app: AppHandle, password: String, remember: bool) -> Result<(), String> {
+    if STARTED.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+    let dir = portable::get().ok_or("нет папки данных")?.data.clone();
+    let key = tauri::async_runtime::spawn_blocking(move || {
+        zv_core::vault::unlock(&dir, &password, remember)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    tracing::info!(
+        "профиль открыт паролем{}",
+        if remember {
+            ", запомнен на этом компьютере"
+        } else {
+            ""
+        }
+    );
+    if let Err(e) = start_app(&app, Some(key), true) {
+        tracing::error!("запуск: {e:#}");
+        portable::fatal(&format!("Не удалось запустить ZVONochek: {e:#}"));
+    }
+    if let Some(w) = app.get_webview_window("unlock") {
+        let _ = w.close();
+    }
+    Ok(())
+}
+
+/// Запуск ядра, трея, ссылок и главного окна. `show` — показать главное окно.
+fn start_app(
+    app: &AppHandle,
+    key: Option<zv_core::vault::DataKey>,
+    show: bool,
+) -> anyhow::Result<()> {
+    if STARTED.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+    let handle = app.clone();
+    let paths = portable::get().ok_or_else(|| anyhow::anyhow!("нет путей данных"))?;
+    let opts = CoreOptions {
+        data_dir: paths.data.clone(),
+        app_version: app.package_info().version.to_string(),
+        web_version: web_version(),
+        platform: platform(),
+        dev: cfg!(debug_assertions),
+        signal: None,
+        p2p_n0: true,
+        downloads_dir: paths.downloads.clone(),
+        data_key: key,
+        vault: zv_core::protect::ENABLED && key.is_some(),
+    };
+    // из окна пароля — уже внутри async-рантайма, при старте — в главном потоке
+    let core = if tokio::runtime::Handle::try_current().is_ok() {
+        Core::start(opts)?
+    } else {
+        tauri::async_runtime::block_on(async { Core::start(opts) })?
+    };
+    app.manage(AppState {
+        core,
+        call_seq: AtomicU32::new(0),
+        current_call: Mutex::new(None),
+        pending_url: Mutex::new(None),
+        main_ready: AtomicBool::new(false),
+        quitting: AtomicBool::new(false),
+        #[cfg(desktop)]
+        tray_dnd: Mutex::new(None),
+        incoming_names: Mutex::new(HashMap::new()),
+        last_url: Mutex::new((String::new(), std::time::Instant::now())),
+        log_dir: paths.logs.clone(),
+        unread: std::sync::atomic::AtomicU64::new(0),
+    });
+    tauri::async_runtime::spawn(forward_events(handle.clone()));
+    #[cfg(windows)]
+    portable::on_start(&handle);
+    #[cfg(desktop)]
+    wins::build_tray(&handle)?;
+    #[cfg(target_os = "android")]
+    android::start(&handle);
+    // deep links: zvonochek://call#k=…
+    {
+        use tauri_plugin_deep_link::DeepLinkExt;
+        #[cfg(windows)]
+        if let Err(e) = app.deep_link().register_all() {
+            tracing::warn!("регистрация zvonochek://: {e}");
+        }
+        let h = handle.clone();
+        app.deep_link().on_open_url(move |e| {
+            for u in e.urls() {
+                handle_url(&h, u.as_str());
+            }
+        });
+        if let Ok(Some(urls)) = app.deep_link().get_current() {
+            for u in urls {
+                handle_url(&handle, u.as_str());
+            }
+        }
+    }
+    if show {
+        wins::build_main(&handle, true)?;
+    }
+    #[cfg(desktop)]
+    {
+        handle_argv(&handle, &std::env::args().collect::<Vec<_>>());
+        let later = std::mem::take(&mut *LOCKED_ARGV.lock().unwrap());
+        for argv in later {
+            handle_argv(&handle, &argv);
+        }
+    }
+    #[cfg(windows)]
+    selfupdate::after_start(&handle);
+    Ok(())
 }
 
 #[tauri::command]
@@ -369,12 +498,25 @@ fn zv_sync(
 /// Точка входа: ПК — из main.rs, Android — из MainActivity (через `mobile_entry_point`).
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // перезапуск после обновления: дождаться выхода прежнего процесса
+    #[cfg(windows)]
+    selfupdate::wait_pid();
     let hidden = cfg!(desktop) && std::env::args().any(|a| a == "--hidden");
     let builder = tauri::Builder::default();
     // один экземпляр — первым плагином (до deep-link)
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
         tracing::info!("повторный запуск: {} аргументов", argv.len());
+        if !STARTED.load(Ordering::SeqCst) {
+            // профиль закрыт паролем: окно пароля — вперёд, ссылки — после входа
+            LOCKED_ARGV.lock().unwrap().push(argv);
+            if let Some(w) = app.get_webview_window("unlock") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+            return;
+        }
         if !argv.iter().any(|a| a == "--hidden") {
             wins::show_main(app);
         }
@@ -388,16 +530,13 @@ pub fn run() {
     #[cfg(target_os = "android")]
     let builder = builder.plugin(android::init());
     #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_autostart::init(
+        tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+        Some(vec!["--hidden"]),
+    ));
     let builder = builder
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--hidden"]),
-        ))
-        .plugin(tauri_plugin_updater::Builder::new().build());
-    let builder = builder
-        .invoke_handler(tauri::generate_handler![zv, zv_sync])
+        .invoke_handler(tauri::generate_handler![zv, zv_sync, zv_unlock])
         .setup(move |app| {
-            let handle = app.handle().clone();
             // Windows: данные рядом с exe (папка ZVONochek-data), иначе — каталоги приложения
             let paths = portable::init(app.handle())?;
             let data_dir = paths.data.clone();
@@ -420,73 +559,34 @@ pub fn run() {
             if let Some(w) = &paths.warning {
                 tracing::warn!("{w}");
             }
-            // папку принесли с другого компьютера / из-под другой учётной записи: секреты под DPAPI тут не
-            // открыть, а ядро начало бы с чистого профиля — объясняем и не запускаемся
+            // нет WebView2 (редко: старая Windows 10 без обновлений) — окна не откроются; объясняем, куда за ним
             #[cfg(windows)]
-            if paths.portable && portable::foreign_profile(&data_dir) {
-                tracing::error!(
-                    "{}: профиль защищён DPAPI другой учётной записи или другого компьютера",
-                    data_dir.display()
-                );
-                portable::error_box(&portable::foreign_text(&data_dir));
+            if let Err(e) = tauri::webview_version() {
+                tracing::error!("WebView2 не найден: {e}");
+                portable::webview2_missing(app.handle());
                 std::process::exit(1);
             }
-            let opts = CoreOptions {
-                data_dir: data_dir.clone(),
-                app_version: app.package_info().version.to_string(),
-                web_version: web_version(),
-                platform: platform(),
-                dev: cfg!(debug_assertions),
-                signal: None,
-                p2p_n0: true,
-                downloads_dir: paths.downloads.clone(),
-            };
-            let core = tauri::async_runtime::block_on(async { Core::start(opts) })?;
-            app.manage(AppState {
-                core,
-                call_seq: AtomicU32::new(0),
-                current_call: Mutex::new(None),
-                pending_url: Mutex::new(None),
-                main_ready: AtomicBool::new(false),
-                quitting: AtomicBool::new(false),
-                #[cfg(desktop)]
-                tray_dnd: Mutex::new(None),
-                incoming_names: Mutex::new(HashMap::new()),
-                last_url: Mutex::new((String::new(), std::time::Instant::now())),
-                log_dir,
-                unread: std::sync::atomic::AtomicU64::new(0),
-            });
-            tauri::async_runtime::spawn(forward_events(handle.clone()));
-            #[cfg(windows)]
-            portable::on_start(&handle);
-            #[cfg(desktop)]
-            wins::build_tray(&handle)?;
-            #[cfg(target_os = "android")]
-            android::start(&handle);
-            // deep links: zvonochek://call#k=…
-            {
-                use tauri_plugin_deep_link::DeepLinkExt;
-                #[cfg(windows)]
-                if let Err(e) = app.deep_link().register_all() {
-                    tracing::warn!("регистрация zvonochek://: {e}");
+            // ключ данных профиля: запомнен здесь — сразу, задан пароль — окно пароля
+            use zv_core::vault::Opened;
+            match zv_core::vault::open(&data_dir, zv_core::protect::ENABLED) {
+                Ok(Opened::Ready(key)) => start_app(app.handle(), key, !hidden)?,
+                Ok(Opened::NeedPassword) => {
+                    tracing::info!("профиль закрыт паролем — окно пароля");
+                    #[cfg(desktop)]
+                    wins::build_unlock(app.handle())?;
                 }
-                let h = handle.clone();
-                app.deep_link().on_open_url(move |e| {
-                    for u in e.urls() {
-                        handle_url(&h, u.as_str());
-                    }
-                });
-                if let Ok(Some(urls)) = app.deep_link().get_current() {
-                    for u in urls {
-                        handle_url(&handle, u.as_str());
-                    }
+                Ok(Opened::Foreign) => {
+                    tracing::error!(
+                        "{}: профиль с другого компьютера, пароль не задан",
+                        data_dir.display()
+                    );
+                    portable::fatal(&portable::foreign_text(&data_dir));
+                }
+                Err(e) => {
+                    tracing::error!("ключ профиля: {e}");
+                    portable::fatal(&e);
                 }
             }
-            if !hidden {
-                wins::build_main(&handle, true)?;
-            }
-            #[cfg(desktop)]
-            handle_argv(&handle, &std::env::args().collect::<Vec<_>>());
             Ok(())
         })
         .on_window_event(wins::on_window_event);
@@ -497,14 +597,21 @@ pub fn run() {
     app.run(|app, ev| match ev {
         RunEvent::ExitRequested { code, api, .. } => {
             // последнее окно закрылось — остаёмся в трее; выходим только по явной команде
-            if code.is_none() && !app.state::<AppState>().quitting.load(Ordering::SeqCst) {
+            // (окно пароля профиля закрыли — выходим)
+            if code.is_none()
+                && app
+                    .try_state::<AppState>()
+                    .is_some_and(|st| !st.quitting.load(Ordering::SeqCst))
+            {
                 api.prevent_exit();
             }
         }
         RunEvent::Exit => {
             tracing::info!("выход");
-            let core = app.state::<AppState>().core.clone();
-            tauri::async_runtime::block_on(async move { core.shutdown().await });
+            if let Some(st) = app.try_state::<AppState>() {
+                let core = st.core.clone();
+                tauri::async_runtime::block_on(async move { core.shutdown().await });
+            }
         }
         _ => {}
     });

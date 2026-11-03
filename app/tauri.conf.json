@@ -16,37 +16,31 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "ZVONochek",
     "copyright": "© 2026 ZVONochek. Все права защищены.",
     "category": "SocialNetworking",
     "shortDescription": "ZVONochek — звонки по ссылке",
     "longDescription": "Голосовые и видеозвонки по ссылке без аккаунтов. Совместим с веб-версией ZVONochek.",
     "homepage": "https://github.com/qwkejkqwje1/zvonochek-app",
-    "icon": ["icons/32x32.png", "icons/64x64.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png", "icons/icon.ico"],
-    "resources": {
-      "../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md"
-    },
-    "createUpdaterArtifacts": true,
-    "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
-      "nsis": {
-        "installMode": "currentUser",
-        "languages": ["Russian", "English"],
-        "displayLanguageSelector": false,
-        "installerIcon": "icons/icon.ico",
-        "startMenuFolder": "ZVONochek"
-      }
-    }
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
   },
   "plugins": {
     "deep-link": {
-      "desktop": { "schemes": ["zvonochek"] }
-    },
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlCMkYwNzMyN0ZCN0EyOTQKUldTVW9yZC9NZ2N2bTVlekRFMEhkeGs4SzhYQkJENTNhN3FJc3VhMmN3aDh0c3M4bXpMLy9ReHYK",
-      "endpoints": ["https://github.com/qwkejkqwje1/zvonochek-app/releases/latest/download/latest.json"],
-      "windows": { "installMode": "passive" }
+      "desktop": {
+        "schemes": [
+          "zvonochek"
+        ]
+      }
     }
   }
 }
