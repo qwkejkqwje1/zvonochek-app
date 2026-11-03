@@ -83,16 +83,21 @@ jobs:
       - name: В черновик релиза
         if: inputs.release_tag != ''
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ vars.ZV_RELEASE_REPO && secrets.ZV_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO: ${{ vars.ZV_RELEASE_REPO || github.repository }}
           TAG: ${{ inputs.release_tag }}
+          FILE: ${{ steps.apk.outputs.file }}
         run: |
-          # черновик создаёт release.yml (publish); exe могли уйти в отдельный открытый репозиторий — тогда свой черновик
-          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" --jq ".[] | select(.tag_name==\"$TAG\") | .id" | head -1)
+          # черновик создаёт release.yml (publish) там же, где exe: ZV_RELEASE_REPO или этот репозиторий
+          find_id() { gh api "repos/$REPO/releases?per_page=30" --jq ".[] | select(.tag_name==\"$TAG\") | .id" | head -1; }
+          ID=$(find_id)
           if [ -z "$ID" ]; then
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --title "ZVONochek $TAG" --notes "Android 7.0+: APK."
-            ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" --jq ".[] | select(.tag_name==\"$TAG\") | .id" | head -1)
+            gh release create "$TAG" -R "$REPO" --draft --title "ZVONochek $TAG" --notes "Android 7.0+: APK."
+            ID=$(find_id)
           fi
-          if [ -z "$ID" ]; then echo "::error::нет релиза $TAG"; exit 1; fi
+          if [ -z "$ID" ]; then echo "::error::нет релиза $TAG в $REPO"; exit 1; fi
+          OLD=$(gh api "repos/$REPO/releases/$ID/assets" --jq ".[] | select(.name==\"$FILE\") | .id")
+          if [ -n "$OLD" ]; then gh api -X DELETE "repos/$REPO/releases/assets/$OLD"; fi
           gh api -X POST -H "Content-Type: application/vnd.android.package-archive" \
-            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=${{ steps.apk.outputs.file }}" \
-            --input "${{ steps.apk.outputs.file }}" --jq .browser_download_url
+            "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=$FILE" \
+            --input "$FILE" --jq .browser_download_url
