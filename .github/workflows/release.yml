@@ -1,6 +1,7 @@
 name: Release
 
-# Тег vX.Y.Z → черновик релиза с установщиками Windows x64/ARM64 (NSIS), latest.json для автообновления и APK для Android.
+# Тег vX.Y.Z → черновик релиза: Windows x64/ARM64 — установщик NSIS и переносной exe, latest.json для автообновления
+# (установленной версии), APK для Android.
 # Секреты репозитория: TAURI_SIGNING_PRIVATE_KEY (ключ подписи обновлений), TAURI_SIGNING_PRIVATE_KEY_PASSWORD (пусто);
 # для APK — ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS (см. android.yml).
 on:
@@ -42,11 +43,21 @@ jobs:
           args: --target ${{ matrix.target }}
           tagName: ${{ github.ref_name }}
           releaseName: ZVONochek ${{ github.ref_name }}
-          releaseBody: 'Что нового — в CHANGELOG.md. Windows: установщик x64 — для обычных ПК, arm64 — для ПК на ARM (Snapdragon). Android 7.0+: файл …_android.apk.'
+          releaseBody: 'Что нового — в CHANGELOG.md. Windows: …_portable.exe — переносная версия без установки (данные в папке ZVONochek-data рядом с exe), …-setup.exe — установщик с автообновлением; x64 — для обычных ПК, arm64 — для ПК на ARM (Snapdragon). Android 7.0+: файл …_android.apk.'
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+      # переносная версия (без установки): тот же exe, данные — в папке ZVONochek-data рядом с ним
+      - name: Переносной exe в релиз
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          arch=x64; [ "${{ matrix.target }}" = aarch64-pc-windows-msvc ] && arch=arm64
+          f="ZVONochek_${GITHUB_REF_NAME#v}_${arch}_portable.exe"
+          cp "target/${{ matrix.target }}/release/zvonochek.exe" "$f"
+          gh release upload "$GITHUB_REF_NAME" "$f" --clobber
 
   android:
     name: Android

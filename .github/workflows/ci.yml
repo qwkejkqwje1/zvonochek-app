@@ -61,3 +61,15 @@ jobs:
           path: target/${{ matrix.target }}/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14
+      # Переносная версия: тот же exe без установщика — данные в папке ZVONochek-data рядом с ним
+      - name: Переносной exe
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/zvonochek.exe" dist/ZVONochek.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zvonochek-portable-${{ matrix.target }}
+          path: dist/ZVONochek.exe
+          if-no-files-found: error
+          retention-days: 14

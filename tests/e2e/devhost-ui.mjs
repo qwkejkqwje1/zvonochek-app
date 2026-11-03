@@ -108,6 +108,34 @@ await step('настройки: имя, тема, DND', async () => {
   await page.click('#setDnd + span');
   await page.click('#setTheme button[data-v="dark"]');
 });
+await step('настройки: переносная версия — папка данных, уведомления, старая копия, «Убрать следы»', async () => {
+  await page.click('.nav[data-page="settings"]');
+  for (const id of ['#rowNotify', '#rowData', '#rowCleanup'])
+    if (await page.$eval(id, (e) => e.classList.contains('hidden'))) throw new Error(id + ' скрыт');
+  console.log('   данные:', await page.textContent('#setDataDir'));
+  // уведомления: выключить → настройка сохранилась, «Проверить» недоступна; включить обратно
+  await page.click('#setNotify + span');
+  await page.waitForFunction(() => document.querySelector('#notifyTest').disabled, null, { timeout: 5000 });
+  const s = await page.evaluate(() => window.__zvIpc.call('settings_get'));
+  if (s.notifications !== false) throw new Error('notifications=' + s.notifications);
+  await page.click('#setNotify + span');
+  await page.waitForFunction(() => !document.querySelector('#notifyTest').disabled, null, { timeout: 5000 });
+  await page.click('#notifyTest');
+  await page.click('#dataOpen');
+  // копия прежней версии (devhost: папка old в данных) — удалить с подтверждением
+  if (!(await page.$eval('#rowOldData', (e) => e.classList.contains('hidden')))) {
+    await page.click('#oldDataDel');
+    await page.click('.dialog .btn.danger');
+    await page.waitForFunction(() => document.querySelector('#rowOldData').classList.contains('hidden'), null, { timeout: 5000 });
+    console.log('   копия прежней версии удалена');
+  } else console.log('   копии прежней версии нет (devhost: создайте папку old в данных)');
+  await page.click('#cleanupBtn');
+  await page.click('.dialog .btn.danger');
+  await page.waitForTimeout(2000);
+  const hosts = (await page.evaluate(() => window.__zvIpc.call('dev_opened'))).map((o) => o.host).filter(Boolean);
+  for (const c of ['host_notify_test', 'host_open_data', 'host_cleanup', 'host_quit'])
+    if (!hosts.includes(c)) throw new Error('не вызвано ' + c + ': ' + hosts.join(', '));
+});
 await step('лицензии открываются', async () => {
   await page.click('#licBtn');
   await page.waitForSelector('.dialog iframe');
