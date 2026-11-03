@@ -420,7 +420,7 @@ impl Inner {
         let mut last = 0u64;
         loop {
             if cancel.load(Ordering::SeqCst) {
-                let _ = rx.stop(0u32.into());
+                rx.stop(0);
                 drop(f);
                 let _ = tokio::fs::remove_file(&part).await;
                 return Err(DlErr::Canceled);
@@ -524,7 +524,7 @@ impl Inner {
             let fail = |e: &str| encode_frame(&json!({"ok": false, "error": e}));
             let Some(r) = rec else {
                 let _ = tx.write_all(&fail("файла больше нет у отправителя")).await;
-                let _ = tx.finish();
+                let _ = tx.finish().await;
                 return;
             };
             let opened = tokio::fs::File::open(&r.path).await;
@@ -532,18 +532,18 @@ impl Inner {
                 Ok(f) if f.metadata().await.map(|m| m.len()).unwrap_or(0) == r.size => f,
                 Ok(_) => {
                     let _ = tx.write_all(&fail("файл у отправителя изменился")).await;
-                    let _ = tx.finish();
+                    let _ = tx.finish().await;
                     return;
                 }
                 Err(_) => {
                     let _ = tx.write_all(&fail("файл у отправителя недоступен")).await;
-                    let _ = tx.finish();
+                    let _ = tx.finish().await;
                     return;
                 }
             };
             if off > r.size || f.seek(std::io::SeekFrom::Start(off)).await.is_err() {
                 let _ = tx.write_all(&fail("неверное смещение")).await;
-                let _ = tx.finish();
+                let _ = tx.finish().await;
                 return;
             }
             if tx.write_all(&encode_frame(&json!({"ok": true, "size": r.size}))).await.is_err() {
@@ -567,13 +567,13 @@ impl Inner {
                     last = now;
                     me.touch_peer(&peer);
                     if me.db.file(&fid).is_some_and(|x| x.st == "canceled") {
-                        let _ = tx.reset(0u32.into());
+                        tx.reset(0);
                         return;
                     }
                     me.emit("chat:file", json!({"fid": fid, "chat": r.chat, "msg": r.msg, "out": true, "st": "sending", "done": sent, "size": r.size}));
                 }
             }
-            let _ = tx.finish();
+            let _ = tx.finish().await;
             let _ = tokio::time::timeout(Duration::from_secs(30), tx.stopped()).await;
             me.db.file_set(&fid, "ready", r.size, None, "");
             me.emit_file(&fid);

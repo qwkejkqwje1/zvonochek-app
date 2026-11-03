@@ -113,7 +113,8 @@ pub(crate) struct PendingAdd {
     pub req: Value,
 }
 
-/// Код приглашения: `zv4c:` + base64url(JSON {v, i: ID, k: секрет, n: имя, r: релей, x: срок, с}).
+/// Код приглашения: `zv4c:` + base64url(JSON {v, i: ID, k: секрет, n: имя, r: релей, a: адреса,
+/// l: адреса libp2p, x: срок}).
 pub fn encode_code(id: &str, secret: &str, name: &str, addr: &Value, expires: u64) -> String {
     let mut o = json!({"v": 1, "i": id, "k": secret, "n": name, "x": expires / 1000});
     if let Some(r) = addr.get("r") {
@@ -121,6 +122,19 @@ pub fn encode_code(id: &str, secret: &str, name: &str, addr: &Value, expires: u6
     }
     if let Some(a) = addr.get("a").and_then(|v| v.as_array()) {
         o["a"] = json!(a.iter().take(4).collect::<Vec<_>>());
+    }
+    // libp2p: один прямой адрес и один через релей (код не должен разрастаться)
+    if let Some(l) = addr.get("l").and_then(|v| v.as_array()) {
+        let circ = |v: &&Value| v.as_str().is_some_and(|s| s.contains("/p2p-circuit"));
+        let pick: Vec<&Value> = l
+            .iter()
+            .filter(|v| !circ(v))
+            .take(1)
+            .chain(l.iter().filter(circ).take(1))
+            .collect();
+        if !pick.is_empty() {
+            o["l"] = json!(pick);
+        }
     }
     format!(
         "{CODE_PREFIX}{}",
@@ -554,7 +568,7 @@ impl Inner {
             "inbox": self.my_inbox(),
             "addr": node.addr_json(),
         });
-        let hint = json!({"r": code.get("r"), "a": code.get("a")});
+        let hint = json!({"r": code.get("r"), "a": code.get("a"), "l": code.get("l")});
         self.lock().p2p.c.adds.insert(
             id.clone(),
             PendingAdd {
@@ -645,7 +659,9 @@ impl Inner {
         hint: Option<Value>,
     ) -> (String, String, bool) {
         let hint = hint.filter(|h| {
-            h.get("r").is_some_and(|r| r.is_string()) || h.get("a").is_some_and(|a| a.is_array())
+            h.get("r").is_some_and(|r| r.is_string())
+                || h.get("a").is_some_and(|a| a.is_array())
+                || h.get("l").is_some_and(|a| a.is_array())
         });
         let now = now_ms();
         let r = {

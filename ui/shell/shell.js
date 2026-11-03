@@ -571,6 +571,8 @@ function renderSettings() {
   $('#setTcp').checked = s.mqttTcp !== false;
   $('#setEco').checked = !!s.eco;
   $('#setP2p').checked = s.p2p !== false;
+  $('#setLibp2p').checked = s.libp2p !== false;
+  $('#setLibp2p').disabled = s.p2p === false;
   $('#setReceipts').checked = s.readReceipts !== false;
   $('#setAutoImg').checked = s.autoImages !== false;
   $('#setNotify').checked = s.notifications !== false;
@@ -612,6 +614,7 @@ $('#setP2p').addEventListener('change', async (e) => {
   }
   setPatch({ p2p: e.target.checked });
 });
+$('#setLibp2p').addEventListener('change', (e) => setPatch({ libp2p: e.target.checked }));
 $('#setWorker').addEventListener('change', (e) => {
   const v = e.target.value.trim();
   if (v && !/^https:\/\/[^/\s]+/.test(v)) {
@@ -885,6 +888,23 @@ function diagP2p(p) {
           ].join(' · ')
         )
       : null,
+    p.running && p.libp2p
+      ? h(
+          'div.muted',
+          { title: 'Второй транспорт: ' + p.libp2p.peer },
+          [
+            'libp2p',
+            `NAT ${{ public: 'открыт', private: 'закрыт', unknown: '?' }[p.libp2p.nat] || p.libp2p.nat}`,
+            p.libp2p.upnp !== 'off' ? `UPnP ${p.libp2p.upnp}` : null,
+            `ретрансляторов ${(p.libp2p.relays || []).filter((r) => r.ok).length}`,
+            `адресов ${((p.addr && p.addr.l) || []).length}`,
+            `DHT ${p.libp2p.dht}`,
+            p.libp2p.lan ? `рядом ${p.libp2p.lan}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        )
+      : null,
     (p.links || []).length
       ? h(
           'div.links',
@@ -896,6 +916,13 @@ function diagP2p(p) {
               h('b', names.get(l.peer) || l.name || l.peer),
               h('span.muted', l.path === 'direct' ? 'напрямую' : l.path === 'relay' ? 'через ретранслятор' : 'нет пути'),
               l.rttMs != null ? h('span.muted', `${l.rttMs} мс`) : null,
+              l.transport
+                ? h(
+                    'span.chip',
+                    { title: (l.paths || []).map((x) => `${x.tr}: ${x.path}${x.main ? ' (основной)' : ''}`).join('\n') },
+                    l.transport + ((l.paths || []).length > 1 ? ` +${l.paths.length - 1}` : '')
+                  )
+                : null,
               h('span.muted', l.outbound ? 'исходящее' : 'входящее'),
               bound && bound.rooms.length ? h('span.chip.accent', `комнат ${bound.rooms.length}`) : null,
               h('span.muted', `↑${l.tx} ↓${l.rx}`)

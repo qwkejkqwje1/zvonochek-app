@@ -48,10 +48,9 @@ impl StreamSend {
         match self {
             StreamSend::Iroh(s) => s.write_all(b).await?,
             StreamSend::Lp(l) => {
-                let w = l
-                    .w
-                    .as_mut()
-                    .ok_or_else(|| anyhow::anyhow!("поток закрыт"))?;
+                let w =
+                    l.w.as_mut()
+                        .ok_or_else(|| anyhow::anyhow!("поток закрыт"))?;
                 w.write_all(b).await?;
             }
         }
@@ -170,6 +169,9 @@ pub async fn read_frame(r: &mut StreamRecv) -> anyhow::Result<Option<Value>> {
     let n = u32::from_be_bytes(len) as usize;
     anyhow::ensure!(n <= MAX_FRAME, "кадр {n} байт — больше предела");
     let mut buf = vec![0u8; n];
-    anyhow::ensure!(n == 0 || r.fill(&mut buf).await?, "поток оборвался посреди кадра");
+    anyhow::ensure!(
+        n == 0 || r.fill(&mut buf).await?,
+        "поток оборвался посреди кадра"
+    );
     Ok(Some(serde_json::from_slice(&buf)?))
 }

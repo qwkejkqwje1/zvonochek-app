@@ -591,6 +591,7 @@ impl Inner {
         let mut new: Settings = serde_json::from_value(cur).map_err(|e| e.to_string())?;
         new.name = new.name.trim().chars().take(40).collect();
         let p2p_changed = new.p2p != st.settings.p2p;
+        let lp_changed = new.libp2p != st.settings.libp2p;
         let eco_changed = new.eco != st.settings.eco;
         st.settings = new.clone();
         self.settings_file
@@ -606,6 +607,10 @@ impl Inner {
             } else {
                 self.p2p_stop();
             }
+            self.sync_listeners();
+        } else if lp_changed && new.p2p {
+            self.p2p_stop();
+            self.p2p_start();
             self.sync_listeners();
         }
         if eco_changed {

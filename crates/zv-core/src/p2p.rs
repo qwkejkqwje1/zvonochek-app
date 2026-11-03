@@ -120,14 +120,19 @@ impl Inner {
     }
 
     pub(crate) fn p2p_start(self: &Arc<Self>) {
-        let (enabled, name) = {
+        let (enabled, name, lp_on) = {
             let st = self.lock();
-            (st.settings.p2p, st.settings.name.clone())
+            (
+                st.settings.p2p,
+                st.settings.name.clone(),
+                st.settings.libp2p,
+            )
         };
         if !enabled || self.node().is_some() || self.p2p_starting.swap(true, Ordering::SeqCst) {
             return;
         }
         let seed = self.identity_seed();
+        let only = std::env::var("ZV_P2P_ONLY").ok();
         let cfg = zv_p2p::Config {
             secret: zv_p2p::crypto::endpoint_secret(&seed),
             app_version: self.opts.app_version.clone(),
@@ -139,6 +144,19 @@ impl Inner {
                 "contact".into(),
             ],
             n0: self.opts.p2p_n0,
+            // ZV_P2P_ONLY=iroh|libp2p — один транспорт (отладка)
+            iroh: only.as_deref() != Some("libp2p"),
+            lp: (lp_on && only.as_deref() != Some("iroh")).then(|| {
+                if self.opts.p2p_n0 {
+                    zv_p2p::LpConfig {
+                        // Android: mDNS без MulticastLock не работает и будит радио
+                        mdns: !cfg!(target_os = "android"),
+                        ..Default::default()
+                    }
+                } else {
+                    zv_p2p::LpConfig::local()
+                }
+            }),
         };
         let me = self.clone();
         self.rt.spawn(async move {
@@ -147,9 +165,16 @@ impl Inner {
             me.p2p_starting.store(false, Ordering::SeqCst);
             match r {
                 Ok(node) => {
-                    // P2P могли выключить, пока узел запускался
-                    if !me.lock().settings.p2p {
+                    // P2P могли выключить (или переключить libp2p), пока узел запускался
+                    let (p2p_on, lp_now) = {
+                        let st = me.lock();
+                        (st.settings.p2p, st.settings.libp2p)
+                    };
+                    if !p2p_on || lp_now != lp_on {
                         node.shutdown().await;
+                        if p2p_on {
+                            me.p2p_start();
+                        }
                         return;
                     }
                     tracing::info!("p2p: ID устройства {}", node.id());

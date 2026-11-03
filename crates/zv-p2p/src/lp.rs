@@ -6,10 +6,10 @@
 
 use futures::StreamExt;
 use libp2p::core::ConnectedPoint;
+use libp2p::core::transport::ListenerId;
 use libp2p::multiaddr::Protocol;
 use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
-use libp2p::core::transport::ListenerId;
 use libp2p::swarm::{ConnectionId, DialError, NetworkBehaviour, SwarmEvent};
 use libp2p::{
     Multiaddr, PeerId, StreamProtocol, Swarm, autonat, dcutr, identify, identity, kad, mdns, noise,
@@ -188,9 +188,14 @@ fn global(a: &Multiaddr) -> bool {
         }
         Some(Protocol::Ip6(ip)) => {
             let s = ip.segments()[0];
-            !(ip.is_loopback() || ip.is_unspecified() || (s & 0xfe00) == 0xfc00 || (s & 0xffc0) == 0xfe80)
+            !(ip.is_loopback()
+                || ip.is_unspecified()
+                || (s & 0xfe00) == 0xfc00
+                || (s & 0xffc0) == 0xfe80)
         }
-        Some(Protocol::Dns(_) | Protocol::Dns4(_) | Protocol::Dns6(_) | Protocol::Dnsaddr(_)) => true,
+        Some(Protocol::Dns(_) | Protocol::Dns4(_) | Protocol::Dns6(_) | Protocol::Dnsaddr(_)) => {
+            true
+        }
         _ => false,
     }
 }
@@ -232,7 +237,7 @@ pub(crate) fn hint_addrs(hint: Option<&Value>, p: &PeerId) -> Vec<Multiaddr> {
         .map(|a| {
             a.iter()
                 .filter_map(|s| s.as_str()?.parse::<Multiaddr>().ok())
-                .filter(|m| usable(m))
+                .filter(usable)
                 .filter(|m| match m.iter().last() {
                     Some(Protocol::P2p(x)) => x == *p,
                     _ => true,
@@ -268,7 +273,9 @@ fn behaviour(key: &identity::Keypair, relay: relay::client::Behaviour, cfg: &LpC
         kad: Toggle::from(kad),
         relay,
         dcutr: dcutr::Behaviour::new(id),
-        autonat: Toggle::from(wide.then(|| autonat::Behaviour::new(id, autonat::Config::default()))),
+        autonat: Toggle::from(
+            wide.then(|| autonat::Behaviour::new(id, autonat::Config::default())),
+        ),
         upnp: Toggle::from((wide && cfg.upnp).then(upnp::tokio::Behaviour::default)),
         mdns: Toggle::from(mdns),
         stream: libp2p_stream::Behaviour::new(),
@@ -356,7 +363,11 @@ impl Lp {
             let etx = etx.clone();
             tokio::spawn(async move {
                 while let Some((p, s)) = inc.next().await {
-                    let ev = if file { LpEv::File(p, s) } else { LpEv::Ctl(p, s) };
+                    let ev = if file {
+                        LpEv::File(p, s)
+                    } else {
+                        LpEv::Ctl(p, s)
+                    };
                     if etx.send(ev).is_err() {
                         break;
                     }
@@ -366,7 +377,11 @@ impl Lp {
         let (ctx, crx) = mpsc::unbounded_channel();
         let st = Arc::new(Mutex::new(St {
             nat: "unknown",
-            upnp: if cfg.upnp && !cfg.local_only { "…" } else { "off" },
+            upnp: if cfg.upnp && !cfg.local_only {
+                "…"
+            } else {
+                "off"
+            },
             ..Default::default()
         }));
         let drv = Driver {
@@ -401,7 +416,10 @@ impl Lp {
         self.st.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    async fn ask(&self, f: impl FnOnce(oneshot::Sender<Result<(), String>>) -> Cmd) -> anyhow::Result<()> {
+    async fn ask(
+        &self,
+        f: impl FnOnce(oneshot::Sender<Result<(), String>>) -> Cmd,
+    ) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd
             .send(f(tx))
@@ -440,13 +458,21 @@ impl Lp {
             .iter()
             .filter(|a| !is_circuit(a) && (self.local || !loopback(a)));
         let relayed = st.external.iter().filter(|a| is_circuit(a));
-        for a in direct_ext.chain(lan).chain(relayed) {
-            if usable(a) && !out.contains(a) {
-                out.push(a.clone());
+        // по два адреса каждого вида: подсказка ходит в кодах приглашений и составе групп
+        for group in [
+            direct_ext.collect::<Vec<_>>(),
+            lan.collect(),
+            relayed.collect(),
+        ] {
+            let mut n = 0;
+            for a in group {
+                if n < 2 && usable(a) && !out.contains(a) {
+                    out.push(a.clone());
+                    n += 1;
+                }
             }
         }
         out.into_iter()
-            .take(8)
             .map(|a| match a.iter().last() {
                 Some(Protocol::P2p(_)) => a.to_string(),
                 _ => a.with(Protocol::P2p(self.me)).to_string(),
@@ -561,7 +587,12 @@ impl Driver {
         });
     }
 
-    fn dial(&mut self, p: PeerId, addrs: Vec<Multiaddr>, done: oneshot::Sender<Result<(), String>>) {
+    fn dial(
+        &mut self,
+        p: PeerId,
+        addrs: Vec<Multiaddr>,
+        done: oneshot::Sender<Result<(), String>>,
+    ) {
         if self.sw.is_connected(&p) {
             let _ = done.send(Ok(()));
             return;
@@ -635,7 +666,9 @@ impl Driver {
                 let relayed = endpoint.is_relayed();
                 let (addr, dialer) = match &endpoint {
                     ConnectedPoint::Dialer { address, .. } => (address.clone(), true),
-                    ConnectedPoint::Listener { send_back_addr, .. } => (send_back_addr.clone(), false),
+                    ConnectedPoint::Listener { send_back_addr, .. } => {
+                        (send_back_addr.clone(), false)
+                    }
                 };
                 let mixed = {
                     let mut st = self.lock();
@@ -736,7 +769,9 @@ impl Driver {
                         let st = self.lock();
                         st.conns.get(&peer_id).and_then(|m| {
                             m.values()
-                                .find(|c| c.dialer && !c.relayed && global(&c.addr) && usable(&c.addr))
+                                .find(|c| {
+                                    c.dialer && !c.relayed && global(&c.addr) && usable(&c.addr)
+                                })
                                 .map(|c| c.addr.clone())
                         })
                     };
@@ -763,7 +798,9 @@ impl Driver {
                 }
             }
             BEvent::Kad(e) => self.on_kad(e),
-            BEvent::Relay(relay::client::Event::ReservationReqAccepted { relay_peer_id, .. }) => {
+            BEvent::Relay(relay::client::Event::ReservationReqAccepted {
+                relay_peer_id, ..
+            }) => {
                 self.lock().relays.insert(relay_peer_id, true);
             }
             BEvent::Dcutr(dcutr::Event {
@@ -798,7 +835,10 @@ impl Driver {
                             v.push(a);
                         }
                         // собеседник рядом, а соединение через релей — позвоним напрямую
-                        if st.conns.get(&p).is_some_and(|m| !m.is_empty() && m.values().all(|c| c.relayed))
+                        if st
+                            .conns
+                            .get(&p)
+                            .is_some_and(|m| !m.is_empty() && m.values().all(|c| c.relayed))
                             && !direct_to.contains(&p)
                         {
                             direct_to.push(p);
@@ -807,7 +847,12 @@ impl Driver {
                 }
                 for p in direct_to {
                     let addrs = self.lock().lan.get(&p).cloned().unwrap_or_default();
-                    let _ = self.sw.dial(DialOpts::peer_id(p).addresses(addrs).condition(PeerCondition::Always).build());
+                    let _ = self.sw.dial(
+                        DialOpts::peer_id(p)
+                            .addresses(addrs)
+                            .condition(PeerCondition::Always)
+                            .build(),
+                    );
                 }
             }
             BEvent::Mdns(mdns::Event::Expired(list)) => {
@@ -849,7 +894,13 @@ impl Driver {
                         .condition(PeerCondition::DisconnectedAndNotDialing)
                         .build(),
                 );
-                if let Some(mut q) = self.sw.behaviour_mut().kad.as_mut().and_then(|k| k.query_mut(&id)) {
+                if let Some(mut q) = self
+                    .sw
+                    .behaviour_mut()
+                    .kad
+                    .as_mut()
+                    .and_then(|k| k.query_mut(&id))
+                {
                     q.finish();
                 }
                 self.finds.remove(&id);
@@ -867,7 +918,10 @@ impl Driver {
                 }
             }
             kad::QueryResult::StartProviding(r) => {
-                tracing::debug!("libp2p: запись в DHT: {}", if r.is_ok() { "ok" } else { "ошибка" });
+                tracing::debug!(
+                    "libp2p: запись в DHT: {}",
+                    if r.is_ok() { "ok" } else { "ошибка" }
+                );
             }
             _ => {}
         }
@@ -899,13 +953,18 @@ impl Driver {
             }
         }
         if self.failed.len() > 64 {
-            self.failed.retain(|_, t| t.elapsed() < Duration::from_secs(300));
+            self.failed
+                .retain(|_, t| t.elapsed() < Duration::from_secs(300));
         }
     }
 
     /// Держим до двух резервов на релеях (свои из настроек — первыми), пока NAT не публичный.
     fn maintain_relays(&mut self) {
-        let want = if self.lock().nat == "public" { 0 } else { RESERVATIONS };
+        let want = if self.lock().nat == "public" {
+            0
+        } else {
+            RESERVATIONS
+        };
         while self.reserving.len() < want {
             let now = Instant::now();
             let next = self

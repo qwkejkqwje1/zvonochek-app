@@ -27,6 +27,8 @@ pub struct Settings {
     pub tray_hint_shown: bool,
     /// Прямое соединение между приложениями (iroh): контакты, звонки контактам, P2P-канал в звонке.
     pub p2p: bool,
+    /// Второй P2P-транспорт — libp2p (QUIC/TCP, свои релеи, DHT, mDNS); работает вместе с iroh.
+    pub libp2p: bool,
     /// Сообщать контакту, что его сообщения прочитаны.
     pub read_receipts: bool,
     /// Картинки до 25 МБ от контактов скачивать сразу.
@@ -53,6 +55,7 @@ impl Default for Settings {
             skip_prejoin: true,
             tray_hint_shown: false,
             p2p: true,
+            libp2p: true,
             read_receipts: true,
             auto_images: true,
             eco: false,
