@@ -15,6 +15,7 @@ mod p2p;
 mod profile;
 pub mod protect;
 pub mod store;
+pub mod update;
 
 pub use contacts::{decode_code as decode_contact_code, encode_code as encode_contact_code};
 
@@ -101,6 +102,9 @@ struct State {
     groups: groups::GroupsState,
     /// Последний сохранённый файл профиля.
     last_export: Option<PathBuf>,
+    /// Найденная новая версия (update_check).
+    update: Option<update::Release>,
+    update_busy: bool,
 }
 
 /// Зачем ядру комната.
@@ -207,6 +211,8 @@ impl Core {
             chats: chats::ChatsState::default(),
             groups: groups::GroupsState::default(),
             last_export: None,
+            update: None,
+            update_busy: false,
         };
         let db = match db::Db::open(&opts.data_dir.join("chats.db")) {
             Ok(d) => d,
@@ -301,6 +307,8 @@ impl Core {
             "chat_file_data" => i.chat_file_data(&args).await,
             "profile_export" => i.profile_export(&args).await,
             "profile_import" => i.profile_import(&args).await,
+            "update_check" => i.update_check().await,
+            "update_download" => i.update_download().await,
             "chat_mail_fetch" => {
                 let busy = std::mem::replace(&mut i.lock().chats.mail_busy, true);
                 if busy {
@@ -315,7 +323,9 @@ impl Core {
     /// Быстрые команды, выполняемые сразу и по порядку (отправка сигналов звонка не должна
     /// перемешиваться). `None` — команда асинхронная, нужен `dispatch`.
     pub fn dispatch_sync(&self, cmd: &str, args: &Value) -> Option<Result<Value, String>> {
-        const ASYNC: [&str; 10] = [
+        const ASYNC: [&str; 12] = [
+            "update_check",
+            "update_download",
             "room_stats",
             "room_status",
             "http_fetch",

@@ -35,6 +35,8 @@ pub struct Settings {
     pub eco: bool,
     /// ПК: уведомления Windows о сообщениях и пропущенных звонках.
     pub notifications: bool,
+    /// ПК: новые версии скачивать и ставить самим (вступают в силу при следующем запуске).
+    pub auto_update: bool,
 }
 
 impl Default for Settings {
@@ -55,6 +57,7 @@ impl Default for Settings {
             auto_images: true,
             eco: false,
             notifications: true,
+            auto_update: true,
         }
     }
 }

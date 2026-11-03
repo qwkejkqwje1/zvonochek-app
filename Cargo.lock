@@ -7923,6 +7923,7 @@ dependencies = [
  "base64 0.23.1",
  "blake3",
  "chacha20poly1305",
+ "ed25519-dalek",
  "hex",
  "reqwest",
  "rusqlite",

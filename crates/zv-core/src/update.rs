@@ -5,9 +5,10 @@
 //! latest.json: `{"version":"4.0.1","notes":"…","platforms":{"windows-x64":{"url":"…","size":N,"sig":"base64"}}}`,
 //! ключ платформы — как `platform` ядра; подпись — Ed25519 над байтами exe (release.yml, секрет ZV_UPDATE_KEY).
 
+use crate::Inner;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as B64;
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -132,6 +133,7 @@ pub async fn download(
     progress: impl Fn(u64, u64),
 ) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(format!("ZVONochek-{}.exe", rel.version));
     let mut resp = zv_signal::tls::http()
         .get(&rel.url)
         .timeout(Duration::from_secs(900))
@@ -159,12 +161,114 @@ pub async fn download(
     if !verify(&data, &rel.sig, keys) {
         return Err("подпись обновления не сходится — файл не от ZVONochek, не устанавливаем".into());
     }
-    let path = dir.join(format!("ZVONochek-{}.exe", rel.version));
     let part = dir.join(format!("ZVONochek-{}.exe.part", rel.version));
     std::fs::write(&part, &data).map_err(|e| format!("{}: {e}", part.display()))?;
     let _ = std::fs::remove_file(&path);
     std::fs::rename(&part, &path).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(path)
+}
+
+/// Уже скачанный и проверенный файл этой версии (автообновление скачало раньше).
+fn ready(path: &Path, rel: &Release, keys: &[[u8; 32]]) -> bool {
+    std::fs::read(path).is_ok_and(|d| d.len() as u64 == rel.size && verify(&d, &rel.sig, keys))
+}
+
+/// Убрать из папки обновлений всё, кроме `keep` (старые версии, недокачанное).
+fn prune(dir: &Path, keep: &Path) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let p = e.path();
+        if p != keep && p.is_file() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+}
+
+/// Снимает отметку «идёт загрузка обновления» при любом выходе.
+struct Busy<'a>(&'a Inner);
+
+impl Drop for Busy<'_> {
+    fn drop(&mut self) {
+        self.0.lock().update_busy = false;
+    }
+}
+
+impl Inner {
+    /// Адреса манифеста; в режиме разработки — `ZV_UPDATE_URL` (через запятую), для тестов.
+    fn update_urls(&self) -> Vec<String> {
+        if self.opts.dev
+            && let Ok(u) = std::env::var("ZV_UPDATE_URL")
+        {
+            return u
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
+        MANIFEST_URLS.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Ключи проверки; в режиме разработки — `ZV_UPDATE_KEY` (hex), для тестов.
+    fn update_keys(&self) -> Vec<[u8; 32]> {
+        if self.opts.dev
+            && let Ok(k) = std::env::var("ZV_UPDATE_KEY")
+        {
+            return keys(&[k.trim()]);
+        }
+        keys(KEYS_HEX)
+    }
+
+    /// Есть ли версия новее: `{available, version, notes, current, size}`.
+    pub(crate) async fn update_check(&self) -> Result<Value, String> {
+        let m = fetch_manifest(&self.update_urls()).await?;
+        let rel = parse_manifest(&m, &self.opts.platform, self.opts.dev)?;
+        let available = newer(&rel.version, &self.opts.app_version);
+        let out = json!({
+            "available": available,
+            "version": rel.version,
+            "notes": rel.notes,
+            "current": self.opts.app_version,
+            "size": rel.size,
+        });
+        self.lock().update = available.then_some(rel);
+        Ok(out)
+    }
+
+    /// Скачать и проверить найденную версию (`<данные>/update/ZVONochek-<версия>.exe`): `{path, version}`.
+    /// Ход — событиями `update:progress` `{done, total}`.
+    pub(crate) async fn update_download(&self) -> Result<Value, String> {
+        if std::mem::replace(&mut self.lock().update_busy, true) {
+            return Err("обновление уже скачивается".into());
+        }
+        let _busy = Busy(self);
+        let cur = self.lock().update.clone();
+        let rel = match cur {
+            Some(r) => r,
+            None => {
+                let c = self.update_check().await?;
+                if c["available"] != true {
+                    return Err("новой версии нет".into());
+                }
+                let cur = self.lock().update.clone();
+                cur.ok_or("новой версии нет")?
+            }
+        };
+        let dir = self.opts.data_dir.join("update");
+        let keys = self.update_keys();
+        let path = dir.join(format!("ZVONochek-{}.exe", rel.version));
+        let path = if ready(&path, &rel, &keys) {
+            path
+        } else {
+            download(&rel, &dir, &keys, |done, total| {
+                self.emit("update:progress", json!({"done": done, "total": total}));
+            })
+            .await?
+        };
+        prune(&dir, &path);
+        Ok(json!({"path": path.to_string_lossy(), "version": rel.version}))
+    }
 }
 
 #[cfg(test)]
