@@ -40,7 +40,7 @@ pub fn wait_pid() {
     unsafe {
         let h = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
         if !h.is_null() {
-            WaitForSingleObject(h, 20_000);
+            WaitForSingleObject(h, 60_000);
             CloseHandle(h);
         }
     }
