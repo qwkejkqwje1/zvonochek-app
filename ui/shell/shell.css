@@ -1085,12 +1085,14 @@ textarea.field.code {
   letter-spacing: 3px;
   color: var(--text-2);
 }
-.diag-p2p .links {
+.diag-p2p .links,
+.diag-net .links {
   display: grid;
   gap: 6px;
   margin-top: 10px;
 }
-.diag-p2p .lk {
+.diag-p2p .lk,
+.diag-net .lk {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
@@ -2089,4 +2091,7 @@ body.mobile .toast {
 }
 body.mobile .set {
   flex-wrap: wrap;
+}
+.diag-net .verdict {
+  margin-top: 8px;
 }

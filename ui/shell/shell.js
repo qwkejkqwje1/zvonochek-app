@@ -38,6 +38,7 @@ import {
 } from './contacts.js';
 import { initChats, chatsVisible, openChat, groupById, callGroup } from './chats.js';
 import { initProfile } from './profile.js';
+import { runNetTest, describeNetTest } from './nettest.js';
 
 const S = {
   page: 'call',
@@ -659,6 +660,53 @@ $('#licBtn').addEventListener('click', () => {
 // ---------- диагностика ----------
 let lastDiag = null;
 let lastChats = null;
+let netTest = null;
+let netRunning = false;
+async function startNetTest() {
+  if (netRunning) return;
+  netRunning = true;
+  renderDiag();
+  try {
+    netTest = await runNetTest();
+  } catch (e) {
+    netTest = { error: e.message || String(e), at: Date.now() };
+  }
+  netRunning = false;
+  renderDiag();
+}
+// Сеть звонков: STUN/TURN из этого окна (WebRTC окна звонка — то же окружение WebView)
+function diagNet() {
+  const d = netRunning ? null : describeNetTest(netTest);
+  return h(
+    'div.card.diag-net',
+    h(
+      'div.row',
+      h('h3.grow', { style: { margin: 0 } }, 'Сеть звонков (WebRTC)'),
+      netTest && !netRunning ? h('span.muted', fmtTime(netTest.at)) : null,
+      h(
+        'button.btn.sm',
+        { id: 'netTestBtn', disabled: netRunning, onclick: startNetTest },
+        icon('refresh', 'sm'),
+        netRunning ? 'Проверяем…' : netTest ? 'Ещё раз' : 'Проверить'
+      )
+    ),
+    d
+      ? h(
+          'div.links',
+          ...d.lines.map((l) =>
+            h('div.lk', h('span.dot', { class: l.ok === true ? 'ok' : l.ok === false ? 'bad' : 'off' }), h('span', l.text))
+          )
+        )
+      : h(
+          'div.muted',
+          { style: { marginTop: '4px' } },
+          netRunning
+            ? 'Проверяем внешний адрес и ретранслятор (до 10 с)…'
+            : 'Получает ли окно звонка внешний адрес (STUN) и путь через ретранслятор (TURN). Пригодится, если звонок с сайтом не соединяется.'
+        ),
+    d ? h('div.muted.verdict', d.verdict) : null
+  );
+}
 async function renderDiag() {
   let d;
   try {
@@ -674,6 +722,7 @@ async function renderDiag() {
   const chats = await call('chat_status').catch(() => null);
   lastChats = chats;
   $('#diagBody').replaceChildren(
+    diagNet(),
     diagP2p(d.p2p || {}),
     chats ? diagChats(chats) : '',
     ...(rooms.length
@@ -806,6 +855,7 @@ $('#diagCopy').addEventListener('click', async () => {
     time: new Date().toISOString(),
     diag: d,
     chats,
+    net: netTest ? { ...netTest, summary: describeNetTest(netTest) } : null,
   };
   copyText(JSON.stringify(report, null, 2), 'Отчёт скопирован');
 });

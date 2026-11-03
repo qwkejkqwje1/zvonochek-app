@@ -123,6 +123,15 @@ await step('диагностика', async () => {
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   if (clip.includes('#k=') || /"secret"/.test(clip)) throw new Error('в отчёте секрет');
 });
+await step('диагностика: проверка сети звонков (STUN/TURN)', async () => {
+  await page.click('#netTestBtn');
+  await page.waitForFunction(() => document.querySelectorAll('.diag-net .lk').length >= 3, null, { timeout: 20000 });
+  console.log('   ', (await page.textContent('.diag-net')).replace(/\s+/g, ' ').trim());
+  await page.click('#diagCopy');
+  const rep = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+  if (!rep.net || !rep.net.stun || typeof rep.net.stun.host !== 'number') throw new Error('нет net в отчёте');
+  if (/\b\d{1,3}(\.\d{1,3}){3}\b/.test(JSON.stringify(rep.net))) throw new Error('IP в отчёте');
+});
 for (const [w, h] of [
   [1000, 680],
   [720, 520],
