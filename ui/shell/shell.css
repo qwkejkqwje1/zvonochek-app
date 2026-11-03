@@ -711,6 +711,9 @@ input[type='range'] {
 .dialog p {
   color: var(--text-2);
   margin: 0 0 14px;
+  white-space: pre-line;
+  max-height: 50vh;
+  overflow: auto;
 }
 .dialog .actions {
   display: flex;

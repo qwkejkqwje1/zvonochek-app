@@ -16,6 +16,7 @@ import {
   dayLabel,
   ago,
   toast,
+  fmtSize,
   copyText,
   dialog,
   confirmDialog,
@@ -574,6 +575,7 @@ function renderSettings() {
   $('#setAutoImg').checked = s.autoImages !== false;
   $('#setNotify').checked = s.notifications !== false;
   $('#notifyTest').disabled = s.notifications === false;
+  $('#setAutoUpd').checked = s.autoUpdate !== false;
   if (document.activeElement !== $('#setWorker')) $('#setWorker').value = s.workerUrl || '';
   for (const b of $$('#setTheme button')) b.classList.toggle('on', b.dataset.v === (s.theme || 'auto'));
 }
@@ -684,34 +686,62 @@ $('#cleanupBtn').addEventListener('click', async () => {
     toast('Не получилось: ' + (e.message || e), 8000);
   }
 });
+// обновление (Windows): найти → скачать и поставить на место exe (подпись проверяет ядро) → перезапустить
+const updLabel = (t) => ($('#updBtn').lastChild.textContent = t);
+function updateReady(version) {
+  S.updateReady = version;
+  updLabel('Перезапустить');
+  $('#updNote').textContent = `Версия ${version} установлена — заработает после перезапуска`;
+  $('#updNote').classList.remove('hidden');
+}
+async function askRestart(version) {
+  if (await confirmDialog(`Версия ${version} установлена`, 'Перезапустить ZVONochek сейчас? Если идёт звонок, он прервётся.', 'Перезапустить'))
+    await call('host_update_restart');
+}
+async function installUpdate(version) {
+  toast(`Скачиваю версию ${version}…`, 120000);
+  const r = await call('host_update_install');
+  toast(`Версия ${r?.version || version} установлена`, 3000);
+  updateReady(r?.version || version);
+  await askRestart(r?.version || version);
+}
+on('update:progress', (_, p) => {
+  if (p && p.total) toast(`Скачиваю обновление: ${Math.min(100, Math.round((p.done / p.total) * 100))}%`, 120000);
+});
+on('host:update', (_, p) => {
+  if (!p || !p.version) return;
+  if (p.ready) {
+    updateReady(p.version);
+    toast(`Установлена версия ${p.version} — заработает после перезапуска (Настройки → О программе)`, 8000);
+  } else {
+    S.updateAvailable = p.version;
+    updLabel(`Обновить до ${p.version}`);
+    if (p.error) {
+      $('#updNote').textContent = `Не удалось обновиться до ${p.version}: ${p.error}`;
+      $('#updNote').classList.remove('hidden');
+    } else toast(`Доступна версия ${p.version} — Настройки → О программе`, 6000);
+  }
+});
 $('#updBtn').addEventListener('click', async () => {
   const btn = $('#updBtn');
   btn.disabled = true;
   try {
+    if (S.updateReady) return await askRestart(S.updateReady);
     const r = await call('host_update_check');
-    if (!r || !r.available) toast('Установлена последняя версия');
-    else if (S.hostInfo.updateMode === 'replace') {
-      // переносная версия: обновление — новый ZVONochek.exe вместо старого
-      if (
-        await confirmDialog(
-          `Доступна версия ${r.version}`,
-          'Скачайте новый ZVONochek.exe со страницы релизов, закройте ZVONochek (значок в трее → Выход) и положите новый файл вместо старого. Папку ZVONochek-data не трогайте — в ней ваши данные.',
-          'Открыть страницу'
-        )
-      )
-        call('host_open_external', { url: RELEASES }).catch((e) => toast('Не открылось: ' + (e.message || e)));
-    } else if (
-      await confirmDialog(`Доступна версия ${r.version}`, r.notes || 'Установить обновление сейчас? Приложение перезапустится.', 'Обновить')
-    ) {
-      toast('Загрузка обновления…', 60000);
-      await call('host_update_install');
+    if (r && r.ready) {
+      updateReady(r.ready);
+      return await askRestart(r.ready);
     }
+    if (!r || !r.available) return toast(`Установлена последняя версия (${S.info.version})`);
+    const text = `${r.notes ? r.notes.trim() + '\n\n' : ''}Скачать и установить (${fmtSize(r.size || 0)})? Новая версия заработает после перезапуска ZVONochek, данные останутся на месте.`;
+    if (await confirmDialog(`Доступна версия ${r.version}`, text, 'Обновить')) await installUpdate(r.version);
   } catch (e) {
-    toast(host === 'tauri' ? 'Проверка не удалась: ' + (e.message || e) : 'Обновления — в установленном приложении');
+    toast(host === 'tauri' ? 'Обновление не удалось: ' + (e.message || e) : 'Обновления — в приложении для Windows', 8000);
   } finally {
     btn.disabled = false;
   }
 });
+$('#setAutoUpd').addEventListener('change', (e) => setPatch({ autoUpdate: e.target.checked }));
 $('#licBtn').addEventListener('click', () => {
   dialog((b, close) => {
     b.style.width = 'min(760px, calc(100vw - 40px))';
@@ -1038,6 +1068,8 @@ function setupMobile() {
 function setupDesktopData() {
   const hi = S.hostInfo;
   if (hi.winNotify) $('#rowNotify').classList.remove('hidden');
+  if (hi.updates) $('#rowAutoUpd').classList.remove('hidden');
+  if (hi.updateReady) updateReady(hi.updateReady);
   if (hi.dataDir) {
     $('#rowData').classList.remove('hidden');
     $('#dataTitle').textContent = hi.portable ? 'Данные рядом с программой' : 'Папка с данными';
@@ -1064,7 +1096,7 @@ async function start() {
   }
   S.info = await call('app_info');
   $('#brandVer').textContent = `версия ${S.info.version}`;
-  $('#aboutVer').textContent = `Версия ${S.info.version} · ${S.info.platform}${S.hostInfo.portable ? ' · переносная' : ''}${S.info.protected ? ' · данные защищены DPAPI' : ''}`;
+  $('#aboutVer').textContent = `Версия ${S.info.version} · ${S.info.platform}${S.hostInfo.portable ? ' · переносная' : ''}${S.info.protected ? ' · данные зашифрованы' : ''}`;
   $('#aboutWeb').textContent = `Веб-клиент v${S.info.webVersion}`;
   await Promise.all([loadSettings(), loadLinks(), loadHistory()]);
   await initContacts({

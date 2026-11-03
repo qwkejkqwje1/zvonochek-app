@@ -29,6 +29,8 @@ struct App {
     opened: std::sync::Mutex<Vec<Value>>,
     /// Папка данных (как у переносной версии на Windows — «рядом с программой»).
     data: PathBuf,
+    /// Версия, «поставленная на место exe» (host_update_install).
+    update_ready: std::sync::Mutex<Option<String>>,
 }
 
 fn arg(name: &str) -> Option<String> {
@@ -123,6 +125,7 @@ async fn main() -> anyhow::Result<()> {
         pick: Default::default(),
         opened: Default::default(),
         data: data.clone(),
+        update_ready: Default::default(),
     });
     let router = axum::Router::new()
         .route("/ipc", get(ipc))
@@ -197,6 +200,29 @@ async fn client(app: Arc<App>, ws: WebSocket) {
             };
             let _ = out.send(resp.to_string());
         };
+        // обновление как в приложении для Windows: проверка и загрузка — ядром (ZV_UPDATE_URL, ZV_UPDATE_KEY),
+        // «поставить на место exe» и перезапуск — только отметка для теста
+        if matches!(cmd.as_str(), "host_update_check" | "host_update_install") {
+            let app = app.clone();
+            let out = out_tx.clone();
+            tokio::spawn(async move {
+                let r = if cmd == "host_update_check" {
+                    app.core.dispatch("update_check", Value::Null).await.map(|mut v| {
+                        v["ready"] = app.update_ready.lock().unwrap().clone().map_or(Value::Null, Value::String);
+                        v
+                    })
+                } else {
+                    app.core.dispatch("update_download", Value::Null).await.map(|d| {
+                        let version = d["version"].as_str().unwrap_or("").to_string();
+                        app.opened.lock().unwrap().push(json!({"update": d["path"], "version": version}));
+                        *app.update_ready.lock().unwrap() = Some(version.clone());
+                        json!({"ready": true, "version": version})
+                    })
+                };
+                reply(&out, id, r);
+            });
+            continue;
+        }
         // команды хоста: в devhost окна — это вкладки, их открывает сама страница
         let host = match cmd.as_str() {
             // --mobile: оболочка в режиме телефона (как Android: нижние вкладки, «Назад», без трея)
@@ -206,7 +232,8 @@ async fn client(app: Arc<App>, ws: WebSocket) {
                 json!({"host": "devhost", "mobile": true, "background": true})
             } else {
                 let old = app.data.join("old");
-                json!({"host": "devhost", "portable": true, "updateMode": "replace",
+                json!({"host": "devhost", "portable": true, "updateMode": "self", "updates": true,
+                    "updateReady": app.update_ready.lock().unwrap().clone(),
                     "dataDir": app.data.display().to_string(), "winNotify": true, "cleanup": true,
                     "oldData": old.is_dir().then(|| old.display().to_string())})
             })),
@@ -220,7 +247,7 @@ async fn client(app: Arc<App>, ws: WebSocket) {
                         .map(|_| json!({"enabled": on})),
                 )
             }
-            "host_notify_test" | "host_open_data" | "host_quit" => {
+            "host_notify_test" | "host_open_data" | "host_quit" | "host_update_restart" => {
                 app.opened.lock().unwrap().push(json!({"host": cmd}));
                 Some(Ok(Value::Null))
             }
@@ -264,7 +291,7 @@ async fn client(app: Arc<App>, ws: WebSocket) {
                 *app.pick.lock().unwrap() = v;
                 Some(Ok(Value::Null))
             }
-            "host_autostart_get" | "host_autostart_set" | "host_update_check" | "host_update_install" => {
+            "host_autostart_get" | "host_autostart_set" => {
                 Some(Err("не поддерживается в zv-devhost".to_string()))
             }
             _ => None,

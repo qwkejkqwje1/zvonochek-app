@@ -150,8 +150,70 @@ async function importProfile() {
   }
 }
 
+// ---------- пароль профиля (Windows): ключ данных под паролем — папку можно открыть на другом компьютере ----------
+async function initVault() {
+  let st = await call('vault_status').catch(() => null);
+  if (!st || !st.enabled) return;
+  const render = (s) => {
+    st = s;
+    $('#rowVault').classList.remove('hidden');
+    $('#vaultText').textContent = s.password
+      ? s.remember
+        ? 'Задан. На этом компьютере не спрашивается, на других — при запуске'
+        : 'Задан. Спрашивается при каждом запуске'
+      : 'Не задан — профиль открывается только на этом компьютере. Задайте пароль, чтобы переносить папку с программой на другие';
+    $('#vaultSet').lastChild.textContent = s.password ? 'Сменить' : 'Задать';
+    $('#vaultDel').classList.toggle('hidden', !s.password);
+    $('#rowVaultRemember').classList.toggle('hidden', !s.password);
+    $('#vaultRemember').checked = !!s.remember;
+  };
+  render(st);
+  $('#vaultSet').addEventListener('click', async () => {
+    const had = st.password;
+    const r = await passwordDialog({
+      title: had ? 'Сменить пароль профиля' : 'Задать пароль профиля',
+      text: 'С паролем папку ZVONochek-data можно унести на другой компьютер: там ZVONochek спросит пароль. Ключ устройства, контакты и ссылки зашифрованы.',
+      note: 'Пароль нигде не хранится, восстановить его нельзя. Забудете — профиль откроется только на компьютерах, где он запомнен.',
+      repeat: true,
+      okLabel: had ? 'Сменить' : 'Задать',
+      okIcon: 'lock',
+      run: (password) => call('vault_set_password', { password }),
+    });
+    if (!r) return;
+    render(r);
+    toast(had ? 'Пароль профиля изменён' : 'Пароль профиля задан', 3000);
+  });
+  $('#vaultDel').addEventListener('click', async () => {
+    if (
+      !(await confirmDialog(
+        'Убрать пароль профиля?',
+        'Профиль будет открываться без пароля, но только на этом компьютере (и там, где он уже запомнен). Унести папку на другой компьютер будет нельзя.',
+        'Убрать',
+        true
+      ))
+    )
+      return;
+    try {
+      render(await call('vault_remove_password'));
+      toast('Пароль профиля убран', 3000);
+    } catch (e) {
+      toast('Не удалось: ' + (e.message || e), 6000);
+    }
+  });
+  $('#vaultRemember').addEventListener('change', async (e) => {
+    try {
+      render(await call('vault_remember', { on: e.target.checked }));
+      toast(e.target.checked ? 'На этом компьютере пароль спрашиваться не будет' : 'Пароль будет спрашиваться при каждом запуске', 3500);
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      toast('Не удалось: ' + (err.message || err), 6000);
+    }
+  });
+}
+
 /** После перезапуска с перенесённым профилем — сообщить один раз. */
 export function initProfile() {
+  initVault().catch(console.error);
   $('#profExport')?.addEventListener('click', () => exportProfile().catch((e) => toast('Не удалось: ' + (e.message || e))));
   $('#profImport')?.addEventListener('click', () => importProfile().catch((e) => toast('Не удалось: ' + (e.message || e))));
   let done = null;

@@ -130,6 +130,8 @@
       <h2>Профиль</h2>
       <div class="card">
         <div class="set"><div class="t"><b>Имя в звонках</b><small>Его видит собеседник</small></div><input class="field" id="setName" maxlength="40" placeholder="Например, Алекс"></div>
+        <div class="set hidden" id="rowVault"><div class="t"><b>Пароль профиля</b><small id="vaultText">—</small></div><div class="btns"><button class="btn sm danger hidden" id="vaultDel">Убрать</button><button class="btn sm" id="vaultSet"><i data-ic="lock" class="sm"></i><span>Задать</span></button></div></div>
+        <div class="set hidden" id="rowVaultRemember"><div class="t"><b>Не спрашивать на этом компьютере</b><small>Выключите, если компьютером пользуются другие: пароль будет спрашиваться при каждом запуске</small></div><label class="switch"><input type="checkbox" id="vaultRemember"><span></span></label></div>
         <div class="set"><div class="t"><b>Перенос на другое устройство</b><small>ID устройства, контакты, ссылки, история звонков и переписка — в один файл под паролем</small></div><div class="btns"><button class="btn sm" id="profExport"><i data-ic="download" class="sm"></i>Сохранить</button><button class="btn sm" id="profImport"><i data-ic="upload" class="sm"></i>Загрузить</button></div></div>
       </div>
 
@@ -170,7 +172,8 @@
 
       <h2>О программе</h2>
       <div class="card">
-        <div class="set"><div class="t"><b id="aboutName">ZVONochek для Windows</b><small id="aboutVer">—</small></div><button class="btn sm" id="updBtn"><i data-ic="download" class="sm"></i>Проверить обновления</button></div>
+        <div class="set"><div class="t"><b id="aboutName">ZVONochek для Windows</b><small id="aboutVer">—</small><small class="warn hidden" id="updNote"></small></div><button class="btn sm" id="updBtn"><i data-ic="download" class="sm"></i><span>Проверить обновления</span></button></div>
+        <div class="set hidden" id="rowAutoUpd"><div class="t"><b>Обновлять автоматически</b><small>Новая версия скачивается сама (проверяется подпись ZVONochek) и начинает работать после перезапуска программы</small></div><label class="switch"><input type="checkbox" id="setAutoUpd"><span></span></label></div>
         <div class="set"><div class="t"><b>Встроенный веб-клиент</b><small id="aboutWeb">—</small></div></div>
         <div class="set hidden" id="rowDiag"><div class="t"><b>Диагностика</b><small>Каналы связи, сеть, отчёт для поддержки</small></div><button class="btn sm" id="diagBtn">Открыть</button></div>
         <div class="set"><div class="t"><b>Лицензии</b><small>© ZVONochek. Все права защищены. Использованные компоненты и их лицензии</small></div><button class="btn sm" id="licBtn">Открыть</button></div>
