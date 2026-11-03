@@ -1,0 +1,48 @@
+name: Release
+
+# Тег vX.Y.Z → черновик релиза с установщиками Windows x64/ARM64 (NSIS) и latest.json для автообновления.
+# Секреты репозитория: TAURI_SIGNING_PRIVATE_KEY (ключ подписи обновлений), TAURI_SIGNING_PRIVATE_KEY_PASSWORD (пусто).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Windows ${{ matrix.target }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install -g @tauri-apps/cli@2
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: app
+          tauriScript: tauri
+          args: --target ${{ matrix.target }}
+          tagName: ${{ github.ref_name }}
+          releaseName: ZVONochek ${{ github.ref_name }}
+          releaseBody: Что нового — в CHANGELOG.md. Установщик для обычных ПК — x64, для ПК на ARM (Snapdragon) — arm64.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true

@@ -1,0 +1,55 @@
+name: Совместимость с веб-версией
+
+# Каждую ночь: свежий веб-клиент (qwkejkqwje1/zvonochek, main) → проверка интерфейса signaling.js,
+# векторы протокола и живой звонок «сайт ↔ ядро приложения». Если веб изменился и всё зелёное — PR с обновлением ui/web.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: qwkejkqwje1/zvonochek
+          path: .web
+          fetch-depth: 0
+      - name: Версии
+        id: ver
+        run: |
+          echo "web=$(git -C .web rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "ours=$(sed -n 's/^commit=//p' ui/web/WEB_VERSION)" >> "$GITHUB_OUTPUT"
+      - name: Синхронизация ui/web (проверка интерфейса моста)
+        run: WEB_DIR=.web tools/sync-web.sh HEAD
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p zv-proto -p zv-signal -p zv-core
+      - run: cargo build -p zv-devhost
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Playwright
+        working-directory: tests/e2e
+        run: npm install && npx playwright install --with-deps chromium
+      - name: Живой звонок — сайт ↔ ядро
+        run: |
+          target/debug/zv-devhost --port 8790 --ui ui --data "$RUNNER_TEMP/zvdev" > "$RUNNER_TEMP/devhost.log" 2>&1 &
+          sleep 3
+          node tests/e2e/devhost-live-call.mjs http://127.0.0.1:8790
+      - name: Входящий по своей ссылке
+        run: node tests/e2e/devhost-shell.mjs http://127.0.0.1:8790
+      - name: PR с новой версией веб-клиента
+        if: steps.ver.outputs.web != steps.ver.outputs.ours
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: web-sync
+          title: 'Веб-клиент ${{ steps.ver.outputs.web }}'
+          commit-message: 'ui/web ← ${{ steps.ver.outputs.web }}'
+          body: Автоматически: интерфейс моста не изменился, звонок «сайт ↔ ядро» и входящий по своей ссылке прошли.

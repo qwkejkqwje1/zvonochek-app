@@ -1,13 +1,10 @@
 // Оболочка в zv-devhost: первый запуск → своя ссылка → браузер звонит по ней → входящий → ответ → разговор;
 // затем пропущенный. Живой сайт и живые каналы.
 //   node tests/e2e/devhost-shell.mjs [http://127.0.0.1:8790]
-import { chromium } from '/data/tools/node_modules/playwright-core/index.mjs';
+import { launch } from './pw.mjs';
 const HOST = process.argv[2] || 'http://127.0.0.1:8790';
 const WEB = process.argv[3] || 'https://qwkejkqwje1.github.io/zvonochek/';
-const browser = await chromium.launch({
-  executablePath: '/usr/local/bin/chromium',
-  args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
-});
+const browser = await launch();
 const quiet = (t) => /WebSocket connection to|status of 429|ERR_CONNECTION/.test(t);
 const watch = (page, tag) => {
   page.on('console', (m) => {

@@ -1,14 +1,11 @@
 // Живой сайт (браузер) ↔ встроенный веб-клиент в zv-devhost (ядро на Rust): звонок должен соединиться.
 //   node tests/e2e/devhost-live-call.mjs [http://127.0.0.1:8790] [https://qwkejkqwje1.github.io/zvonochek/]
-import { chromium } from '/data/tools/node_modules/playwright-core/index.mjs';
+import { launch } from './pw.mjs';
 import { randomBytes } from 'node:crypto';
 const HOST = process.argv[2] || 'http://127.0.0.1:8790';
 const WEB = process.argv[3] || 'https://qwkejkqwje1.github.io/zvonochek/';
 const secret = randomBytes(16).toString('base64url');
-const browser = await chromium.launch({
-  executablePath: '/usr/local/bin/chromium',
-  args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
-});
+const browser = await launch();
 const mk = async (tag) => {
   const ctx = await browser.newContext({ permissions: ['microphone', 'camera'] });
   const page = await ctx.newPage();

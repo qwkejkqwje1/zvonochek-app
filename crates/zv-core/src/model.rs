@@ -23,6 +23,8 @@ pub struct Settings {
     pub worker_url: String,
     /// Входить в звонок сразу, без экрана проверки устройств веб-клиента.
     pub skip_prejoin: bool,
+    /// Подсказка «работаю в трее» уже показана.
+    pub tray_hint_shown: bool,
 }
 
 impl Default for Settings {
@@ -37,6 +39,7 @@ impl Default for Settings {
             mqtt_tcp: true,
             worker_url: String::new(),
             skip_prejoin: true,
+            tray_hint_shown: false,
         }
     }
 }

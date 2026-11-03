@@ -77,6 +77,18 @@ for (name, ver), p in sorted(pkgs.items()):
             texts = [('MIT (текст по лицензии пакета)', f'Copyright (c) {authors}\n\n' + STD['MIT'])]
     entries.append((f'{name} {ver}', lic, p.get('repository') or '', texts))
 
+# пакеты без файлов лицензии: текст той же лицензии из того же репозитория, иначе — любой с той же лицензией
+by_repo_lic, by_lic = {}, {}
+for t, lic, repo, texts in entries:
+    if texts:
+        by_repo_lic.setdefault((repo, lic), texts)
+        by_lic.setdefault(lic, texts)
+for i, (t, lic, repo, texts) in enumerate(entries):
+    if not texts:
+        src = by_repo_lic.get((repo, lic)) or by_lic.get(lic)
+        if src:
+            entries[i] = (t, lic, repo, src)
+
 # JS, встроенные в веб-клиент
 def js_header(path):
     try:

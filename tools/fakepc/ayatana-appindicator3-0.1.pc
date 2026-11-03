@@ -1,0 +1,7 @@
+prefix=/usr
+libdir=/usr/lib64
+Name: ayatana-appindicator3-0.1
+Description: заглушка для кросс-сборки установщика Windows из Linux (tauri-cli проверяет трей Linux)
+Version: 0.5.90
+Libs: -L${libdir}
+Cflags:

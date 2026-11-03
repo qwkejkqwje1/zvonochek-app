@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Обёртка clang для кросс-сборки aarch64-pc-windows-msvc: ring вызывает «clang» (не clang-cl),
+# а cargo-xwin кладёт в CFLAGS флаги в стиле clang-cl (/imsvc DIR). Переводим их в -isystem DIR.
+real="${ZV_REAL_CLANG:-/usr/bin/clang}"
+a=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    /imsvc) a+=(-isystem "$2"); shift 2 ;;
+    /imsvc*) a+=(-isystem "${1#/imsvc}"); shift ;;
+    *) a+=("$1"); shift ;;
+  esac
+done
+exec "$real" "${a[@]}"

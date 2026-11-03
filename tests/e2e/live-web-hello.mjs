@@ -1,10 +1,7 @@
 // Живой сайт ↔ zv-cli: веб входит в комнату, проверяем, что ядро видит его hello, а веб — наш.
-import { chromium } from '/data/tools/node_modules/playwright-core/index.mjs';
+import { launch } from './pw.mjs';
 const link = process.argv[2];
-const browser = await chromium.launch({
-  executablePath: '/usr/local/bin/chromium',
-  args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'],
-});
+const browser = await launch();
 const ctx = await browser.newContext({ permissions: ['microphone', 'camera'] });
 const page = await ctx.newPage();
 const logs = [];

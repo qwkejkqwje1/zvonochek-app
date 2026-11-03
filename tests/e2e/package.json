@@ -1,0 +1,9 @@
+{
+  "name": "zvonochek-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Сквозные тесты: zv-devhost (ядро на Rust) ↔ живой веб-клиент",
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  core:
+    name: Ядро — тесты, clippy, fmt (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy -p zv-proto -p zv-signal -p zv-core -p zv-cli -p zv-devhost --all-targets -- -D warnings
+      - run: cargo test -p zv-proto -p zv-signal -p zv-core
+
+  windows:
+    name: Приложение — сборка (${{ matrix.target }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - run: cargo clippy -p zvonochek --target ${{ matrix.target }} -- -D warnings
+      - run: cargo build -p zvonochek --release --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zvonochek-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/zvonochek.exe
+          retention-days: 7

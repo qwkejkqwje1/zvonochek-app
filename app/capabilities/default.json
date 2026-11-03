@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Окна приложения: события ядра (listen) и команды zv/zv_sync.",
+  "windows": ["main", "incoming", "call-*"],
+  "permissions": ["core:event:default"]
+}

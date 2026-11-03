@@ -242,11 +242,13 @@ a {
 }
 .head-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   gap: 12px;
 }
 .head-row > div:first-child {
-  flex: 1;
+  flex: 1 1 240px;
+  min-width: 0;
 }
 h2 {
   font-size: 13px;
