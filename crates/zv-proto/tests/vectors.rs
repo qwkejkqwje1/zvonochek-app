@@ -4,7 +4,7 @@ use serde_json::Value;
 use zv_proto::{Room, topics};
 
 fn vectors() -> Value {
-    let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/vectors/web-v39.json");
+    let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/vectors/web-v40.json");
     serde_json::from_str(&std::fs::read_to_string(p).expect("vectors file")).expect("json")
 }
 

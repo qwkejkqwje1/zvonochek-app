@@ -1,6 +1,6 @@
 // Генератор тест-векторов совместимости: исполняет crypto.js / ntfy.js веб-версии
 // (Node 24 умеет WebCrypto, CompressionStream, atob/btoa) и пишет JSON.
-//   WEB_DIR=../zvonochek node tools/gen-vectors.mjs > spec/vectors/web-v39.json
+//   WEB_DIR=../zvonochek node tools/gen-vectors.mjs > spec/vectors/web-v40.json
 // Проверка обратного направления (Rust seal → JS open):
 //   WEB_DIR=… node tools/gen-vectors.mjs --check rust-sealed.json
 import { pathToFileURL } from 'node:url';
