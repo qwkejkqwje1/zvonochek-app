@@ -207,17 +207,31 @@ async fn client(app: Arc<App>, ws: WebSocket) {
             let out = out_tx.clone();
             tokio::spawn(async move {
                 let r = if cmd == "host_update_check" {
-                    app.core.dispatch("update_check", Value::Null).await.map(|mut v| {
-                        v["ready"] = app.update_ready.lock().unwrap().clone().map_or(Value::Null, Value::String);
-                        v
-                    })
+                    app.core
+                        .dispatch("update_check", Value::Null)
+                        .await
+                        .map(|mut v| {
+                            v["ready"] = app
+                                .update_ready
+                                .lock()
+                                .unwrap()
+                                .clone()
+                                .map_or(Value::Null, Value::String);
+                            v
+                        })
                 } else {
-                    app.core.dispatch("update_download", Value::Null).await.map(|d| {
-                        let version = d["version"].as_str().unwrap_or("").to_string();
-                        app.opened.lock().unwrap().push(json!({"update": d["path"], "version": version}));
-                        *app.update_ready.lock().unwrap() = Some(version.clone());
-                        json!({"ready": true, "version": version})
-                    })
+                    app.core
+                        .dispatch("update_download", Value::Null)
+                        .await
+                        .map(|d| {
+                            let version = d["version"].as_str().unwrap_or("").to_string();
+                            app.opened
+                                .lock()
+                                .unwrap()
+                                .push(json!({"update": d["path"], "version": version}));
+                            *app.update_ready.lock().unwrap() = Some(version.clone());
+                            json!({"ready": true, "version": version})
+                        })
                 };
                 reply(&out, id, r);
             });
