@@ -1,30 +1,30 @@
-// ZVONochek Service Worker v40 — мгновенный старт, офлайн-оболочка и безопасные обновления
-const CACHE_NAME = 'zvonochek-v40';
+// ZVONochek Service Worker v41 — мгновенный старт, офлайн-оболочка и безопасные обновления
+const CACHE_NAME = 'zvonochek-v41';
 const CORE = [
   './',
   './index.html',
-  './style.css?v=40',
-  './app.js?v=40',
-  './group.js?v=40',
-  './store.js?v=40',
-  './identity.js?v=40',
-  './inbox.js?v=40',
-  './chat.js?v=40',
-  './chat-transport.js?v=40',
-  './backup.js?v=40',
-  './signaling.js?v=40',
-  './ntfy.js?v=40',
-  './crypto.js?v=40',
-  './config.js?v=40',
-  './zvdiag.js?v=40',
-  './callstats.js?v=40',
-  './media-policy.js?v=40',
-  './stats-ui.js?v=40',
-  './coalesce.js?v=40',
-  './mqtt-lite.js?v=40',
-  './anon-names.js?v=40',
-  './devices.js?v=40',
-  './sync-core.js?v=40',
+  './style.css?v=41',
+  './app.js?v=41',
+  './group.js?v=41',
+  './store.js?v=41',
+  './identity.js?v=41',
+  './inbox.js?v=41',
+  './chat.js?v=41',
+  './chat-transport.js?v=41',
+  './backup.js?v=41',
+  './signaling.js?v=41',
+  './ntfy.js?v=41',
+  './crypto.js?v=41',
+  './config.js?v=41',
+  './zvdiag.js?v=41',
+  './callstats.js?v=41',
+  './media-policy.js?v=41',
+  './stats-ui.js?v=41',
+  './coalesce.js?v=41',
+  './mqtt-lite.js?v=41',
+  './anon-names.js?v=41',
+  './devices.js?v=41',
+  './sync-core.js?v=41',
   './icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -32,8 +32,8 @@ const CORE = [
   './icons/apple-touch-icon.png',
   './icons/badge-96.png',
   './manifest.webmanifest',
-  './vendor/qrcode.js?v=40',
-  './vendor/secp256k1.js?v=40',
+  './vendor/qrcode.js?v=41',
+  './vendor/secp256k1.js?v=41',
 ];
 
 self.addEventListener('install', (e) => {
@@ -46,11 +46,16 @@ self.addEventListener('install', (e) => {
   );
 });
 
+// v41: удаляем только свои старые кэши. Хранилище кэшей общее на весь
+// origin (qwkejkqwje1.github.io): до v41 активация стирала и кэши других
+// приложений этого адреса (например, /TorrClient/).
+const OWN_CACHE = (k) => k.startsWith('zvonochek-') && k !== CACHE_NAME;
+
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter(OWN_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -111,8 +116,18 @@ const RING_VIBRATE = [700, 300, 700, 300, 700, 300, 700, 300, 700];
 const ICON = './icons/icon-192.png';
 const BADGE = './icons/badge-96.png';
 
+// v41: matchAll с includeUncontrolled отдаёт ВСЕ окна origin, а на github.io
+// это и чужие проекты аккаунта (например, /TorrClient/). Раньше открытая
+// вкладка TorrClient считалась «приложение на экране»: уведомление о звонке
+// не показывалось, а клик по уведомлению фокусировал чужую вкладку.
+// Считаем только окна внутри своей папки (scope).
+async function ownWindows() {
+  const scope = self.registration.scope;
+  const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  return all.filter((w) => typeof w.url === 'string' && w.url.startsWith(scope));
+}
 async function windowsState() {
-  const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const wins = await ownWindows();
   return { wins, visible: wins.some((w) => w.visibilityState === 'visible') };
 }
 
@@ -180,6 +195,7 @@ self.addEventListener('push', (e) => {
   } else if (d.t === 'ring-done') {
     e.waitUntil(
       (async () => {
+        const { visible } = await windowsState();
         const tags = ['ring-' + d.ringId, String(d.ringId || '')];
         let had = false;
         for (const tag of tags) {
@@ -189,17 +205,31 @@ self.addEventListener('push', (e) => {
             n.close();
           }
         }
-        if (had && (d.state === 'expired' || d.state === 'cancelled')) {
-          await self.registration.showNotification('Пропущенный звонок — ZVONochek', {
-            body: 'Вам звонили по личной ссылке',
-            tag: 'missed-' + d.ringId,
-            icon: ICON,
-            badge: BADGE,
-            silent: true,
-            timestamp: Date.now(),
-            data: { missed: 1 },
-          });
-        }
+        // v41: push теперь действительно доходит (до v41 Worker падал на
+        // шифровании). Когда окна приложения не видно, каждый push обязан
+        // показать уведомление: Chrome иначе показывает своё «сайт обновлён
+        // в фоне», Safari на iPhone после нескольких «тихих» пушей отзывает
+        // подписку. ring-done может прийти и вместо пуша звонка (тот же
+        // Topic: сервис доставки заменяет недоставленный), поэтому итог
+        // звонка показываем тихим уведомлением.
+        const missed = d.state === 'expired' || d.state === 'cancelled';
+        if (missed ? !had && visible : visible) return;
+        const title = missed
+          ? 'Пропущенный звонок — ZVONochek'
+          : d.state === 'accepted'
+            ? 'Звонок принят на другом устройстве'
+            : d.state === 'declined'
+              ? 'Звонок отклонён на другом устройстве'
+              : 'Входящий звонок завершён';
+        await self.registration.showNotification(title, {
+          body: missed ? 'Вам звонили по личной ссылке' : 'ZVONochek',
+          tag: (missed ? 'missed-' : 'ringdone-') + d.ringId,
+          icon: ICON,
+          badge: BADGE,
+          silent: true,
+          timestamp: Date.now(),
+          data: missed ? { missed: 1 } : {},
+        });
       })()
     );
   }
@@ -216,7 +246,7 @@ self.addEventListener('notificationclick', (e) => {
   const chatRoom = data.chatRoom || data.chat || '';
   e.waitUntil(
     (async () => {
-      const wins = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const wins = await ownWindows();
       const msg = chatRoom
         ? { type: 'chat-notification', roomId: chatRoom, call: data.call ? 1 : 0 }
         : ringId

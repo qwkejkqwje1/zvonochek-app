@@ -18,7 +18,7 @@
 <link rel="icon" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="style.css?v=41">
 </head>
 <body>
 
@@ -631,7 +631,7 @@
           <button id="pMic" class="round" title="Микрофон" aria-label="Микрофон"><svg class="ic"><use href="#i-mic"/></svg></button>
           <button id="pCam" class="round" title="Камера" aria-label="Камера"><svg class="ic"><use href="#i-cam"/></svg></button>
           <button id="pFlipCam" class="round" title="Фронтальная / задняя камера" aria-label="Сменить камеру"><svg class="ic"><use href="#i-flip-cam"/></svg></button>
-          <button id="pTestMic" class="pill-btn" title="Услышать свой голос"><svg class="ic"><use href="#i-volume"/></svg><span class="lbl">Проверить микрофон</span></button>
+          <button id="pTestMic" class="pill-btn" title="Записать 5 секунд и прослушать"><svg class="ic"><use href="#i-volume"/></svg><span class="lbl">Проверить микрофон</span></button>
           <button id="pOpenSettings" class="round" title="Настройки звука и связи" aria-label="Настройки"><svg class="ic"><use href="#i-settings"/></svg></button>
         </div>
       </div>
@@ -782,6 +782,7 @@
       <label class="check"><input type="checkbox" id="qaEcoMode"> Эко-режим (против нагрева)</label>
       <label class="check"><input type="checkbox" id="qaBoost"> Выравнивание тихого голоса</label>
       <label class="check"><input type="checkbox" id="qaBridgeMode"> Голос только через мост</label>
+      <label class="check"><input type="checkbox" id="qaEcho"> Эхоподавление (нужно без наушников)</label>
     </div>
     <button id="qaMoreSettings" class="btn small block"><svg class="ic"><use href="#i-settings"/></svg><span>Все настройки звука</span></button>
   </div>
@@ -903,10 +904,18 @@
   </div>
 
   <div class="settings-sec">
-    <h4>Обработка звука <span class="sec-note">по умолчанию выключена</span></h4>
-    <p class="sec-hint">Чистый тракт обычно звучит лучше в долгих звонках. Включайте пункт, только если есть конкретная проблема.</p>
+    <h4>Обработка звука</h4>
+    <p class="sec-hint">Шумодав, авторегулировка и компрессор по умолчанию выключены — чистый тракт обычно звучит лучше. Включайте их, только если есть конкретная проблема.</p>
+    <label class="field">Эхоподавление
+      <select id="sEchoMode">
+        <option value="auto">Авто — выключено в наушниках, включено на динамике</option>
+        <option value="on">Всегда включено</option>
+        <option value="off">Выключено</option>
+      </select>
+    </label>
+    <p class="sec-hint" id="sEchoState"></p>
+    <p class="sec-hint">Эхоподавление нужно не вам, а собеседнику: без него он слышит свой голос, вернувшийся из вашего динамика. В наушниках эха нет, а обработка может сделать ваш голос глуше — поэтому в «Авто» она там выключена.</p>
     <label class="check"><input type="checkbox" id="sNoise"> Шумоподавление и фильтр гула</label>
-    <label class="check"><input type="checkbox" id="sEcho"> Эхоподавление</label>
     <label class="check"><input type="checkbox" id="sAgc"> Авторегулировка уровня</label>
     <label class="check"><input type="checkbox" id="sComp"> Компрессор тихого голоса</label>
     <label class="check"><input type="checkbox" id="sOpusTune"> Ручная настройка Opus</label>
@@ -1023,12 +1032,12 @@
 
 <noscript><p class="noscript">Для ZVONochek нужен JavaScript.</p></noscript>
 
-<script src="mqtt-lite.js?v=40"></script>
-<script src="vendor/qrcode.js?v=40"></script>
-<script src="zvdiag.js?v=40"></script>
-<script type="module" src="app.js?v=40"></script>
-<script type="module" src="group.js?v=40"></script>
-<script type="module" src="chat.js?v=40"></script>
-<script type="module" src="backup.js?v=40"></script>
+<script src="mqtt-lite.js?v=41"></script>
+<script src="vendor/qrcode.js?v=41"></script>
+<script src="zvdiag.js?v=41"></script>
+<script type="module" src="app.js?v=41"></script>
+<script type="module" src="group.js?v=41"></script>
+<script type="module" src="chat.js?v=41"></script>
+<script type="module" src="backup.js?v=41"></script>
 </body>
 </html>

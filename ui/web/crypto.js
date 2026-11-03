@@ -403,9 +403,15 @@ export async function hashChatBlob(blob) {
 // ensureGuestDevice (identity.js) и гостевой ключ исходящего дозвона
 // (app.js); звонки при этом работали — generateKeyPair им не нужен.
 //
-// Конструкция: если нативная generateKeyPair есть — используется ОНА
-// (основной путь, поведение не меняется). Fallback включается только при
-// её отсутствии: приватный скаляр d — случайные 32 байта (rejection
+// v41: диагноз v23 был неверным. generateKeyPair нет НИ В ОДНОМ браузере —
+// стандартный метод называется crypto.subtle.generateKey. Проверка
+// `typeof subtle.generateKeyPair` всегда давала undefined, и с v24 все пары
+// создавались этим fallback. Он корректен (случайность getRandomValues,
+// приватный ключ неэкспортируемый), но это лишний самописный код на пути
+// каждого ключа. Теперь основной путь — нативный generateKey; fallback
+// остаётся на случай его отказа и для тестов (forceFallback).
+//
+// Конструкция fallback: приватный скаляр d — случайные 32 байта (rejection
 // sampling в [1, n-1]), публичная точка Q = d·G считается здесь на BigInt
 // (константы кривой — SEC 2 / FIPS 186-4), после чего обе половины пары
 // импортируются в обычные CryptoKey через subtle.importKey('jwk', …).
@@ -518,7 +524,7 @@ export async function p256KeyPairFromPriv(dBytes, usages = ['sign', 'verify'], a
   };
   const privJwk = { ...pubJwk, d: b64u.enc(dBytes), key_ops: privUsages };
   // Публичный импортируется extractable=true: у нативной пары, созданной
-  // generateKeyPair(..., false, ...), публичная половина всё равно
+  // generateKey(..., false, ...), публичная половина всё равно
   // экспортируема (identity.js достаёт из неё raw) — повторяем семантику.
   // Приватный — строго неэкспортируемый.
   const publicKey = await crypto.subtle.importKey('jwk', pubJwk, alg, true, pubUsages);
@@ -526,13 +532,14 @@ export async function p256KeyPairFromPriv(dBytes, usages = ['sign', 'verify'], a
   return { publicKey, privateKey };
 }
 
-// Генерация пары P-256: нативный generateKeyPair, если он есть; иначе
-// fallback выше. forceFallback — только для тестов.
+// Генерация пары P-256: нативный crypto.subtle.generateKey (v41); если он
+// недоступен или отказал — fallback выше. forceFallback — только для тестов.
+// Форма результата одна: {publicKey (экспортируемый), privateKey (нет)}.
 export async function genP256KeyPair(usages = ['sign', 'verify'], algName = 'ECDSA', forceFallback = false) {
-  if (!forceFallback && typeof crypto?.subtle?.generateKeyPair === 'function') {
-    return crypto.subtle.generateKeyPair({ name: algName, namedCurve: 'P-256' }, false, [
-      ...usages,
-    ]);
+  if (!forceFallback && typeof crypto?.subtle?.generateKey === 'function') {
+    try {
+      return await crypto.subtle.generateKey({ name: algName, namedCurve: 'P-256' }, false, [...usages]);
+    } catch {}
   }
   for (;;) {
     const dBytes = crypto.getRandomValues(new Uint8Array(32));

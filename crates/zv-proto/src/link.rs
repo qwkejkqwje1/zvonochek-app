@@ -1,8 +1,9 @@
-//! Ссылки веб-версии: `https://qwkejkqwje1.github.io/zvonochek/#k=<секрет>[&d=<32 hex>]`,
+//! Ссылки веб-версии: `https://zvonochek.github.io/#k=<секрет>[&d=<32 hex>]` (старый адрес
+//! `https://qwkejkqwje1.github.io/zvonochek/` тоже разбирается — разбор не зависит от домена),
 //! `#chat=…`, `#link=…`, а также своя схема `zvonochek://call#k=…`.
 
-/// Адрес веб-версии.
-pub const WEB_BASE: &str = "https://qwkejkqwje1.github.io/zvonochek/";
+/// Адрес веб-версии (с 03.11.2026 сайт переехал с qwkejkqwje1.github.io/zvonochek).
+pub const WEB_BASE: &str = "https://zvonochek.github.io/";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Link {
@@ -117,6 +118,11 @@ mod tests {
         assert_eq!(parse_link(&app_url(S)), Some(want.clone()));
         assert_eq!(parse_link(&format!("#k={S}")), Some(want.clone()));
         assert_eq!(parse_link(&format!("k={S}")), Some(want.clone()));
+        // старый адрес сайта (до переезда на zvonochek.github.io) — ссылки из прошлых приглашений
+        assert_eq!(
+            parse_link(&format!("https://qwkejkqwje1.github.io/zvonochek/#k={S}")),
+            Some(want.clone())
+        );
         assert_eq!(parse_link(S), Some(want));
         let d = "0123456789abcdef0123456789abcdef";
         assert_eq!(

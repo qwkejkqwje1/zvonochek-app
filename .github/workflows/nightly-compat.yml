@@ -1,6 +1,6 @@
 name: Совместимость с веб-версией
 
-# Каждую ночь: свежий веб-клиент (qwkejkqwje1/zvonochek, main) → проверка интерфейса signaling.js,
+# Каждую ночь: свежий веб-клиент (ZVONochek/zvonochek.github.io, main) → проверка интерфейса signaling.js,
 # векторы протокола и живой звонок «сайт ↔ ядро приложения». Если веб изменился и всё зелёное — PR с обновлением ui/web.
 on:
   schedule:
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/checkout@v5
         with:
-          repository: qwkejkqwje1/zvonochek
+          repository: ZVONochek/zvonochek.github.io
           path: .web
           fetch-depth: 0
       - name: Версии

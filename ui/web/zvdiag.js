@@ -11,6 +11,8 @@
 // is not a function» при живом importKey/deriveKey (звонки работали, а
 // генерация ключей — нет). Поэтому окружение проверяется СРАЗУ при загрузке,
 // а не по нажатию кнопки, и его сводка дописывается к каждому баннеру.
+// v41: generateKeyPair не существует ни в одном браузере (стандарт —
+// generateKey); тот сбой v22 был ошибкой в коде, а не в окружении.
 // v36: «ворота» старого браузера. Если браузер не умеет модули/ES2020,
 // WebRTC или IndexedDB, вместо молчаливо пустого экрана (так выглядел сбой
 // на старом телефоне) сразу показываем понятный экран «обновите браузер».
@@ -109,7 +111,7 @@
       ua: ua,
       secure: !!window.isSecureContext,
       subtle: typeof (window.crypto && window.crypto.subtle),
-      gen: s ? typeof s.generateKeyPair : 'undefined',
+      gen: s ? typeof s.generateKey : 'undefined', // v41: стандартный метод (generateKeyPair не существует)
       sign: s ? typeof s.sign : 'undefined',
       imp: s ? typeof s.importKey : 'undefined',
       enc: s ? typeof s.encrypt : 'undefined',
@@ -120,7 +122,7 @@
     return (
       'secure=' + p.secure +
       ', subtle=' + p.subtle +
-      ', generateKeyPair=' + p.gen +
+      ', generateKey=' + p.gen +
       ', sign=' + p.sign +
       ', importKey=' + p.imp +
       ', encrypt=' + p.enc +

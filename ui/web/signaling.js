@@ -2,7 +2,7 @@
 // Тот же интерфейс, что у веба: new Signaling({topic, key, selfId, inst, onMessage, onStatus, onPeerJoined}),
 // start(), send(msg, opts), sendByeBeacon(), deliveryStats(), close(), onTransportUp.
 // Конверт, шифрование, каналы (MQTT WSS/TCP, Worker WS/HTTP, Nostr, ntfy, P2P) и дедупликация — в ядре (Rust).
-import { ntfyTopic } from './ntfy.js?v=40';
+import { ntfyTopic } from './ntfy.js?v=41';
 
 const ipc = () => window.__zvIpc;
 

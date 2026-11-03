@@ -3,7 +3,7 @@
 //   node tests/e2e/devhost-shell.mjs [http://127.0.0.1:8790]
 import { launch } from './pw.mjs';
 const HOST = process.argv[2] || 'http://127.0.0.1:8790';
-const WEB = process.argv[3] || 'https://qwkejkqwje1.github.io/zvonochek/';
+const WEB = process.argv[3] || 'https://zvonochek.github.io/';
 const browser = await launch();
 const quiet = (t) => /WebSocket connection to|status of 429|ERR_CONNECTION/.test(t);
 const watch = (page, tag) => {

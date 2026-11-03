@@ -1,12 +1,12 @@
-import { CONFIG, getWorkerBase, setWorkerBase, normalizeWorkerUrl, DEFAULT_WORKER_URL } from './config.js?v=40';
-import { newSecret, deriveRoom, safetyCode, safetyCodeBridge, b64u, seal, open as openSealed, genP256KeyPair, sha256hex } from './crypto.js?v=40';
-import { hasPersonal, getPersonal, ensurePersonal, signWithDevice, signWithKey, personalLinkOf, fpOfPubRaw, getChatDeviceEcdh, rotatePersonal, encryptWithVault, decryptWithVault, adminSigner, resetIdentityCache } from './identity.js?v=40';
-import { inboxRegister, inboxRing, inboxRingState, inboxAck, inboxAnswer, inboxCancel, inboxMissed, inboxMissedAck, inboxRetire, InboxListener } from './inbox.js?v=40';
-import { kvGet, kvPut, kvAll, kvDel, wipeDatabase } from './store.js?v=40';
-import { Signaling } from './signaling.js?v=40';
-import { ROUTE_SHORT, readCounters, deriveSample, bridgeSample, CallRecorder, journalDigest, plural } from './callstats.js?v=40';
-import { renderLiveStats, renderCallsDashboard, renderCallsList, renderContactsList } from './stats-ui.js?v=40';
-import { anonName, randomAnonName } from './anon-names.js?v=40';
+import { CONFIG, getWorkerBase, setWorkerBase, normalizeWorkerUrl, DEFAULT_WORKER_URL } from './config.js?v=41';
+import { newSecret, deriveRoom, safetyCode, safetyCodeBridge, b64u, seal, open as openSealed, genP256KeyPair, sha256hex } from './crypto.js?v=41';
+import { hasPersonal, getPersonal, ensurePersonal, signWithDevice, signWithKey, personalLinkOf, fpOfPubRaw, getChatDeviceEcdh, rotatePersonal, encryptWithVault, decryptWithVault, adminSigner, resetIdentityCache } from './identity.js?v=41';
+import { inboxRegister, inboxRing, inboxRingState, inboxAck, inboxAnswer, inboxCancel, inboxMissed, inboxMissedAck, inboxRetire, InboxListener } from './inbox.js?v=41';
+import { kvGet, kvPut, kvAll, kvDel, wipeDatabase } from './store.js?v=41';
+import { Signaling } from './signaling.js?v=41';
+import { ROUTE_SHORT, readCounters, deriveSample, bridgeSample, CallRecorder, journalDigest, plural } from './callstats.js?v=41';
+import { renderLiveStats, renderCallsDashboard, renderCallsList, renderContactsList } from './stats-ui.js?v=41';
+import { anonName, randomAnonName } from './anon-names.js?v=41';
 import {
   startDevices,
   hasOtherDevices,
@@ -16,10 +16,10 @@ import {
   rotateWithDevices,
   openAdminLink,
   SYNC_SETTINGS,
-} from './devices.js?v=40';
-import { VQ_CHOICES, deviceClass, captureTier, tierConstraints, rxCap, parseCap, videoEncoding, QLEVELS, audioCodecOrder, videoCodecOrder, CLASS_TEXT, sdpFirstCodec } from './media-policy.js?v=40';
+} from './devices.js?v=41';
+import { VQ_CHOICES, deviceClass, captureTier, tierConstraints, rxCap, parseCap, videoEncoding, QLEVELS, audioCodecOrder, videoCodecOrder, CLASS_TEXT, sdpFirstCodec, audioRoute, echoWanted } from './media-policy.js?v=41';
 
-export const APP_VERSION = 40;
+export const APP_VERSION = 41;
 export const APP_BUILD = '2026-11-01';
 // Версия разработки пишется из одного места: главная (бейдж и подпись),
 // экран подготовки, карточка подключения в начале звонка.
@@ -34,7 +34,7 @@ const setBtnIcon = (sel, name) => setUse((typeof sel === 'string' ? $(sel) : sel
 
 // Регистрация Service Worker для быстрого старта и работы PWA
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=40').catch(() => {});
+  navigator.serviceWorker.register('./sw.js?v=41').catch(() => {});
 }
 
 // Автообновление: если на сайте вышла новая версия, а браузер держит старую из кэша — перезагружаемся.
@@ -52,7 +52,13 @@ fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
 const randHex = (n) =>
   [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, '0')).join('');
 const selfId = sessionStorage.zvId || (sessionStorage.zvId = randHex(8));
-const inst = randHex(6); // меняется при каждой перезагрузке страницы
+// Экземпляр участника. v41: новый на каждый вход в звонок (раньше — на загрузку
+// страницы). При быстром перезвоне без перезагрузки собеседник видел «того же»
+// участника и держал соединение от прошлого звонка (~20 с до сторожевого
+// таймера), а опоздавшие сообщения прошлого сеанса (Nostr-реле повторяют
+// события за последнюю минуту) принимались как свежие. Теперь собеседник
+// видит «переподключился», а адресованное старому экземпляру отбрасывается.
+let inst = randHex(6);
 const MAX_FILE_BYTES = 256 * 1024 * 1024;
 
 // Миграция настроек v13 (один раз): у пользователей прошлых версий обработка
@@ -96,6 +102,16 @@ try {
     // Шумодав и АРУ остаются выключенными (выбор владельца), их можно включить.
     localStorage.zvEcho = '1';
     localStorage.zvSettingsV = '40';
+  }
+  if (Number(localStorage.zvSettingsV || 0) < 41) {
+    // v41: эхоподавление — режим «Авто» (zvEchoMode): в наушниках и гарнитуре
+    // выключено, на динамике включено (media-policy.js audioRoute). v40
+    // включал AEC всем и всегда, а в наушниках он только ухудшает голос: на
+    // телефоне включает «режим разговора» с обработкой производителя, в
+    // Chrome на компьютере приглушает голос, когда говорят оба. Кто после v40
+    // выключил AEC вручную, у того остаётся «Выключено».
+    localStorage.zvEchoMode = localStorage.zvEcho === '0' ? 'off' : 'auto';
+    localStorage.zvSettingsV = '41';
   }
 } catch {}
 
@@ -164,7 +180,11 @@ const S = {
     // фраз, а после долгой паузы Opus с DTX мог «просыпаться» с задержкой.
     // Теперь чистый тракт: браузерный Opus — авто, DSP — только по явному выбору.
     noise: localStorage.zvNoise === '1',
-    echo: localStorage.zvEcho !== '0', // v40: AEC включён по умолчанию (см. миграцию v40)
+    // v41: режим эхоподавления 'auto' | 'on' | 'off' (см. миграцию v41);
+    // echo — действующее значение (в «Авто» — по наушникам/динамику, route).
+    echoMode: ['auto', 'on', 'off'].includes(localStorage.zvEchoMode) ? localStorage.zvEchoMode : 'auto',
+    echo: localStorage.zvEchoMode !== 'off',
+    route: 'unknown', // 'headset' | 'speaker' | 'unknown'
     agc: localStorage.zvAgc === '1',
     comp: localStorage.zvComp === '1',
     opusTune: localStorage.zvOpusTune === '1',
@@ -637,7 +657,8 @@ function persistSoon() {
       localStorage.zvInputMode = S.audio.inputMode;
       localStorage.zvVadGate = String(S.audio.vadGate);
       localStorage.zvNoise = S.audio.noise ? '1' : '0';
-      localStorage.zvEcho = S.audio.echo ? '1' : '0';
+      localStorage.zvEchoMode = S.audio.echoMode;
+      localStorage.zvEcho = S.audio.echoMode === 'off' ? '0' : '1'; // для отката на v40
       localStorage.zvAgc = S.audio.agc ? '1' : '0';
       localStorage.zvComp = S.audio.comp ? '1' : '0';
       localStorage.zvOpusTune = S.audio.opusTune ? '1' : '0';
@@ -789,40 +810,195 @@ function startMeterLoop() {
   }, 220);
 }
 
-function toggleMicTest(btnEl) {
+// v41: проверка микрофона — запись 5 секунд и воспроизведение (как эхо-тест
+// Skype и проверка звука в Google Meet). До v41 это была живая петля
+// «микрофон → динамик»: с эхоподавлением браузер принимал ваш же голос из
+// динамика за эхо и вырезал его, и проверка звучала заметно хуже, чем вас
+// слышит собеседник (в звонке AEC сравнивает микрофон с голосом собеседника,
+// а не с вашим). Без AEC на динамике петля могла засвистеть. Запись берётся
+// после всей обработки — ровно то, что уходит собеседнику.
+const MIC_TEST_MS = 5000;
+function toggleMicTest() {
+  if (S.testingMic) return stopMicTest();
   const ctx = ensureAudioEngine();
   if (!ctx || !S.gateGainNode) return;
-  S.testingMic = !S.testingMic;
+  if (!S.rawAudioTrack || S.rawAudioTrack.readyState !== 'live') return toast('Микрофон не включён');
+  if (typeof MediaRecorder === 'undefined') return toast('Этот браузер не умеет записывать звук — проверка недоступна');
+  const dest = ctx.createMediaStreamDestination();
+  let rec;
   try {
-    if (S.testingMic) {
-      S.gateGainNode.connect(ctx.destination);
-      toast('Проверка микрофона включена — говорите');
-    } else {
-      S.gateGainNode.disconnect(ctx.destination);
-    }
-  } catch {}
+    S.gateGainNode.connect(dest);
+    rec = new MediaRecorder(dest.stream);
+  } catch {
+    try { S.gateGainNode.disconnect(dest); } catch {}
+    return toast('Проверка микрофона недоступна в этом браузере');
+  }
+  const t = { rec, dest, chunks: [], left: MIC_TEST_MS / 1000, timer: 0, tick: 0, audio: null, src: null, url: '' };
+  S.micTest = t;
+  S.testingMic = 'rec';
+  rec.ondataavailable = (e) => {
+    if (e.data && e.data.size) t.chunks.push(e.data);
+  };
+  rec.onstop = () => {
+    try { S.gateGainNode?.disconnect(dest); } catch {}
+    dest.stream.getTracks().forEach((x) => x.stop());
+    if (S.micTest !== t) return; // остановили вручную
+    playMicTest(t, new Blob(t.chunks, { type: rec.mimeType || t.chunks[0]?.type || 'audio/webm' }));
+  };
+  rec.start(250);
+  t.tick = setInterval(() => {
+    t.left = Math.max(1, t.left - 1);
+    paintMicTest();
+  }, 1000);
+  t.timer = setTimeout(() => {
+    clearInterval(t.tick);
+    try {
+      if (rec.state !== 'inactive') rec.stop();
+    } catch {}
+  }, MIC_TEST_MS);
+  toast('Скажите пару фраз — через 5 секунд запись прозвучит');
   paintMicTest();
-  if (btnEl) btnEl.setAttribute('aria-pressed', String(S.testingMic));
+}
+function playMicTest(t, blob) {
+  S.testingMic = 'play';
+  paintMicTest();
+  const done = () => {
+    if (S.micTest === t) stopMicTest();
+  };
+  // Запасной путь — через уже запущенный AudioContext (не нужен новый жест).
+  const viaCtx = async () => {
+    try {
+      const buf = await S.audioCtx.decodeAudioData(await blob.arrayBuffer());
+      if (S.micTest !== t) return;
+      const src = (t.src = S.audioCtx.createBufferSource());
+      src.buffer = buf;
+      src.connect(S.audioCtx.destination);
+      src.onended = done;
+      src.start();
+    } catch {
+      toast('Не удалось воспроизвести запись');
+      done();
+    }
+  };
+  try {
+    t.url = URL.createObjectURL(blob);
+    const a = (t.audio = new Audio(t.url));
+    if (S.dev.spk && a.setSinkId) a.setSinkId(S.dev.spk).catch(() => {});
+    a.onended = done;
+    a.play().catch(() => {
+      t.audio = null;
+      viaCtx();
+    });
+  } catch {
+    viaCtx();
+  }
 }
 function paintMicTest() {
-  const labels = { '#pTestMic': ['Проверить микрофон', 'Стоп тест'], '#sTestMic': ['Проверить', 'Стоп'] };
-  for (const [id, [idle, active]] of Object.entries(labels)) {
+  const left = S.micTest?.left || 0;
+  const labels = {
+    '#pTestMic': ['Проверить микрофон', `Говорите… ${left}`, 'Слушайте…'],
+    '#sTestMic': ['Проверить', `Запись ${left}`, 'Слушайте'],
+  };
+  for (const [id, [idle, rec, play]] of Object.entries(labels)) {
     const b = $(id);
     if (!b) continue;
-    b.classList.toggle('active-test', S.testingMic);
-    b.setAttribute('aria-pressed', String(S.testingMic));
+    const on = !!S.testingMic;
+    b.classList.toggle('active-test', on);
+    b.setAttribute('aria-pressed', String(on));
     const lbl = b.querySelector('.lbl');
-    if (lbl) lbl.textContent = S.testingMic ? active : idle;
-    setBtnIcon(b, S.testingMic ? 'i-stop' : 'i-volume');
+    if (lbl) lbl.textContent = S.testingMic === 'rec' ? rec : S.testingMic === 'play' ? play : idle;
+    setBtnIcon(b, on ? 'i-stop' : 'i-volume');
   }
 }
 function stopMicTest() {
-  if (!S.testingMic) return;
+  const t = S.micTest;
+  const was = S.testingMic;
+  S.micTest = null;
   S.testingMic = false;
+  if (t) {
+    clearTimeout(t.timer);
+    clearInterval(t.tick);
+    try {
+      if (t.rec.state !== 'inactive') t.rec.stop();
+    } catch {}
+    try { S.gateGainNode?.disconnect(t.dest); } catch {}
+    try { t.audio?.pause(); } catch {}
+    try { t.src?.stop(); } catch {}
+    if (t.url) URL.revokeObjectURL(t.url);
+  }
+  if (was) paintMicTest();
+}
+
+// ---------- v41: эхоподавление «Авто» ----------
+// Куда идёт звук (наушники / динамик) — по названиям устройств; в «Авто»
+// AEC выключается в наушниках и включается на динамике. Маршрут
+// пересчитывается перед открытием микрофона, после первого разрешения
+// (до него названия скрыты), при смене микрофона/динамика и при
+// подключении/отключении наушников (devicechange).
+async function refreshAudioRoute({ useTrack = true } = {}) {
+  let route = 'unknown';
   try {
-    S.gateGainNode?.disconnect(S.audioCtx.destination);
+    const list = await navigator.mediaDevices.enumerateDevices();
+    const live = useTrack && S.rawAudioTrack?.readyState === 'live' ? S.rawAudioTrack.label || '' : '';
+    route = audioRoute(list, { micId: S.dev.mic, spkId: S.dev.spk, micLabel: live });
   } catch {}
-  paintMicTest();
+  S.audio.route = route;
+  const want = echoWanted(S.audio.echoMode, route);
+  const changed = want !== S.audio.echo;
+  S.audio.echo = want;
+  paintEchoState();
+  return changed;
+}
+// Применить эхоподавление/шумодав/АРУ к живому микрофону. v40: Chrome молча
+// принимает applyConstraints для обработки, но на живом треке её не меняет
+// (getSettings остаётся прежним) — проверяем результат и при расхождении
+// переоткрываем микрофон (обработанный трек при этом не умирает).
+async function applyMicProcessing() {
+  if (!S.rawAudioTrack || S.rawAudioTrack.readyState !== 'live') return;
+  let applied = false;
+  try {
+    await S.rawAudioTrack.applyConstraints(audioC());
+    const st = S.rawAudioTrack.getSettings?.() || {};
+    const same = (v, want) => v === undefined || (v !== false) === want;
+    applied =
+      same(st.echoCancellation, S.audio.echo) &&
+      same(st.noiseSuppression, S.audio.noise) &&
+      same(st.autoGainControl, S.audio.agc);
+  } catch {}
+  if (!applied) await switchDevice('mic', S.dev.mic);
+}
+async function setEchoMode(mode) {
+  S.audio.echoMode = ['auto', 'on', 'off'].includes(mode) ? mode : 'auto';
+  await refreshAudioRoute();
+  syncAudioParams();
+  await applyMicProcessing();
+}
+const AUDIO_ROUTE_TEXT = { headset: 'наушники или гарнитура', speaker: 'звук из динамика', unknown: 'не удалось понять, наушники или динамик' };
+function paintEchoState() {
+  const qa = $('#qaEcho');
+  if (qa) qa.checked = !!S.audio.echo;
+  const el = $('#sEchoState');
+  if (!el) return;
+  const on = S.audio.echo ? 'включено' : 'выключено';
+  el.textContent =
+    S.audio.echoMode === 'auto'
+      ? `Сейчас: ${AUDIO_ROUTE_TEXT[S.audio.route] || AUDIO_ROUTE_TEXT.unknown} — эхоподавление ${on}.` +
+        (S.audio.route === 'unknown' ? ' Если вы в наушниках, выберите «Выключено» — голос будет чище.' : '')
+      : `Эхоподавление ${on} вручную.` +
+        (S.audio.echo ? '' : ' Без наушников собеседник может слышать себя эхом.');
+}
+{
+  let routeTimer = 0;
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+    clearTimeout(routeTimer);
+    routeTimer = setTimeout(async () => {
+      if (!(await refreshAudioRoute())) return;
+      syncAudioParams();
+      if (S.rawAudioTrack?.readyState !== 'live') return;
+      await applyMicProcessing();
+      toast(S.audio.echo ? 'Звук из динамика — эхоподавление включено' : 'Наушники — эхоподавление выключено, голос чище');
+    }, 800);
+  });
 }
 
 // ---------- Медиа и переключение устройств ----------
@@ -882,6 +1058,7 @@ async function getTrack(kind) {
 
 async function startLocal() {
   stopLocal();
+  await refreshAudioRoute({ useTrack: false });
   let st = null;
   try {
     st = await navigator.mediaDevices.getUserMedia({
@@ -910,6 +1087,9 @@ async function startLocal() {
   if (!localTrack('video')) S.camOn = false;
   syncAudioParams();
   await fillDevices();
+  // v41: до первого разрешения на микрофон названия устройств скрыты —
+  // уточняем маршрут сейчас и, если нужен другой режим AEC, переоткрываем.
+  if (await refreshAudioRoute()) await applyMicProcessing();
 }
 
 async function fillDevices(prefix = 'p') {
@@ -956,8 +1136,11 @@ async function setSendTrack(kind, track) {
 }
 
 async function switchDevice(kind, id) {
+  const micChanged = kind === 'mic' && id !== S.dev.mic;
   if (kind === 'mic') S.dev.mic = localStorage.zvMic = id;
   else S.dev.cam = localStorage.zvCam = id;
+  // v41: другой микрофон — возможно, гарнитура: режим AEC до открытия.
+  if (micChanged) await refreshAudioRoute({ useTrack: false });
   const k = kind === 'mic' ? 'audio' : 'video';
   if (k === 'video' && (!S.camOn || S.screenTrack)) return;
   const old = localTrack(k);
@@ -1296,7 +1479,7 @@ $('#cFlipCam') && ($('#cFlipCam').onclick = flipCamera);
 $('#local') && ($('#local').onclick = () => {
   if (!S.screenTrack && S.camOn) flipCamera();
 });
-$('#pTestMic').onclick = () => toggleMicTest($('#pTestMic'));
+$('#pTestMic').onclick = () => toggleMicTest();
 $('#pOpenSettings').onclick = openSettingsModal;
 $('#pMicSel').onchange = (e) => switchDevice('mic', e.target.value);
 $('#pCamSel').onchange = (e) => switchDevice('cam', e.target.value);
@@ -1482,6 +1665,18 @@ async function join() {
     return toast('Неверная ссылка');
   }
   if (S.audio.netMode === 'relay') await ensureTurnLoaded('режим «только TURN» из прошлых настроек');
+  // v41: остатки прошлого звонка. Опоздавшее сообщение сигналинга (Nostr-реле
+  // доставляют с задержкой в секунды) после «Положить трубку» создавало
+  // соединение без микрофона, и при быстром перезвоне в ту же комнату оно
+  // подхватывалось: собеседник нас не слышал (tests/e2e «перезвон»).
+  if (S.pc || S.bridgeActive) {
+    log('Сброшено соединение, оставшееся от прошлого звонка');
+    clearTimeout(S.turnTimer);
+    resetPC(true); // true: S.callMeta нового звонка уже заполнен — не трогаем
+    stopBridge();
+  }
+  S.peer = null;
+  S.roster.clear();
   S.joined = true;
   show('call');
   refreshLocalView();
@@ -1491,7 +1686,10 @@ async function join() {
   $('#remote').srcObject = S.remote;
   if (S.dev.spk) $('#remote').setSinkId?.(S.dev.spk).catch(() => {});
 
-  S.sig = new Signaling({
+  // v41: сообщения принимает только сигналинг текущего звонка — закрытый
+  // экземпляр (прошлый звонок) больше ничего не создаёт.
+  inst = randHex(6);
+  const sig = (S.sig = new Signaling({
     topic: S.room.topic,
     key: S.room.key,
     selfId,
@@ -1500,7 +1698,9 @@ async function join() {
     workerUrl: getWorkerBase(),
     relays: CONFIG.NOSTR_RELAYS,
     ntfyBase: CONFIG.NTFY_BASE,
-    onMessage: onSignal,
+    onMessage: (m) => {
+      if (S.sig === sig && S.joined) return onSignal(m);
+    },
     onStatus: (st) => {
       S.sigStatus = st;
       updateStatus();
@@ -1509,7 +1709,7 @@ async function join() {
       // Воркер сообщил, что второй участник открыл комнату — мгновенно шлём приветствие!
       hello();
     },
-  });
+  }));
   S.sig.onTransportUp = () => {
     hello();
     if (!S.peer) progress(25, 'Каналы сигнала активны, ждём собеседника');
@@ -3524,7 +3724,14 @@ $('#btnQuickAudio').onclick = () => {
   pop.classList.toggle('hidden');
   $('#qaBoost').checked = S.audio.comp;
   $('#qaBridgeMode').checked = S.audio.netMode === 'bridge' || S.bridgeActive;
+  paintEchoState();
   syncAudioParams();
+};
+// v41: эхоподавление одним касанием прямо в звонке — удобно сравнить, как
+// вас слышит собеседник. Ручной выбор; «Авто» — в «Все настройки звука».
+$('#qaEcho').onchange = (e) => {
+  setEchoMode(e.target.checked ? 'on' : 'off').catch(() => {});
+  toast(e.target.checked ? 'Эхоподавление включено' : 'Эхоподавление выключено — без наушников собеседник может слышать эхо');
 };
 $('#qaPeerVol').oninput = (e) => {
   S.audio.peerVol = Number(e.target.value);
@@ -3581,11 +3788,16 @@ async function openSettingsModal() {
       );
     };
   }
-  $('#sSpk', b).onchange = (e) => {
+  $('#sSpk', b).onchange = async (e) => {
     S.dev.spk = localStorage.zvSpk = e.target.value;
     $('#remote').setSinkId?.(e.target.value).catch(() => {});
     $('#remoteAudioOut')?.setSinkId?.(e.target.value).catch(() => {});
     attachRemoteToEngine();
+    // v41: выбрали наушники или колонки — пересчитать эхоподавление.
+    if (await refreshAudioRoute()) {
+      syncAudioParams();
+      await applyMicProcessing();
+    }
   };
 
   // Громкость микрофона и собеседника (0-200%)
@@ -3638,46 +3850,29 @@ async function openSettingsModal() {
     syncAudioParams();
   };
 
-  // Кнопка проверки микрофона
-  const testBtn = $('#sTestMic', b);
-  testBtn.onclick = () => toggleMicTest(testBtn);
+  // Кнопка проверки микрофона (v41: запись и воспроизведение)
+  $('#sTestMic', b).onclick = () => toggleMicTest();
+  paintMicTest();
 
   // Обработка звука
   const sNoise = $('#sNoise', b),
-    sEcho = $('#sEcho', b),
+    sEchoMode = $('#sEchoMode', b),
     sAgc = $('#sAgc', b),
     sComp = $('#sComp', b);
   sNoise.checked = S.audio.noise;
-  sEcho.checked = S.audio.echo;
+  sEchoMode.value = S.audio.echoMode;
   sAgc.checked = S.audio.agc;
   sComp.checked = S.audio.comp;
+  refreshAudioRoute().catch(() => {});
 
   const rebuildMicConstraints = async () => {
     S.audio.noise = sNoise.checked;
-    S.audio.echo = sEcho.checked;
     S.audio.agc = sAgc.checked;
     syncAudioParams();
-    if (S.rawAudioTrack) {
-      // v40: Chrome молча принимает applyConstraints для echoCancellation/
-      // noiseSuppression/autoGainControl, но обработку на живом треке не
-      // меняет (getSettings остаётся прежним) — переключатель не работал до
-      // следующего входа. Проверяем результат и при расхождении переоткрываем
-      // микрофон (с v40 это безопасно: обработанный трек не умирает).
-      let applied = false;
-      try {
-        await S.rawAudioTrack.applyConstraints(audioC());
-        const st = S.rawAudioTrack.getSettings?.() || {};
-        const same = (v, want) => v === undefined || (v !== false) === want;
-        applied =
-          same(st.echoCancellation, S.audio.echo) &&
-          same(st.noiseSuppression, S.audio.noise) &&
-          same(st.autoGainControl, S.audio.agc);
-      } catch {}
-      if (!applied) await switchDevice('mic', S.dev.mic);
-    }
+    await applyMicProcessing();
   };
   sNoise.onchange = rebuildMicConstraints;
-  sEcho.onchange = rebuildMicConstraints;
+  sEchoMode.onchange = () => setEchoMode(sEchoMode.value);
   sAgc.onchange = rebuildMicConstraints;
   sComp.onchange = () => {
     S.audio.comp = sComp.checked;
@@ -4421,10 +4616,14 @@ function setPendingRetire(list) {
     else localStorage.removeItem(RETIRE_KEY);
   } catch {}
 }
-async function retireTopics(topics, bundle) {
+// v41: admin — подпись владельца номера (adminSigner(), снятый ДО смены
+// master-ключа). Если её не приняли (у старого topic другой владелец, или
+// сервер ещё v40), повторяем подписью устройства.
+async function retireTopics(topics, bundle, admin = null) {
   const left = [];
   for (const t of topics) {
-    const r = await inboxRetire(getWorkerBase(), t, bundle).catch(() => null);
+    let r = admin ? await inboxRetire(getWorkerBase(), t, bundle, admin).catch(() => null) : null;
+    if (!r || r.status !== 200) r = await inboxRetire(getWorkerBase(), t, bundle).catch(() => null);
     // 403: устройства там уже нет (стёрт ранее / не регистрировался) — готово.
     if (!r || (r.status !== 200 && r.status !== 403)) left.push(t);
   }
@@ -4478,11 +4677,16 @@ async function changeNumberCore(prev, say) {
   } catch {}
   say('Создаём новый номер…');
   stopInboxListeners();
+  // v41: подпись старого владельца — до смены master-ключа (после rotatePersonal
+  // его приватной части в хранилище уже нет, а сервер гасит номер только по ней
+  // или по подписи основного устройства).
+  const oldAdmin = await adminSigner().catch(() => null);
   const { next } = await rotatePersonal();
   S.personal = next;
   S.personalRoom = await deriveRoom(next.secret);
+  S.inboxNotOwner = false;
   say('Отключаем старую ссылку на сервере…');
-  const left = await retireTopics(oldTopics, next);
+  const left = await retireTopics(oldTopics, next, oldAdmin);
   setPendingRetire([...pendingRetire(), ...left]);
   await refreshPersonalUI();
   window.ZVChat?.identityChanged?.();
@@ -4501,7 +4705,9 @@ async function wipeEverything(say, { backupToo = false, revoked = false, query =
   // v39: у профиля есть другие устройства — номер живёт на них: этот
   // аппарат только отвязывается (сервер входящих забывает его одного),
   // а не гасит номер целиком. Отвязанное (revoked) — уже отвязано.
-  const multi = !revoked && hasOtherDevices();
+  // v41: подключённое устройство номер не гасит (сервер это и не примет) —
+  // всегда только отвязывается, даже если список устройств ещё не пришёл.
+  const multi = !revoked && (hasOtherDevices() || !!p?.linked);
   if (multi) {
     tasks.push(unlinkSelf().catch(() => {}));
   } else if (p && getWorkerBase() && !revoked) {
@@ -4512,7 +4718,8 @@ async function wipeEverything(say, { backupToo = false, revoked = false, query =
           topics.push((await deriveRoom(p.secret)).topic);
         } catch {}
         if (p.masterPub) topics.push(await chatDialTopic(p.masterPub));
-        await retireTopics([...topics, ...pendingRetire()], p);
+        const admin = await adminSigner().catch(() => null);
+        await retireTopics([...topics, ...pendingRetire()], p, admin);
       })().catch(() => {})
     );
   }
@@ -4525,19 +4732,36 @@ async function wipeEverything(say, { backupToo = false, revoked = false, query =
     await sub?.unsubscribe?.();
   } catch {}
   await wipeDatabase();
-  try {
-    localStorage.clear();
-  } catch {}
-  try {
-    sessionStorage.clear();
-  } catch {}
-  try {
-    for (const k of await caches.keys()) await caches.delete(k);
-  } catch {}
-  try {
-    for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) await r.unregister();
-  } catch {}
+  await wipeOwnSiteData();
   location.replace(location.pathname + '?' + query);
+}
+// v41: стираем только своё. Сайт на github.io делит origin с другими
+// проектами аккаунта (например, /TorrClient/): у них общие localStorage,
+// кэши и список service worker. Раньше «Стереть всё» делало
+// localStorage.clear(), удаляло все кэши и все регистрации SW origin —
+// и заодно чужие настройки (в т.ч. сохранённые логины TURN).
+// Ключи Звоночка начинаются с 'zv' (tests/static.test.mjs), кэши — с
+// 'zvonochek-', регистрации — со scope этой папки.
+async function wipeOwnSiteData() {
+  for (const store of [globalThis.localStorage, globalThis.sessionStorage]) {
+    try {
+      const own = [];
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i);
+        if (k && k.startsWith('zv')) own.push(k);
+      }
+      for (const k of own) store.removeItem(k);
+    } catch {}
+  }
+  try {
+    for (const k of await caches.keys()) if (k.startsWith('zvonochek-')) await caches.delete(k);
+  } catch {}
+  try {
+    const scope = new URL('./', location.href).href;
+    for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) {
+      if (r.scope.startsWith(scope)) await r.unregister();
+    }
+  } catch {}
 }
 
 let dangerKind = null;
@@ -4774,8 +4998,23 @@ function startInboxListener() {
   // v38: слушатель — после регистрации устройства (auth до /register сервер
   // отклоняет; раньше такой сокет молча оставался глухим до перезагрузки).
   const listener = S.inboxListener;
-  Promise.resolve(S.inboxRegP).then(() => {
-    if (S.inboxListener === listener) listener.connect();
+  Promise.resolve(S.inboxRegP).then((r) => {
+    if (S.inboxListener !== listener) return;
+    // v41: сервер закрепил этот номер за другим master-ключом (тот, кто первым
+    // зарегистрировался по ссылке). Слушать бесполезно — звонки по этой ссылке
+    // сюда не придут; выход — сменить номер.
+    if (r?.status === 403 && r.data?.error === 'not owner') {
+      S.inboxNotOwner = true;
+      listener.close();
+      const el = $('#personalStatus');
+      if (el) {
+        el.textContent =
+          'Эта личная ссылка на сервере закреплена за другим ключом — ' +
+          (p.linked ? 'смените номер на основном устройстве профиля' : 'нажмите «Сменить номер (новая ссылка)» ниже');
+      }
+      return;
+    }
+    listener.connect();
   });
   // v28: второй, аддитивный слушатель дозвонa ИЗ ЧАТА. Его topic выводится
   // из публичного masterPub владельца (chatDialTopic ниже), поэтому личная

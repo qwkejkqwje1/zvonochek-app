@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Синхронизация встроенной копии веб-клиента: ui/web ← репозиторий веба на заданном коммите.
 # Заменяется только signaling.js (мост к ядру, ui/desktop/signaling.js); service worker не регистрируется (preload).
-#   WEB_DIR=../zvonochek tools/sync-web.sh [коммит]
+#   WEB_DIR=../zvonochek.github.io tools/sync-web.sh [коммит]   (веб: github.com/ZVONochek/zvonochek.github.io)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WEB_DIR="${WEB_DIR:-$ROOT/../zvonochek}"
+WEB_DIR="${WEB_DIR:-$ROOT/../zvonochek.github.io}"
 REV="${1:-HEAD}"
 OUT="$ROOT/ui/web"
 COMMIT="$(git -C "$WEB_DIR" rev-parse --short "$REV")"
@@ -30,5 +30,5 @@ grep -q "import { Signaling } from './signaling.js?v=$VER'" "$OUT/app.js" || { e
 for api in "S.sig.start()" "S.sig.onTransportUp" "sendByeBeacon" "deliveryStats"; do
   grep -qF "$api" "$OUT/app.js" || { echo "app.js больше не использует $api — проверь мост" >&2; exit 1; }
 done
-printf 'commit=%s\nver=%s\nsource=https://github.com/qwkejkqwje1/zvonochek\n' "$COMMIT" "$VER" > "$OUT/WEB_VERSION"
+printf 'commit=%s\nver=%s\nsource=https://github.com/ZVONochek/zvonochek.github.io\n' "$COMMIT" "$VER" > "$OUT/WEB_VERSION"
 echo "ui/web ← $COMMIT (v$VER)"

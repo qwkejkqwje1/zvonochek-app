@@ -1,9 +1,9 @@
 // Живой сайт (браузер) ↔ встроенный веб-клиент в zv-devhost (ядро на Rust): звонок должен соединиться.
-//   node tests/e2e/devhost-live-call.mjs [http://127.0.0.1:8790] [https://qwkejkqwje1.github.io/zvonochek/]
+//   node tests/e2e/devhost-live-call.mjs [http://127.0.0.1:8790] [https://zvonochek.github.io/]
 import { launch } from './pw.mjs';
 import { randomBytes } from 'node:crypto';
 const HOST = process.argv[2] || 'http://127.0.0.1:8790';
-const WEB = process.argv[3] || 'https://qwkejkqwje1.github.io/zvonochek/';
+const WEB = process.argv[3] || 'https://zvonochek.github.io/';
 const secret = randomBytes(16).toString('base64url');
 const browser = await launch();
 const mk = async (tag) => {

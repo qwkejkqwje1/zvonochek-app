@@ -3,9 +3,9 @@
 // IndexedDB) удостоверяет ключи устройств; секрет личной ссылки зашифрован
 // vault-ключом устройства. Личная ссылка: #k=<секрет>&d=<fp>, где fp — первые
 // 32 hex SHA-256 от X9.62-представления master-публичного ключа.
-import { b64u, newSecret, genP256KeyPair, deriveRecoveryPair } from './crypto.js?v=40';
-import { kvGet, kvPut, kvDel } from './store.js?v=40';
-import { utils as secpUtils } from './vendor/secp256k1.js?v=40';
+import { b64u, newSecret, genP256KeyPair, deriveRecoveryPair } from './crypto.js?v=41';
+import { kvGet, kvPut, kvDel } from './store.js?v=41';
+import { utils as secpUtils } from './vendor/secp256k1.js?v=41';
 
 const te = new TextEncoder();
 let cached = null; // {secret, masterPub, masterPriv, fp, devicePub, devicePriv, cert, label}
@@ -136,10 +136,14 @@ export async function rotatePersonal() {
   const secretEnc = b64u.enc(new Uint8Array([...iv, ...new Uint8Array(ct)]));
   const dev = await kvGet('devices', 'self');
   if (dev?.devicePub && dev?.devicePriv) {
-    const label = dev.label || dev.cert?.label || 'Владелец';
+    // v41: после смены номера это устройство держит новый master-ключ —
+    // метка подключённого ('Устройство') ему не подходит: сервер входящих
+    // по ней отличает подключённые устройства, которым гасить номер нельзя.
+    const was = dev.label || dev.cert?.label || '';
+    const label = !was || was === LINKED_CERT_LABEL ? 'Владелец' : was;
     const exp = Date.now() + 10 * 365 * 24 * 3600000;
     const cert = await signDeviceCert(pair.privateKey, dev.devicePub, label, exp);
-    const next = { ...dev, cert };
+    const next = { ...dev, cert, label };
     delete next.chain; // цепочка восстановления относилась к старому master
     await kvPut('devices', 'self', next);
   }

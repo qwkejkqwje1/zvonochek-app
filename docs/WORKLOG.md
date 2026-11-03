@@ -1,6 +1,13 @@
 # Журнал разработки (для себя: состояние, команды, следующие шаги)
 
 ## Окружение (песочница)
+- С 3 ноября: песочницу сбрасывает к снимку /data (≈ 2 ноября) — инструменты и сборка ВНЕ /data:
+  `source ~/.zv/env.sh` (RUSTUP_HOME/CARGO_HOME=~/zvtools, CARGO_TARGET_DIR=~/zv4-target); токен GitHub — ~/.zv/gh-token
+  (не в репозитории), `~/.zv/git.sh` / `~/.zv/gh-api.sh`. Всё важное — сразу в GitHub.
+- E2E в песочнице: `PW_MODULE=/data/tools/node_modules/playwright-core/index.mjs CHROMIUM_PATH=/usr/local/bin/chromium`
+  (Playwright 1.64.1). devhost-contacts изредка падает на «повторное добавление» (клик, 30 с) — повтор проходит.
+- Веб-эталон v41: /data/zvweb-new (ZVONochek/zvonochek.github.io, b954896); сайт — https://zvonochek.github.io/
+  (старый qwkejkqwje1.github.io/zvonochek отдаёт ту же версию). Синхронизация: `WEB_DIR=/data/zvweb-new tools/sync-web.sh HEAD`.
 - `source /data/tools/env-rust.sh` — Rust 1.99 (rustup в /data/tools/rust), цели x86_64/aarch64-pc-windows-msvc,
   cargo-xwin, tauri CLI (npm, /data/tools/tauri-cli), makensis 3.11 (/data/tools/nsis/bin), CARGO_TARGET_DIR=/data/zv4-target.
 - clang/lld/llvm-rc из dnf; swap 6 ГБ (/swapfile, после перезапуска песочницы включить заново: `sudo swapon /swapfile`).
@@ -61,7 +68,11 @@
   - Проверки: `cargo clippy -p zvonochek --target aarch64-linux-android -- -D warnings`; CI — `android.yml`
     (подпись — секреты ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS, без них APK неподписанный).
   - CI на f6cd650: CI (Linux + сборка Windows x64/ARM64) и Android (APK arm64+armv7, ≈ 24 мин) — зелёные.
-- [ ] Релиз 4.0.0 — за владельцем: секреты в GitHub (TAURI_SIGNING_PRIVATE_KEY из /data/zv4-secrets/updater.key;
+- [x] После M6: веб-клиент v41 и новый адрес сайта (WEB_BASE), тест `devhost-live-video.mjs` (видео сайт ↔ приложение;
+  `ZV_WEB_GUM_DELAY=мс` — браузер долго не отвечает на запрос микрофона); CI собирает тестовые установщики NSIS
+  (артефакты `zvonochek-setup-<target>`, без подписи обновлений).
+- [ ] Релиз 4.0.0 — за владельцем: секреты в GitHub (TAURI_SIGNING_PRIVATE_KEY — создать заново, прежний ключ потерян
+  при сбросе песочницы;
   ключ Android — создать по согласию), публичность репозитория или отдельный публичный репозиторий релизов
   (иначе latest.json и «Страница релизов» недоступны пользователям), тег `v4.0.0`, проверка на Windows 10/11 и телефоне.
 

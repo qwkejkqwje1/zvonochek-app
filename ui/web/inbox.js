@@ -2,7 +2,7 @@
 // слушатель входящих по WebSocket, ответы и пропущенные. Протокол и подписи —
 // см. worker/inbox.js. Ring идёт ТОЛЬКО через Worker (не через публичные
 // транспорты — иначе «кому звонят» узнали бы все наблюдатели сигналинга).
-import { signWithDevice } from './identity.js?v=40';
+import { signWithDevice } from './identity.js?v=41';
 
 const base = (workerUrl, topic) => `${workerUrl.replace(/\/$/, '')}/inbox/${topic}`;
 
@@ -45,9 +45,19 @@ export async function inboxRegister(workerUrl, topic, bundle, sub = null) {
 // v38: «Сменить номер» / «Стереть всё»: владелец отзывает свой Inbox —
 // сервер удаляет устройства, push-подписки, звонки и пропущенные; звонки
 // по старой ссылке дальше получают 404 «номер не обслуживается».
-export async function inboxRetire(workerUrl, topic, bundle) {
+// v41: погасить номер может только владелец. admin — adminSigner()
+// (identity.js): подпись master-ключом или recovery-ключом фразы, сервер
+// сверяет её с отпечатком владельца. Без admin — подпись ключом устройства
+// (сервер примет её только от основного/восстановленного устройства,
+// подключённое получит 403 'linked device').
+export async function inboxRetire(workerUrl, topic, bundle, admin = null) {
   const ts = Date.now();
-  const sig = await signWithDevice(`retire|${topic}|${bundle.devicePub}|${ts}`);
+  const text = `retire|${topic}|${bundle.devicePub}|${ts}`;
+  if (admin) {
+    const sig = await admin.sign(text);
+    return post(workerUrl, topic, '/retire', { devicePub: bundle.devicePub, ts, sig, by: admin.kind, ...admin.extra });
+  }
+  const sig = await signWithDevice(text);
   return post(workerUrl, topic, '/retire', { devicePub: bundle.devicePub, ts, sig });
 }
 

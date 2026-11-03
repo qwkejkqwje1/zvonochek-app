@@ -214,3 +214,63 @@ export function sdpFirstCodec(sdp, kind = 'audio') {
   }
   return '';
 }
+
+// ---------- v41: эхоподавление «Авто» ----------
+// Эхо — это голос собеседника, который из ДИНАМИКА попадает обратно в ваш
+// микрофон: эхоподавление (AEC) на вашей стороне нужно, чтобы собеседник не
+// слышал себя с задержкой. В наушниках и гарнитуре такого пути нет, а сама
+// обработка голос не улучшает: на телефоне echoCancellation включает «режим
+// разговора» с обработкой производителя (звук как в обычном телефонном
+// звонке), в Chrome на компьютере подавитель приглушает голос, когда говорят
+// оба. Поэтому «Авто»: наушники → AEC выключен; динамик или неизвестно →
+// включён (безопасный вариант). Тип выхода — по названиям устройств
+// (enumerateDevices отдаёт их после разрешения на микрофон).
+
+// Android Chrome называет аудиоустройства так (AudioManagerAndroid):
+// «Speakerphone», «Headset earpiece» (это разговорный динамик самого
+// телефона!), «Wired headset», «Bluetooth headset», «USB audio». При выборе
+// «по умолчанию» Chrome сам ведёт звук в проводную гарнитуру → USB →
+// Bluetooth, а если их нет — на громкую связь.
+const ANDROID_NAMES = /^(speakerphone|headset earpiece|wired headset|bluetooth headset|usb audio)$/i;
+const ANDROID_HEADSET = /^(wired headset|bluetooth headset|usb audio)$/i;
+// Названия от Windows/macOS/Linux (англ. и рус.). «Динамик» проверяется
+// первым: «Speakers/Headphones (Realtek)» — общий разъём, это может быть и
+// колонка; ошибиться в сторону включённого AEC безопасно.
+const SPEAKER_RE = /speaker|динамик|громкоговорит|earpiece/i;
+const HEADSET_RE = /head(phone|set)|ear(phone|bud)|ear ?pods|airpods|buds|hands-?free|наушник|гарнитур|головн(ой|ые) телефон/i;
+const DEFAULT_PREFIX = /^(default|по умолчанию|communications|связь)\s*[-–—:]\s*/i;
+
+/** Тип устройства по названию: 'headset' | 'speaker' | 'unknown'. */
+export function routeOfLabel(label) {
+  const l = String(label || '').replace(DEFAULT_PREFIX, '').trim();
+  if (!l) return 'unknown';
+  if (SPEAKER_RE.test(l)) return 'speaker';
+  if (HEADSET_RE.test(l)) return 'headset';
+  return 'unknown';
+}
+
+/**
+ * Куда сейчас идёт звук: 'headset' | 'speaker' | 'unknown'.
+ * devices — результат enumerateDevices(); micId/spkId — выбранные в
+ * настройках (пусто = по умолчанию); micLabel — название живого трека
+ * микрофона (точнее всего, если он уже открыт).
+ */
+export function audioRoute(devices = [], { micId = '', spkId = '', micLabel = '' } = {}) {
+  const lbl = (d) => String((d && d.label) || '').trim();
+  const ins = (devices || []).filter((d) => d && d.kind === 'audioinput');
+  const outs = (devices || []).filter((d) => d && d.kind === 'audiooutput');
+  const find = (list, id) => (id && list.find((d) => d.deviceId === id)) || null;
+  if (ins.some((d) => ANDROID_NAMES.test(lbl(d)))) {
+    const sel = find(ins, micId);
+    if (sel && sel.deviceId !== 'default') return ANDROID_HEADSET.test(lbl(sel)) ? 'headset' : 'speaker';
+    return ins.some((d) => ANDROID_HEADSET.test(lbl(d))) ? 'headset' : 'speaker';
+  }
+  const out = find(outs, spkId) || find(outs, 'default') || outs[0] || null;
+  const byOut = routeOfLabel(lbl(out));
+  if (byOut !== 'unknown') return byOut;
+  const mic = find(ins, micId) || find(ins, 'default') || ins[0] || null;
+  return routeOfLabel(micLabel || lbl(mic));
+}
+
+/** Нужен ли AEC: режим 'auto' | 'on' | 'off' и маршрут из audioRoute(). */
+export const echoWanted = (mode, route) => mode === 'on' || (mode !== 'off' && route !== 'headset');
