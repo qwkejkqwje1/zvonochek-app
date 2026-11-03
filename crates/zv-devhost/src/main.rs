@@ -94,6 +94,16 @@ async fn main() -> anyhow::Result<()> {
         let m = zv_signal::mock::MockWorker::spawn_on(p).await;
         tracing::info!("devhost: заглушка Worker {}", m.url);
     }
+    // --vault: пароль профиля как на Windows (ключ данных; запомненный ключ здесь не защищён — только тесты)
+    let vault = std::env::args().any(|a| a == "--vault");
+    let data_key = match zv_core::vault::open(&data, vault).map_err(anyhow::Error::msg)? {
+        zv_core::vault::Opened::Ready(k) => k,
+        zv_core::vault::Opened::NeedPassword => {
+            let pw = std::env::var("ZV_VAULT_PASSWORD").unwrap_or_default();
+            Some(zv_core::vault::unlock(&data, &pw, false).map_err(anyhow::Error::msg)?)
+        }
+        zv_core::vault::Opened::Foreign => anyhow::bail!("данные с другого компьютера без пароля"),
+    };
     let core = Core::start(CoreOptions {
         data_dir: data.clone(),
         app_version: env!("CARGO_PKG_VERSION").into(),
@@ -104,6 +114,8 @@ async fn main() -> anyhow::Result<()> {
         // --p2p-local: только прямые адреса, без релеев и поиска n0
         p2p_n0: !std::env::args().any(|a| a == "--p2p-local"),
         downloads_dir: Some(data.join("Downloads")),
+        data_key,
+        vault,
     })?;
     let app = Arc::new(App {
         core,

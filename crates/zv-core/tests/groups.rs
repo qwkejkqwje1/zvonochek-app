@@ -23,6 +23,8 @@ fn opts(dir: &std::path::Path, worker: &str) -> CoreOptions {
         signal: Some(sig),
         p2p_n0: false,
         downloads_dir: Some(dir.join("Downloads")),
+        data_key: None,
+        vault: false,
     }
 }
 

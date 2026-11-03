@@ -16,6 +16,7 @@ mod profile;
 pub mod protect;
 pub mod store;
 pub mod update;
+pub mod vault;
 
 pub use contacts::{decode_code as decode_contact_code, encode_code as encode_contact_code};
 
@@ -54,6 +55,10 @@ pub struct CoreOptions {
     pub p2p_n0: bool,
     /// Куда сохранять файлы из чатов (`None` — папка данных/Downloads).
     pub downloads_dir: Option<PathBuf>,
+    /// Ключ данных профиля (vault.rs): им шифруются секретные файлы.
+    pub data_key: Option<vault::DataKey>,
+    /// Пароль профиля можно задать (Windows; тестовый стенд — `--vault`).
+    pub vault: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -193,12 +198,15 @@ impl Core {
     /// Запуск ядра (внутри tokio-runtime).
     pub fn start(opts: CoreOptions) -> anyhow::Result<Core> {
         std::fs::create_dir_all(&opts.data_dir)?;
-        profile::apply_pending(&opts.data_dir);
+        let key = opts.data_key;
+        // без ключа зашифрованные файлы прочитались бы как испорченные и началось бы «с чистого»
+        vault::check_files(&opts.data_dir, key.as_ref()).map_err(anyhow::Error::msg)?;
+        profile::apply_pending(&opts.data_dir, key);
         let settings_file = JsonFile::new(&opts.data_dir, "settings.json", false);
-        let links_file = JsonFile::new(&opts.data_dir, "links.dat", true);
+        let links_file = JsonFile::new(&opts.data_dir, "links.dat", true).keyed(key);
         let history_file = JsonFile::new(&opts.data_dir, "history.json", false);
-        let contacts_file = JsonFile::new(&opts.data_dir, "contacts.dat", true);
-        let identity_file = JsonFile::new(&opts.data_dir, "identity.dat", true);
+        let contacts_file = JsonFile::new(&opts.data_dir, "contacts.dat", true).keyed(key);
+        let identity_file = JsonFile::new(&opts.data_dir, "identity.dat", true).keyed(key);
         let state = State {
             settings: settings_file.load(),
             links: links_file.load(),
@@ -309,6 +317,7 @@ impl Core {
             "profile_import" => i.profile_import(&args).await,
             "update_check" => i.update_check().await,
             "update_download" => i.update_download().await,
+            "vault_set_password" => i.vault_set_password(&args).await,
             "chat_mail_fetch" => {
                 let busy = std::mem::replace(&mut i.lock().chats.mail_busy, true);
                 if busy {
@@ -323,7 +332,8 @@ impl Core {
     /// Быстрые команды, выполняемые сразу и по порядку (отправка сигналов звонка не должна
     /// перемешиваться). `None` — команда асинхронная, нужен `dispatch`.
     pub fn dispatch_sync(&self, cmd: &str, args: &Value) -> Option<Result<Value, String>> {
-        const ASYNC: [&str; 12] = [
+        const ASYNC: [&str; 13] = [
+            "vault_set_password",
             "update_check",
             "update_download",
             "room_stats",
@@ -354,6 +364,9 @@ impl Core {
                 "protected": protect::ENABLED,
             })),
             "settings_get" => ok(i.lock().settings.clone()),
+            "vault_status" => i.vault_status(),
+            "vault_remove_password" => i.vault_remove_password(),
+            "vault_remember" => i.vault_remember(&args),
             "settings_set" => i.settings_set(&args),
             "link_parse" => {
                 let t = s(&args, "text")?;
@@ -1559,6 +1572,8 @@ mod tests {
             signal: Some(sig),
             p2p_n0: false,
             downloads_dir: None,
+            data_key: None,
+            vault: false,
         }
     }
 
@@ -1585,6 +1600,80 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(p["kind"], "call");
+    }
+
+    /// Ключ данных профиля: секретные файлы зашифрованы им, старый формат перешифровывается,
+    /// без ключа ядро не стартует (иначе данные посчитались бы испорченными).
+    #[tokio::test]
+    async fn data_key_encrypts_secret_files() {
+        let d = tempfile::tempdir().unwrap();
+        // старый формат (не Windows — открытый JSON)
+        let core = Core::start(opts(d.path())).unwrap();
+        core.dispatch("link_create", json!({"name": "Мама"}))
+            .await
+            .unwrap();
+        drop(core);
+        assert!(
+            std::fs::read(d.path().join("links.dat"))
+                .unwrap()
+                .starts_with(b"{")
+        );
+        let vault::Opened::Ready(Some(k)) = vault::open(d.path(), true).unwrap() else {
+            panic!("нет ключа")
+        };
+        let keyed = |dir: &std::path::Path| CoreOptions {
+            data_key: Some(k),
+            vault: true,
+            ..opts(dir)
+        };
+        let core = Core::start(keyed(d.path())).unwrap();
+        assert_eq!(
+            core.dispatch("links_list", Value::Null)
+                .await
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(
+            std::fs::read(d.path().join("links.dat"))
+                .unwrap()
+                .starts_with(b"ZVK1")
+        );
+        let st = core.dispatch("vault_status", Value::Null).await.unwrap();
+        assert_eq!(
+            st,
+            json!({"enabled": true, "password": false, "remember": true})
+        );
+        let st = core
+            .dispatch("vault_set_password", json!({"password": "пароль-профиля"}))
+            .await
+            .unwrap();
+        assert_eq!(st["password"], true);
+        assert!(
+            core.dispatch("vault_remember", json!({"on": false}))
+                .await
+                .is_ok()
+        );
+        drop(core);
+        assert_eq!(
+            vault::open(d.path(), true).unwrap(),
+            vault::Opened::NeedPassword
+        );
+        assert!(Core::start(opts(d.path())).is_err());
+        let k2 = vault::unlock(d.path(), "пароль-профиля", true).unwrap();
+        assert_eq!(k2, k);
+        let core = Core::start(keyed(d.path())).unwrap();
+        assert_eq!(
+            core.dispatch("links_list", Value::Null)
+                .await
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]

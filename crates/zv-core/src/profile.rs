@@ -20,15 +20,15 @@ use zv_proto::ids::{now_ms, rand_hex};
 const MAGIC: &[u8] = b"ZVONochek-profile\n";
 const VERSION: u64 = 1;
 /// Argon2id по RFC 9106 (второй рекомендуемый набор): 64 МиБ, 3 прохода, 4 линии.
-const KDF_M: u32 = 64 * 1024;
-const KDF_T: u32 = 3;
-const KDF_P: u32 = 4;
+pub(crate) const KDF_M: u32 = 64 * 1024;
+pub(crate) const KDF_T: u32 = 3;
+pub(crate) const KDF_P: u32 = 4;
 pub(crate) const MIN_PASSWORD: usize = 8;
 const MAX_FILE: u64 = 1 << 30;
 const PENDING: &str = "import.pending";
 const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
 
-fn kdf(password: &str, salt: &[u8], m: u32, t: u32, p: u32) -> Result<[u8; 32], String> {
+pub(crate) fn kdf(password: &str, salt: &[u8], m: u32, t: u32, p: u32) -> Result<[u8; 32], String> {
     let params = argon2::Params::new(m, t, p, Some(32)).map_err(|e| e.to_string())?;
     let a = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     let mut key = [0u8; 32];
@@ -37,7 +37,7 @@ fn kdf(password: &str, salt: &[u8], m: u32, t: u32, p: u32) -> Result<[u8; 32], 
     Ok(key)
 }
 
-fn rand_bytes<const N: usize>() -> [u8; N] {
+pub(crate) fn rand_bytes<const N: usize>() -> [u8; N] {
     let mut out = [0u8; N];
     let v = hex::decode(rand_hex(N)).unwrap_or_default();
     out.copy_from_slice(&v[..N]);
@@ -135,21 +135,21 @@ fn ymd(ms: u64) -> String {
 }
 
 /// Отложенный импорт: применить до чтения данных (вызывается в `Core::start`).
-pub(crate) fn apply_pending(dir: &Path) {
-    let pending = JsonFile::new(dir, PENDING, true);
+pub(crate) fn apply_pending(dir: &Path, key: Option<crate::vault::DataKey>) {
+    let pending = JsonFile::new(dir, PENDING, true).keyed(key);
     let p: Value = pending.load();
     if p.is_null() {
         return;
     }
     let path = dir.join(PENDING);
-    match apply(dir, &p) {
+    match apply(dir, &p, key) {
         Ok(()) => tracing::info!("профиль: перенос применён"),
         Err(e) => tracing::error!("профиль: перенос не применён: {e}"),
     }
     let _ = std::fs::remove_file(path);
 }
 
-fn apply(dir: &Path, p: &Value) -> anyhow::Result<()> {
+fn apply(dir: &Path, p: &Value, key: Option<crate::vault::DataKey>) -> anyhow::Result<()> {
     let chats = B64.decode(p["chats"].as_str().unwrap_or(""))?;
     anyhow::ensure!(
         chats.is_empty() || chats.starts_with(SQLITE_MAGIC),
@@ -161,10 +161,14 @@ fn apply(dir: &Path, p: &Value) -> anyhow::Result<()> {
     settings.onboarded = local.onboarded;
     settings.tray_hint_shown = local.tray_hint_shown;
     let identity: Identity = serde_json::from_value(p["identity"].clone())?;
-    JsonFile::new(dir, "identity.dat", true).save(&identity)?;
+    JsonFile::new(dir, "identity.dat", true)
+        .keyed(key)
+        .save(&identity)?;
     JsonFile::new(dir, "contacts.dat", true)
+        .keyed(key)
         .save(&serde_json::from_value::<Contacts>(p["contacts"].clone())?)?;
     JsonFile::new(dir, "links.dat", true)
+        .keyed(key)
         .save(&serde_json::from_value::<Links>(p["links"].clone())?)?;
     JsonFile::new(dir, "history.json", false)
         .save(&serde_json::from_value::<History>(p["history"].clone())?)?;
@@ -298,6 +302,7 @@ impl Inner {
             return Err("Файл профиля повреждён".into());
         }
         JsonFile::new(&self.opts.data_dir, PENDING, true)
+            .keyed(self.opts.data_key)
             .save(&p)
             .map_err(|e| format!("Не удалось подготовить перенос: {e}"))?;
         tracing::info!("профиль: перенос подготовлен, применится при перезапуске");

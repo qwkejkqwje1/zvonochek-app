@@ -87,7 +87,12 @@ pub fn parse_manifest(m: &Value, platform: &str, allow_http: bool) -> Result<Rel
         .ok_or("у обновления нет подписи")?;
     Ok(Release {
         version,
-        notes: m["notes"].as_str().unwrap_or("").chars().take(4000).collect(),
+        notes: m["notes"]
+            .as_str()
+            .unwrap_or("")
+            .chars()
+            .take(4000)
+            .collect(),
         url,
         size,
         sig,
@@ -100,7 +105,8 @@ pub fn verify(data: &[u8], sig: &[u8], keys: &[[u8; 32]]) -> bool {
         return false;
     };
     keys.iter().any(|k| {
-        ed25519_dalek::VerifyingKey::from_bytes(k).is_ok_and(|vk| vk.verify_strict(data, &sig).is_ok())
+        ed25519_dalek::VerifyingKey::from_bytes(k)
+            .is_ok_and(|vk| vk.verify_strict(data, &sig).is_ok())
     })
 }
 
@@ -159,7 +165,9 @@ pub async fn download(
         return Err("обновление скачалось не полностью".into());
     }
     if !verify(&data, &rel.sig, keys) {
-        return Err("подпись обновления не сходится — файл не от ZVONochek, не устанавливаем".into());
+        return Err(
+            "подпись обновления не сходится — файл не от ZVONochek, не устанавливаем".into(),
+        );
     }
     let part = dir.join(format!("ZVONochek-{}.exe.part", rel.version));
     std::fs::write(&part, &data).map_err(|e| format!("{}: {e}", part.display()))?;
