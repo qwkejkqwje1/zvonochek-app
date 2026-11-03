@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZVONochek</title>
+<link rel="icon" href="icon.svg">
+<link rel="stylesheet" href="shell.css">
+<script src="../desktop/preload.js"></script>
+<script src="../web/vendor/qrcode.js"></script>
+<script type="module" src="shell.js"></script>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><img src="icon.svg" alt=""><div><b>ZVONochek</b><small id="brandVer">для Windows</small></div></div>
+    <button class="nav on" data-page="call"><i data-ic="phone"></i><span class="label">Звонок</span></button>
+    <button class="nav" data-page="links"><i data-ic="link"></i><span class="label">Мои ссылки</span></button>
+    <button class="nav" data-page="history"><i data-ic="clock"></i><span class="label">История</span><span class="count hidden" id="missedCount"></span></button>
+    <button class="nav" data-page="settings"><i data-ic="sliders"></i><span class="label">Настройки</span></button>
+    <button class="nav" data-page="diag"><i data-ic="pulse"></i><span class="label">Диагностика</span></button>
+    <div class="grow"></div>
+    <div class="side-status" id="sideStatus" title="Состояние ожидания звонков">
+      <span class="dot off" id="sideDot"></span>
+      <div class="txt"><b id="sideTitle">Запуск…</b><span id="sideText">подключение к каналам</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ЗВОНОК -->
+    <section class="page" id="page-call">
+      <h1>Звонок</h1>
+      <p class="lead">Голосовые и видеозвонки по ссылке — без аккаунтов и серверов с вашими данными.</p>
+
+      <div class="card">
+        <h3>Позвонить по ссылке</h3>
+        <p>Вставьте ссылку, которую вам прислали (сайт ZVONochek или приложение).</p>
+        <div class="row">
+          <input id="dialInput" class="field lg grow" placeholder="https://…/zvonochek/#k=…" spellcheck="false" autocomplete="off">
+          <button id="dialBtn" class="btn primary lg" disabled><i data-ic="phone"></i>Позвонить</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="row" style="gap:8px;cursor:pointer"><span class="switch"><input type="checkbox" id="dialSave" checked><span></span></span>Запомнить ссылку</label>
+          <input id="dialName" class="field grow" placeholder="Как подписать (необязательно)" maxlength="60" style="height:34px">
+        </div>
+        <div class="hint" id="dialHint"></div>
+      </div>
+
+      <div class="card">
+        <div class="head-row">
+          <div>
+            <h3>Своя ссылка</h3>
+            <p style="margin:0">Отправьте её собеседнику — приложение зазвонит, даже если окно закрыто.</p>
+          </div>
+          <button id="newLinkBtn" class="btn primary"><i data-ic="plus"></i>Создать ссылку</button>
+        </div>
+      </div>
+
+      <h2 id="quickTitle">Быстрый набор</h2>
+      <div class="tiles" id="quick"></div>
+    </section>
+
+    <!-- ССЫЛКИ -->
+    <section class="page hidden" id="page-links">
+      <div class="head-row">
+        <div>
+          <h1>Мои ссылки</h1>
+          <p class="lead">По своим ссылкам приложение ждёт звонка. Сохранённые — ссылки собеседников.</p>
+        </div>
+        <button class="btn primary" id="newLinkBtn2"><i data-ic="plus"></i>Создать</button>
+      </div>
+      <h2>Свои — ждут звонка</h2>
+      <div class="list" id="mineList"></div>
+      <h2>Сохранённые</h2>
+      <div class="list" id="savedList"></div>
+    </section>
+
+    <!-- ИСТОРИЯ -->
+    <section class="page hidden" id="page-history">
+      <div class="head-row">
+        <div>
+          <h1>История</h1>
+          <p class="lead">Журнал хранится только на этом компьютере.</p>
+        </div>
+        <button class="btn ghost" id="histClear"><i data-ic="trash"></i>Очистить</button>
+      </div>
+      <div class="list" id="histList"></div>
+    </section>
+
+    <!-- НАСТРОЙКИ -->
+    <section class="page hidden" id="page-settings">
+      <h1>Настройки</h1>
+      <p class="lead">Сохраняются сразу.</p>
+
+      <h2>Профиль</h2>
+      <div class="card">
+        <div class="set"><div class="t"><b>Имя в звонках</b><small>Его видит собеседник</small></div><input class="field" id="setName" maxlength="40" placeholder="Например, Алекс"></div>
+      </div>
+
+      <h2>Звонки</h2>
+      <div class="card">
+        <div class="set"><div class="t"><b>Не беспокоить</b><small>Входящие не звонят — только «пропущенный» в истории</small></div><label class="switch"><input type="checkbox" id="setDnd"><span></span></label></div>
+        <div class="set"><div class="t"><b>Сразу входить в звонок</b><small>Без экрана проверки микрофона и камеры</small></div><label class="switch"><input type="checkbox" id="setSkip"><span></span></label></div>
+        <div class="set"><div class="t"><b>Громкость мелодии</b><small id="setVolText">80%</small></div><input type="range" id="setVol" min="0" max="100" step="5"><button class="btn sm" id="setVolTest"><i data-ic="bell" class="sm"></i>Проверить</button></div>
+      </div>
+
+      <h2>Приложение</h2>
+      <div class="card">
+        <div class="set" id="rowAutostart"><div class="t"><b>Запускать вместе с Windows</b><small>Чтобы звонки по своим ссылкам доходили после перезагрузки</small></div><label class="switch"><input type="checkbox" id="setAutostart"><span></span></label></div>
+        <div class="set"><div class="t"><b>Закрывать в трей</b><small>Крестик прячет окно, приложение продолжает ждать звонков</small></div><label class="switch"><input type="checkbox" id="setTray"><span></span></label></div>
+        <div class="set"><div class="t"><b>Тема</b></div><div class="seg" id="setTheme"><button data-v="auto">Как в системе</button><button data-v="light">Светлая</button><button data-v="dark">Тёмная</button></div></div>
+      </div>
+
+      <h2>Сеть</h2>
+      <div class="card">
+        <div class="set"><div class="t"><b>MQTT по TCP</b><small>Дополнительный канал на порту 1883 — быстрее, но его режут некоторые сети</small></div><label class="switch"><input type="checkbox" id="setTcp"><span></span></label></div>
+        <div class="set"><div class="t"><b>Свой Worker</b><small>Адрес собственного Cloudflare Worker (пусто — общий)</small></div><input class="field mono" id="setWorker" placeholder="https://….workers.dev" spellcheck="false"></div>
+      </div>
+
+      <h2>О программе</h2>
+      <div class="card">
+        <div class="set"><div class="t"><b>ZVONochek для Windows</b><small id="aboutVer">—</small></div><button class="btn sm" id="updBtn"><i data-ic="download" class="sm"></i>Проверить обновления</button></div>
+        <div class="set"><div class="t"><b>Встроенный веб-клиент</b><small id="aboutWeb">—</small></div></div>
+        <div class="set"><div class="t"><b>Лицензии</b><small>© ZVONochek. Все права защищены. Использованные компоненты и их лицензии</small></div><button class="btn sm" id="licBtn">Открыть</button></div>
+      </div>
+    </section>
+
+    <!-- ДИАГНОСТИКА -->
+    <section class="page hidden" id="page-diag">
+      <div class="head-row">
+        <div>
+          <h1>Диагностика</h1>
+          <p class="lead">Каналы сигнализации по каждой комнате. Отчёт не содержит ключей и ссылок.</p>
+        </div>
+        <button class="btn" id="diagCopy"><i data-ic="copy"></i>Скопировать отчёт</button>
+      </div>
+      <div id="diagBody"></div>
+    </section>
+  </main>
+</div>
+<div id="incOverlay" class="inc-overlay incoming hidden"></div>
+</body>
+</html>

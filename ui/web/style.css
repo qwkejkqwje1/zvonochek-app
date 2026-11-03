@@ -1,0 +1,4488 @@
+/* ==========================================================================
+   ZVONochek v36 — дизайн-система
+   Тёмная палитра в духе Telegram Night: один набор токенов на всё приложение,
+   никаких дублирующих «тем поверх тем». Слои: токены → база → примитивы →
+   экраны (главная, чат, лобби, звонок) → адаптив → эко-режим.
+   Классы, которые строит JS (chat.js, app.js, stats-ui.js), отмечены в
+   комментариях секций — их имена менять нельзя без правки скриптов.
+   ========================================================================== */
+
+/* ---------- 0. Токены ---------- */
+:root {
+  color-scheme: dark;
+  --bg: #0e1621;
+  --bg-2: #17212b;
+  --bg-3: #202b36;
+  --bg-4: #242f3d;
+  --bg-elev: #1d2733;
+  --line: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.11);
+  --text: #f5f7fa;
+  --text-2: #aab8c5;
+  --text-3: #708499;
+  --accent: #3390ec;
+  --accent-press: #2b7fd6;
+  --accent-ink: #6ab3f3;
+  --accent-soft: rgba(51, 144, 236, 0.16);
+  --active: #2b5278;
+  --bubble-in: #182533;
+  --bubble-out: #2b5278;
+  --meta-out: #7da8d3;
+  --ok: #4fce5d;
+  --warn: #f0a940;
+  --bad: #ef5350;
+  --danger: #e5484d;
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --side-w: 380px;
+  --bar-h: 56px;
+  --tab-h: 56px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --wallpaper: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.035' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M26 34c0-6.6 4.6-11 10.5-11S47 27.4 47 34v6.5l3 5H23l3-5z'/%3E%3Cpath d='M32.5 49.5a4 4 0 0 0 8 0'/%3E%3Crect x='112' y='30' width='24' height='18' rx='4.5'/%3E%3Cpath d='M117 30v-4.5a7 7 0 0 1 14 0V30'/%3E%3Cpath d='M30 112h28a6.5 6.5 0 0 1 6.5 6.5v11a6.5 6.5 0 0 1-6.5 6.5H42l-9 6.5V136h-3a6.5 6.5 0 0 1-6.5-6.5v-11A6.5 6.5 0 0 1 30 112z'/%3E%3Ccircle cx='128' cy='124' r='12'/%3E%3Cpath d='M122.5 124.5l3.8 3.8 6.2-7'/%3E%3Cpath d='M86 78l5-10 5 10h-10z'/%3E%3Cpath d='M150 82c4 0 6 3 6 6s-2 6-6 6M156 76c7 0 11 5.5 11 12s-4 12-11 12'/%3E%3Cpath d='M74 164l10-10M79 154h5v5'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ---------- 1. База ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--bg);
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+body {
+  font: 15px/1.4 var(--font);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button:disabled {
+  cursor: default;
+}
+a {
+  color: var(--accent-ink);
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: var(--bg-4);
+}
+h3 {
+  margin: 0 0 12px;
+  font-size: 19px;
+  font-weight: 650;
+}
+h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+p {
+  margin: 0 0 10px;
+}
+::selection {
+  background: rgba(51, 144, 236, 0.45);
+}
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.hidden {
+  display: none !important;
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.noscript {
+  padding: 24px;
+  text-align: center;
+}
+
+/* ---------- 2. Примитивы ---------- */
+.ic {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  vertical-align: middle;
+}
+.ic.lg {
+  width: 30px;
+  height: 30px;
+}
+.mark {
+  width: 40px;
+  height: 40px;
+  flex: none;
+}
+
+/* Кнопки */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r);
+  background: var(--bg-4);
+  color: var(--text);
+  font-weight: 550;
+  font-size: 14.5px;
+  line-height: 1.2;
+  text-align: center;
+  transition: background 0.15s, transform 0.1s, opacity 0.15s;
+}
+.btn:hover {
+  background: #2c3a4a;
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn.primary:hover {
+  background: var(--accent-press);
+}
+.btn.ghost {
+  background: transparent;
+  color: var(--accent-ink);
+}
+.btn.ghost:hover {
+  background: var(--accent-soft);
+}
+.btn.danger,
+.btn.small.danger {
+  background: rgba(229, 72, 77, 0.14);
+  color: #ff8a8d;
+}
+.btn.small {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  border-radius: 10px;
+}
+.btn.small .ic {
+  width: 17px;
+  height: 17px;
+}
+.btn.lg {
+  min-height: 50px;
+  font-size: 16px;
+  border-radius: 14px;
+}
+.btn.block {
+  display: flex;
+  width: 100%;
+}
+.btn:disabled {
+  opacity: 0.45;
+  transform: none;
+}
+.btn[data-armed] {
+  background: var(--danger);
+  color: #fff;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-3);
+  transition: background 0.15s, color 0.15s;
+}
+.icon-btn:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+.icon-btn .ic {
+  width: 22px;
+  height: 22px;
+}
+.icon-btn.small {
+  width: 32px;
+  height: 32px;
+}
+.icon-btn.small .ic {
+  width: 18px;
+  height: 18px;
+}
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 2px 4px;
+  color: var(--accent-ink);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.tag-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: rgba(240, 169, 64, 0.16);
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 600;
+}
+.tag-btn:disabled {
+  opacity: 1;
+}
+.x {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-3);
+}
+.x:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+
+/* Поля ввода */
+/* Текстовые поля перечислены явно: низкая специфичность (0,1,1) позволяет
+   компонентам (поиск, композер) переопределять вид без !important. */
+input:not([type]),
+input[type='text'],
+input[type='search'],
+input[type='url'],
+input[type='password'],
+input[type='number'],
+select,
+textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  background: var(--bg-4);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-3);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  background: #283545;
+}
+input[readonly] {
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+textarea {
+  resize: vertical;
+  line-height: 1.45;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23708499' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.field-row > input {
+  flex: 1;
+  min-width: 0;
+}
+.field-row > .btn {
+  flex: none;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 14.5px;
+  color: var(--text);
+  cursor: pointer;
+}
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.search .ic {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.search input {
+  min-height: 40px;
+  padding-left: 40px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+.search input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+/* Ползунки */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  margin: 0;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--bg-4);
+}
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--bg-4);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid #fff;
+}
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid #fff;
+}
+.slider-lbl {
+  display: block;
+  margin: 6px 0 8px;
+}
+.slider-lbl > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.slider-lbl b {
+  margin-left: auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.slider-lbl .ic {
+  width: 16px;
+  height: 16px;
+}
+
+/* Карточки, списки, подсказки */
+.card {
+  background: var(--bg-2);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  margin: 0 12px 12px;
+}
+.card-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 15.5px;
+}
+.list-card {
+  margin: 0 12px 12px;
+  border-radius: var(--r-lg);
+  background: var(--bg-2);
+  overflow: hidden;
+}
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 15px;
+}
+.list-item + .list-item {
+  border-top: 1px solid var(--line);
+}
+.list-item .ic {
+  color: var(--accent-ink);
+}
+.list-item:hover {
+  background: var(--bg-3);
+}
+.list-item:disabled {
+  color: var(--text-2);
+}
+.hint,
+.sec-hint {
+  margin: 6px 0 10px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-3);
+}
+.note {
+  margin: 6px 0;
+  font-size: 13.5px;
+  color: var(--warn);
+}
+.note:empty {
+  display: none;
+}
+.status-line {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.plain-list li {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Меню (список чатов, сообщение, комната) — позиционирует JS */
+.menu,
+.chat-msg-menu {
+  position: fixed;
+  z-index: 80;
+  min-width: 210px;
+  padding: 6px;
+  border-radius: var(--r);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+  animation: pop-in 0.14s var(--ease);
+}
+.chat-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14.5px;
+  text-align: left;
+}
+.chat-menu-item:hover {
+  background: var(--bg-3);
+}
+.chat-menu-item .ic {
+  width: 19px;
+  height: 19px;
+  color: var(--text-3);
+}
+.chat-menu-item.danger,
+.chat-menu-item.danger .ic {
+  color: #ff7b7e;
+}
+.chat-menu-item[aria-pressed='true'] .ic {
+  color: var(--warn);
+}
+.chat-menu-item.muted {
+  color: var(--text-3);
+}
+.chat-menu-item[data-armed] {
+  background: var(--danger);
+  color: #fff;
+}
+.chat-menu-item[data-armed] .ic {
+  color: #fff;
+}
+.chat-react-row {
+  display: flex;
+  gap: 2px;
+  padding: 2px 2px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.chat-react-emoji {
+  flex: 1;
+  height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 21px;
+  transition: transform 0.12s;
+}
+.chat-react-emoji:hover {
+  background: var(--bg-3);
+  transform: scale(1.15);
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* ---------- 3. Обратная связь: тост, баннер, модалка, диагностика ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + var(--safe-b));
+  z-index: 200;
+  max-width: min(92vw, 460px);
+  padding: 11px 16px;
+  border-radius: var(--r);
+  background: rgba(30, 41, 53, 0.97);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  transform: translateX(-50%);
+  animation: toast-in 0.2s var(--ease);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+.chat-toast {
+  position: fixed;
+  top: calc(10px + var(--safe-t));
+  left: 50%;
+  z-index: 210;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(92vw, 380px);
+  padding: 10px 14px;
+  border-radius: var(--r);
+  background: var(--bg-elev);
+  border-left: 3px solid var(--accent);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  cursor: pointer;
+  animation: pop-in 0.18s var(--ease);
+}
+.chat-toast span {
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.zv-diag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 300;
+  padding: 10px 14px calc(10px);
+  padding-top: calc(10px + var(--safe-t));
+  background: #5b1d22;
+  color: #ffd9db;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  word-break: break-word;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 10px 8px;
+  padding: 10px 8px 10px 12px;
+  border-radius: var(--r);
+  background: var(--accent-soft);
+}
+.banner-ic {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  flex: none;
+}
+.banner-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.banner-text b {
+  color: var(--text);
+  font-size: 14px;
+}
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(5, 10, 16, 0.62);
+  animation: fade-in 0.15s;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: min(88dvh, 860px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 22px 20px 20px;
+  border-radius: var(--r-xl);
+  background: var(--bg-2);
+  box-shadow: var(--shadow);
+  animation: pop-in 0.18s var(--ease);
+}
+.modal-card > .x {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.modal-card h3 {
+  padding-right: 40px;
+}
+.settings-sec {
+  margin: 14px 0 0;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--line);
+}
+.sec-note {
+  margin-left: 6px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+.seg-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--r);
+  background: var(--bg);
+}
+.seg-opt {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.seg-opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.seg-opt:has(input:checked) {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.seg-opt input:focus-visible + span {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.status-box {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--bg);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.status-box:empty {
+  display: none;
+}
+.diaglog {
+  max-height: 260px;
+  overflow: auto;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--bg);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pwa-steps {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.qr {
+  display: grid;
+  place-items: center;
+  margin: 12px auto 0;
+  padding: 12px;
+  width: fit-content;
+  border-radius: var(--r);
+  background: #fff;
+}
+.qr canvas,
+.qr img,
+.qr svg,
+.greet-qr canvas,
+.greet-qr img,
+.greet-qr svg {
+  display: block;
+  max-width: 220px;
+  height: auto;
+}
+.safety-emoji {
+  margin: 14px 0 6px;
+  font-size: 34px;
+  letter-spacing: 6px;
+  text-align: center;
+}
+.safety-digits {
+  font-family: var(--mono);
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-align: center;
+  color: var(--text-2);
+}
+
+/* ---------- 4. Каркас: экраны, сайдбар, деталь ----------
+   Мобильный: сайдбар на весь экран, деталь скрыта (кроме экрана чата).
+   ≥920px: сайдбар фиксированной ширины слева, деталь справа. */
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+.shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.side {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding-top: var(--safe-t);
+  background: var(--bg-2);
+}
+.detail {
+  position: relative;
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.chatroom .detail {
+  display: flex;
+}
+.chatroom .chat-sidebar,
+.wide-only {
+  display: none;
+}
+@media (min-width: 720px) {
+  .wide-only {
+    display: inline-grid;
+  }
+}
+@media (min-width: 920px) {
+  .side {
+    flex: 0 0 var(--side-w);
+    border-right: 1px solid rgba(0, 0, 0, 0.4);
+  }
+  .home .detail,
+  .chatroom .chat-sidebar {
+    display: flex;
+  }
+  #chatBack {
+    display: none;
+  }
+}
+
+/* Шапка сайдбара */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: var(--bar-h);
+  padding: 0 8px 0 14px;
+}
+.chat-sidebar .appbar {
+  padding-left: 6px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+}
+.brand .mark {
+  width: 38px;
+  height: 38px;
+}
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.brand-name {
+  font-size: 17.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.brand-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.brand-sub .ic {
+  width: 12px;
+  height: 12px;
+  color: var(--ok);
+}
+.appbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.appbar-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+/* Вкладки главной */
+.panes {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
+}
+.pane.tab-active {
+  display: block;
+}
+.pane[data-home-pane='calls'],
+.pane[data-home-pane='personal'] {
+  padding-top: 12px;
+  background: var(--bg);
+}
+.pane > .note {
+  margin: 2px 16px 8px;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  padding: 2px 6px 8px 12px;
+}
+.drawer {
+  display: grid;
+  gap: 10px;
+  margin: 0 12px 10px;
+  padding: 14px;
+  border-radius: var(--r-lg);
+  background: var(--bg-3);
+  animation: pop-in 0.14s var(--ease);
+}
+.drawer-title {
+  font-size: 15px;
+  font-weight: 650;
+}
+.drawer .hint,
+.drawer .check {
+  margin: 0;
+}
+.drawer > .btn {
+  justify-self: start;
+}
+.fab {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42);
+  transition: background 0.15s, transform 0.15s var(--ease);
+}
+.fab:hover {
+  background: var(--accent-press);
+}
+.fab:active {
+  transform: scale(0.93);
+}
+.fab .ic {
+  width: 24px;
+  height: 24px;
+}
+.tabbar {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 4px 6px calc(4px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+}
+.tab {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 52px;
+  padding: 5px 4px 4px;
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 550;
+  transition: color 0.15s;
+}
+.tab.active {
+  color: var(--accent-ink);
+}
+.tab-ic {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 28px;
+  border-radius: 14px;
+  transition: background 0.15s;
+}
+.tab:hover .tab-ic {
+  background: var(--bg-3);
+}
+.tab.active .tab-ic {
+  background: var(--accent-soft);
+}
+.tab-ic .ic {
+  width: 22px;
+  height: 22px;
+}
+.tab-ic .chat-unread-badge {
+  position: absolute;
+  top: -4px;
+  left: 33px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  box-shadow: 0 0 0 2px var(--bg-2);
+}
+
+/* Правая панель главной на ПК */
+.detail-welcome {
+  align-items: center;
+  justify-content: center;
+  background: var(--bg) var(--wallpaper);
+}
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 380px;
+  margin: 24px;
+  padding: 28px 30px;
+  border-radius: 24px;
+  background: rgba(23, 33, 43, 0.78);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.welcome .mark {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 4px;
+}
+.welcome b {
+  color: var(--text);
+  font-size: 17px;
+}
+
+/* ---------- 5. Список чатов (строит chat.js) ---------- */
+.room-list {
+  margin: 0;
+  padding: 0 0 92px;
+  list-style: none;
+}
+.chat-sidebar .room-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 12px;
+}
+.tg-chat-li {
+  position: relative;
+  padding: 0 6px;
+}
+.chat-room-item.tg-chat-item {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  height: 72px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 400;
+  text-align: left;
+  transition: background 0.12s;
+}
+.chat-room-item.tg-chat-item:hover {
+  background: var(--bg-3);
+}
+.chat-room-item.tg-chat-item:active {
+  transform: none;
+  background: var(--bg-4);
+}
+.chat-room-item.tg-chat-item.active {
+  background: var(--active);
+}
+.chat-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.tg-item-avatar {
+  width: 54px;
+  height: 54px;
+  font-size: 21px;
+}
+.tg-avatar-lock {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  font-size: 11px;
+}
+.active .tg-avatar-lock {
+  background: var(--active);
+}
+.tg-item-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.chat-room-top,
+.chat-room-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tg-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 15.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-room-when {
+  flex: none;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.chat-room-preview-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 14.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tg-draft-prefix {
+  color: #e86d6d;
+}
+.chat-unread-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1;
+}
+.chat-room-item.active .chat-room-when,
+.chat-room-item.active .chat-room-preview-text {
+  color: #c2d8ee;
+}
+.chat-room-item.active .chat-unread-badge {
+  background: #fff;
+  color: var(--active);
+}
+/* «···» у чата: на ПК появляется вместо времени при наведении;
+   на сенсорных экранах виден всегда (iOS не шлёт contextmenu). */
+.btn.chat-room-menu-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 30px;
+  min-height: 0;
+  height: 24px;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--bg-4);
+  color: var(--text-2);
+  font-size: 14px;
+  letter-spacing: 1px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tg-chat-li:hover .btn.chat-room-menu-btn,
+.btn.chat-room-menu-btn:focus-visible {
+  opacity: 1;
+}
+.tg-chat-li:hover .chat-room-when {
+  visibility: hidden;
+}
+@media (hover: none) {
+  .chat-room-item.tg-chat-item {
+    padding-right: 42px;
+  }
+  .btn.chat-room-menu-btn {
+    top: 50%;
+    right: 10px;
+    height: 30px;
+    background: transparent;
+    color: var(--text-3);
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+  .tg-chat-li:hover .chat-room-when {
+    visibility: visible;
+  }
+}
+.tg-empty-rooms {
+  padding: 48px 28px;
+}
+.tg-empty-rooms-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: center;
+}
+.tg-empty-rooms-box b {
+  color: var(--text);
+  font-size: 16px;
+}
+.tg-empty-rooms-ic {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  font-size: 38px;
+}
+
+/* ---------- 6. Вкладки «Звонки» и «Мой номер» ---------- */
+.call-start {
+  display: grid;
+  gap: 12px;
+}
+.call-start .hint,
+.call-start .note,
+.hero-mini .hint {
+  margin: 0;
+}
+.hero-mini {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 18px 18px;
+  text-align: center;
+}
+.hero-mini b {
+  font-size: 17px;
+}
+.hero-ic {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4aa3f5, #2b6fd1);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(51, 144, 236, 0.35);
+}
+.hero-mini .btn {
+  margin-top: 4px;
+}
+#restoreBox textarea {
+  margin: 4px 0 10px;
+}
+.list-block {
+  margin: 0 12px 12px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--bg-2);
+}
+.list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 4px;
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.call-list {
+  margin: 0;
+  padding: 2px 0 6px;
+  list-style: none;
+}
+.call-li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 8px 16px;
+}
+.call-av {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5aaaf8, #2e6fd5);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 650;
+}
+.call-li[data-kind='link'] .call-av {
+  background: linear-gradient(135deg, #a98bff, #6c4fd8);
+}
+.call-li[data-kind='missed'] .call-av {
+  background: linear-gradient(135deg, #ff8f7e, #dc4a4f);
+}
+.call-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.call-name {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.call-li[data-kind='missed'] .call-name {
+  color: #ff8a8d;
+}
+.call-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.call-dir {
+  width: 15px;
+  height: 15px;
+  color: var(--ok);
+}
+.call-li[data-kind='missed'] .call-dir {
+  color: var(--bad);
+}
+.call-li[data-kind='link'] .call-dir {
+  color: var(--accent-ink);
+}
+.call-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+}
+.call-when {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.call-q {
+  min-width: 34px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(79, 206, 93, 0.14);
+  color: var(--ok);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: center;
+}
+.call-q[data-level='mid'] {
+  background: rgba(240, 169, 64, 0.15);
+  color: var(--warn);
+}
+.call-q[data-level='bad'] {
+  background: rgba(239, 83, 80, 0.16);
+  color: #ff7c79;
+}
+.calls-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 26px 24px 30px;
+  color: var(--text-3);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: center;
+}
+.calls-empty .ic {
+  width: 38px;
+  height: 38px;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+.calls-empty b {
+  color: var(--text-2);
+  font-size: 15px;
+}
+
+/* Сводка звонков (stats-ui.js → renderCallsDashboard) */
+.calls-dash {
+  margin: 0 12px 12px;
+  padding: 14px 16px 16px;
+  border-radius: var(--r-lg);
+  background: var(--bg-2);
+}
+.cd-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cd-head b {
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.cd-head span {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.cd-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.cd-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 8px;
+  border-radius: var(--r);
+  background: var(--bg-3);
+  text-align: center;
+}
+.cd-kpi b {
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.cd-kpi span {
+  color: var(--text-3);
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+.cd-kpi[data-level='good'] b {
+  color: var(--ok);
+}
+.cd-kpi[data-level='mid'] b {
+  color: var(--warn);
+}
+.cd-kpi[data-level='bad'] b {
+  color: var(--bad);
+}
+.cd-chart {
+  margin-top: 16px;
+}
+.cd-chart-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.cd-chart-head b {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.cd-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 64px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid var(--line-2);
+}
+.cd-bars i {
+  flex: 1;
+  min-height: 2px;
+  border-radius: 4px 4px 1px 1px;
+  background: linear-gradient(180deg, #5eb2ff, var(--accent));
+  transition: height 0.3s var(--ease);
+}
+.cd-bars i[data-empty] {
+  background: rgba(255, 255, 255, 0.07);
+}
+.cd-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.cd-routes {
+  margin-top: 14px;
+}
+.cd-route-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.cd-route-bar i {
+  flex: 1 1 0;
+  min-width: 4px;
+}
+.cd-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.cd-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cd-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+[data-route='p2p'] > i,
+.cd-route-bar i[data-route='p2p'] {
+  background: var(--ok);
+}
+[data-route='lan'] > i,
+.cd-route-bar i[data-route='lan'] {
+  background: var(--accent);
+}
+[data-route='turn'] > i,
+.cd-route-bar i[data-route='turn'] {
+  background: var(--warn);
+}
+[data-route='bridge'] > i,
+.cd-route-bar i[data-route='bridge'] {
+  background: #a77bf3;
+}
+
+/* Мой номер */
+.backup-words {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px 10px;
+  margin: 10px 0 12px;
+  padding: 12px 12px 12px 34px;
+  border-radius: var(--r);
+  background: var(--bg);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+.backup-words li::marker {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.about {
+  padding: 8px 16px 24px;
+  text-align: center;
+}
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.facts .ic {
+  width: 15px;
+  height: 15px;
+  color: var(--ok);
+}
+.about-ver {
+  margin: 12px 0 0;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+
+/* ---------- 7. Экран чата: шапка, плашки, карточки ---------- */
+.chat-main {
+  background: var(--bg) var(--wallpaper);
+}
+.chat-card {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.chat-empty {
+  display: none;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+#chatroom.chat-no-room .chat-card {
+  display: none;
+}
+#chatroom.chat-no-room .chat-empty {
+  display: flex;
+}
+.chat-empty-pill {
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(15, 25, 36, 0.62);
+  font-size: 14px;
+  font-weight: 500;
+}
+.chat-header {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: calc(var(--bar-h) + var(--safe-t));
+  padding: var(--safe-t) 6px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  background: var(--bg-2);
+}
+.chat-room-avatar {
+  width: 42px;
+  height: 42px;
+  margin: 0 2px 0 4px;
+  font-size: 17px;
+}
+.chat-title-box {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  line-height: 1.25;
+  cursor: pointer;
+}
+.chat-title-box b {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-subline {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.chat-subline > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-presence[data-live] {
+  color: var(--accent-ink);
+}
+.chat-status {
+  flex: none;
+  color: var(--warn);
+}
+.chat-status[data-ok] {
+  display: none;
+}
+.chat-status:not(:empty):not([data-ok]) + .chat-presence:not(:empty)::before {
+  content: '·';
+  margin: 0 5px;
+}
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex: none;
+}
+.chat-header-actions .tag-btn {
+  margin-right: 4px;
+}
+
+/* Плашки под шапкой: закреп, групповой звонок, поиск */
+.topbar-strip {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-height: 46px;
+  padding: 5px 8px 5px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  background: var(--bg-2);
+}
+.strip-mark {
+  flex: none;
+  align-self: stretch;
+  width: 3px;
+  margin: 3px 0;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.chat-pinbar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-gcallbar {
+  background: linear-gradient(90deg, rgba(79, 206, 93, 0.16), var(--bg-2) 72%);
+  cursor: pointer; /* v38: вся плашка — кнопка входа */
+  transition: background-color 0.15s;
+}
+.chat-gcallbar:hover,
+.chat-gcallbar:focus-visible {
+  background: linear-gradient(90deg, rgba(79, 206, 93, 0.26), var(--bg-2) 80%);
+}
+.chat-gcallbar::before {
+  content: '';
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 0 0 rgba(79, 206, 93, 0.6);
+  animation: gcall-pulse 1.6s infinite;
+}
+.chat-gcallbar.joined::before {
+  animation: none;
+}
+@keyframes gcall-pulse {
+  70% {
+    box-shadow: 0 0 0 9px rgba(79, 206, 93, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 206, 93, 0);
+  }
+}
+.chat-gcallbar-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ok);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chat-searchbar {
+  gap: 4px;
+  padding-left: 10px;
+}
+.chat-searchbar input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: 999px;
+  background: var(--bg);
+}
+.chat-search-count {
+  margin: 0 4px;
+  color: var(--text-3);
+  font-size: 13px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Карточки управления комнатой — всплывают поверх ленты справа */
+.popovers {
+  position: relative;
+  z-index: 7;
+  height: 0;
+}
+.popover {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  width: min(380px, calc(100vw - 20px));
+  max-height: min(72vh, 580px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow);
+  animation: pop-in 0.14s var(--ease);
+}
+.popover .btn-row {
+  margin-top: 12px;
+}
+.popover > .hint:last-child {
+  margin-bottom: 0;
+}
+.menu-pop {
+  width: 290px;
+  padding: 6px;
+}
+.menu-pop .note {
+  margin: 6px 12px 6px;
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.pop-title {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.greet-code {
+  margin: 6px 0 12px;
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+}
+.greet-code:empty {
+  display: none;
+}
+.greet-qr {
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+}
+.greet-qr:empty {
+  display: none;
+}
+
+/* Участники и сверка (renderMembersList) */
+.chat-members {
+  padding: 8px;
+}
+.chat-phrase {
+  margin: 2px 4px 8px;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.chat-member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+.chat-member-row:hover {
+  background: var(--bg-3);
+}
+.chat-member-row .chat-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+.chat-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-3);
+  box-shadow: 0 0 0 2px var(--bg-elev);
+}
+.chat-dot.on {
+  background: var(--ok);
+}
+.chat-member-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14.5px;
+  font-weight: 550;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-member-seen {
+  flex: none;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.btn.chat-member-call {
+  width: 36px;
+  padding: 0;
+  font-size: 16px;
+}
+.chat-epoch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.chat-epoch-warn {
+  flex-basis: 100%;
+  padding-left: 28px;
+  color: var(--warn);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* Первый вход: имя */
+.nick-gate {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(14, 22, 33, 0.74);
+}
+.nick-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(360px, 100%);
+  padding: 26px 20px 20px;
+  border-radius: 20px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow);
+  text-align: center;
+  animation: pop-in 0.18s var(--ease);
+}
+.nick-ic {
+  font-size: 42px;
+  line-height: 1;
+}
+.nick-card b {
+  font-size: 18px;
+}
+.nick-card .hint {
+  margin: 0 0 4px;
+}
+.nick-card input {
+  text-align: center;
+}
+
+/* ---------- 8. Лента сообщений (renderMessagesNow) ---------- */
+.chat-messages {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px max(10px, calc((100% - 780px) / 2)) 6px;
+}
+.chat-messages > :first-child {
+  margin-top: auto;
+}
+.chat-date-chip,
+.chat-sys {
+  align-self: center;
+  border-radius: 999px;
+  background: rgba(15, 25, 36, 0.62);
+  color: #e3ebf3;
+  font-size: 13px;
+  font-weight: 550;
+}
+.chat-date-chip {
+  margin: 12px 0 8px;
+  padding: 4px 11px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.chat-sys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: min(92%, 520px);
+  margin: 6px 0;
+  padding: 5px 12px;
+  border-radius: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+}
+.chat-sys.warn {
+  color: #ffc46b;
+}
+.chat-sys-key {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.chat-sys .btn {
+  min-height: 30px;
+}
+.chat-bubble.ratchet-miss {
+  align-self: flex-start;
+  margin: 3px 0 3px 44px;
+  padding: 7px 12px;
+  border-radius: 14px;
+  background: rgba(24, 37, 51, 0.8);
+  color: var(--text-3);
+  font-size: 13.5px;
+  font-style: italic;
+}
+.tg-chat-welcome {
+  display: flex;
+  justify-content: center;
+  margin: auto 0;
+  padding: 16px 0;
+}
+.tg-chat-welcome-card {
+  max-width: 310px;
+  padding: 22px 22px 20px;
+  border-radius: 20px;
+  background: rgba(15, 25, 36, 0.66);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.tg-chat-welcome-card b {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 16px;
+}
+.tg-chat-welcome-card p {
+  margin: 0;
+  color: var(--text-2);
+}
+.tg-chat-welcome-acts {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.tg-chat-welcome-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  font-size: 30px;
+}
+
+/* Строка сообщения: [аватар] пузырь, реакции — отдельной строкой */
+.chat-msg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0 10px;
+  margin-top: 2px;
+}
+.chat-msg-row.grp-first {
+  margin-top: 8px;
+}
+.chat-msg-row.mine {
+  justify-content: flex-end;
+}
+.chat-msg-row .chat-avatar.ghost {
+  visibility: hidden;
+}
+.chat-msg {
+  position: relative;
+  max-width: min(560px, calc(100% - 84px));
+  padding: 6px 10px 7px 11px;
+  border-radius: 16px;
+  background: var(--bubble-in);
+  box-shadow: var(--shadow-sm);
+  font-size: 15px;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+.chat-msg.mine {
+  max-width: min(560px, calc(100% - 48px));
+  background: var(--bubble-out);
+}
+.chat-msg-row:not(.mine) .chat-msg {
+  border-bottom-left-radius: 6px;
+}
+.chat-msg-row:not(.mine):not(.grp-first) .chat-msg {
+  border-top-left-radius: 6px;
+}
+.chat-msg-row.mine .chat-msg {
+  border-bottom-right-radius: 6px;
+}
+.chat-msg-row.mine:not(.grp-first) .chat-msg {
+  border-top-right-radius: 6px;
+}
+/* Хвостик у последнего пузыря группы — вырез эллипсом через маску */
+.chat-msg.tail:not(.mine) {
+  border-bottom-left-radius: 0;
+}
+.chat-msg.tail.mine {
+  border-bottom-right-radius: 0;
+}
+.chat-msg.tail::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: -9px;
+  width: 9px;
+  height: 16px;
+  background: inherit;
+  -webkit-mask: radial-gradient(9px 16px at 0 0, transparent 98%, #000 100%);
+  mask: radial-gradient(9px 16px at 0 0, transparent 98%, #000 100%);
+}
+.chat-msg.tail.mine::before {
+  left: auto;
+  right: -9px;
+  -webkit-mask: radial-gradient(9px 16px at 100% 0, transparent 98%, #000 100%);
+  mask: radial-gradient(9px 16px at 100% 0, transparent 98%, #000 100%);
+}
+.chat-msg-head {
+  margin-bottom: 2px;
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.chat-msg-text {
+  display: inline;
+  white-space: pre-wrap;
+}
+.chat-msg-text a {
+  color: var(--accent-ink);
+}
+.chat-msg.mine .chat-msg-text a {
+  color: #bfe0ff;
+}
+.chat-deleted {
+  color: var(--text-3);
+  font-style: italic;
+}
+.chat-msg mark {
+  border-radius: 3px;
+  background: rgba(255, 204, 0, 0.42);
+  color: inherit;
+}
+/* Время и галочки плавают в правом нижнем углу последней строки: пузырь —
+   flex-элемент, то есть сам содержит float (независимый контекст), а
+   отрицательный нижний отступ не даёт подписи раздувать высоту пузыря. */
+.chat-msg-foot {
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 5px -3px -5px 10px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.chat-msg.mine .chat-msg-foot {
+  color: var(--meta-out);
+}
+.chat-edited {
+  order: -1;
+  font-style: italic;
+}
+.chat-receipt {
+  font-size: 12.5px;
+  letter-spacing: -3px;
+  padding-right: 3px;
+}
+.chat-receipt.st-read {
+  color: var(--accent-ink);
+}
+.chat-msg.mine .chat-receipt.st-read {
+  color: #8fd0ff;
+}
+.chat-receipt.warn {
+  color: var(--warn);
+  font-size: 11.5px;
+  letter-spacing: 0;
+}
+.chat-act-btn {
+  position: absolute;
+  right: -38px;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(15, 25, 36, 0.62);
+  color: #dfe8f1;
+  font-size: 13px;
+  letter-spacing: 1px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.chat-msg.mine .chat-act-btn {
+  right: auto;
+  left: -38px;
+}
+.chat-msg:hover .chat-act-btn,
+.chat-act-btn:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  /* меню открывается касанием пузыря; кнопка остаётся якорем позиции */
+  .chat-act-btn {
+    pointer-events: none;
+  }
+}
+.chat-quote {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 2px 0 5px;
+  padding: 3px 8px 4px 9px;
+  border-left: 3px solid var(--accent-ink);
+  border-radius: 4px 6px 6px 4px;
+  background: rgba(106, 179, 243, 0.1);
+  font-size: 13.5px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+.chat-quote b {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.chat-quote span {
+  overflow: hidden;
+  color: var(--text-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-msg.mine .chat-quote {
+  border-left-color: #a9d6ff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.chat-msg.mine .chat-quote b {
+  color: #cfe7ff;
+}
+.chat-reactions {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 2px;
+  padding-left: 44px;
+}
+.chat-msg-row.mine .chat-reactions {
+  justify-content: flex-end;
+  padding: 0 4px 0 0;
+}
+.duo .chat-msg {
+  max-width: min(560px, calc(100% - 48px));
+}
+.duo .chat-reactions {
+  padding-left: 2px;
+}
+.chat-chip {
+  min-height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(24, 37, 51, 0.92);
+  color: var(--text);
+  font-size: 13px;
+}
+.chat-chip.mine {
+  background: var(--accent);
+  color: #fff;
+}
+.chat-flash {
+  animation: msg-flash 1.2s var(--ease);
+}
+@keyframes msg-flash {
+  20% {
+    background: rgba(51, 144, 236, 0.28);
+  }
+}
+
+/* Голосовые и файлы */
+.chat-voice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: min(240px, 60vw);
+  padding: 2px 0 4px;
+}
+.btn.chat-voice-play {
+  width: 40px;
+  min-height: 0;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px;
+}
+.chat-msg.mine .btn.chat-voice-play {
+  background: #fff;
+  color: var(--bubble-out);
+}
+.chat-voice-bar {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.chat-voice-fill {
+  width: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-ink);
+}
+.chat-msg.mine .chat-voice-fill {
+  background: #fff;
+}
+.chat-voice-time {
+  color: var(--text-2);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.chat-file-state {
+  flex-basis: 100%;
+  color: var(--warn);
+  font-size: 12.5px;
+}
+.chat-file-state:empty {
+  display: none;
+}
+.chat-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: center;
+  min-width: min(260px, 62vw);
+  padding: 2px 0 4px;
+}
+.chat-file-name {
+  overflow: hidden;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-file-size {
+  grid-column: 1;
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.chat-msg.mine .chat-file-size {
+  color: var(--meta-out);
+}
+.chat-file-preview,
+.chat-file-bar,
+.chat-file .chat-file-state {
+  grid-column: 1 / -1;
+}
+.chat-file-preview:empty {
+  display: none;
+}
+.chat-file-img {
+  display: block;
+  max-width: 100%;
+  max-height: 320px;
+  margin: 6px 0 2px;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.chat-file-bar {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.chat-file-bar-fill {
+  width: 0;
+  height: 100%;
+  background: var(--accent-ink);
+  transition: width 0.2s;
+}
+.btn.chat-file-btn {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---------- 9. Композер ---------- */
+.composer {
+  position: relative;
+  z-index: 4;
+  flex: none;
+  padding: 4px max(8px, calc((100% - 780px) / 2)) calc(8px + var(--safe-b));
+}
+.chat-input-bar,
+.chat-rec-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 50px;
+  padding: 5px;
+  border-radius: 25px;
+  background: var(--bg-2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.chat-replybar:not(.hidden) ~ .chat-input-bar {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+#chatInput {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 15.5px;
+}
+.send-btn {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  transition: background 0.15s, transform 0.12s;
+}
+.send-btn:hover {
+  background: var(--accent-press);
+}
+.send-btn:active {
+  transform: scale(0.92);
+}
+.send-btn .ic {
+  width: 20px;
+  height: 20px;
+}
+.send-btn.mic {
+  background: transparent;
+  color: var(--text-3);
+}
+.send-btn.mic:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}
+.send-btn.mic .ic {
+  width: 22px;
+  height: 22px;
+}
+.chat-rec-bar {
+  gap: 10px;
+  padding-left: 18px;
+}
+.chat-rec-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bad);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+.chat-rec-time {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.chat-rec-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-replybar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 4px 14px;
+  border-radius: 20px 20px 0 0;
+  background: var(--bg-2);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+.chat-replybar > .ic {
+  color: var(--accent-ink);
+}
+.chat-replybar-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chat-replybar-text > b,
+.chat-replybar-text > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-replybar-text > b {
+  color: var(--accent-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.chat-file-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.chat-file-progress-bar {
+  flex: 1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-4);
+}
+#chatFileProgressFill {
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+.chat-note {
+  margin: 6px 12px 0;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+/* ---------- 10. Лобби звонка ----------
+   Сетка: мобильный — шапка, превью, форма столбиком;
+   ПК — превью слева, шапка и форма карточкой справа. */
+.prejoin-screen {
+  overflow-y: auto;
+}
+.prejoin {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'head' 'preview' 'side';
+  gap: 12px;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--safe-t) 12px calc(16px + var(--safe-b));
+}
+.side-header {
+  grid-area: head;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--bar-h);
+}
+.side-header b {
+  flex: 1;
+  font-size: 17px;
+  font-weight: 650;
+}
+.ver-tag {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-3);
+  font-size: 12px;
+}
+.preview-col {
+  grid-area: preview;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.side-card {
+  grid-area: side;
+  border-radius: 20px;
+  background: var(--bg-2);
+}
+.side-body {
+  padding: 16px 16px 18px;
+}
+@media (min-width: 920px) {
+  .prejoin {
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-areas: 'preview head' 'preview side';
+    grid-template-rows: auto 1fr;
+    gap: 0 24px;
+    margin: auto;
+    padding: 32px 28px;
+  }
+  .side-header {
+    padding: 6px 12px 0 6px;
+    border-radius: 20px 20px 0 0;
+    background: var(--bg-2);
+  }
+  .side-card {
+    align-self: start;
+    border-radius: 0 0 20px 20px;
+  }
+  .side-body {
+    padding-top: 6px;
+  }
+}
+.preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  border-radius: 20px;
+  background: #05080c;
+  box-shadow: var(--shadow);
+}
+@media (min-width: 920px) {
+  .preview {
+    aspect-ratio: 16 / 10;
+  }
+}
+.preview video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+.preview video.rear-cam {
+  transform: none;
+}
+.preview .video-off {
+  position: absolute;
+  inset: 0;
+}
+.preview-hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hud-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.46);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 550;
+}
+.hud-tag .ic {
+  width: 15px;
+  height: 15px;
+}
+.preview-ctrls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+.pill-btn {
+  cursor: pointer;
+}
+.preview-ctrls .pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 550;
+  transition: background 0.15s;
+}
+.preview-ctrls .pill-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.preview-ctrls .pill-btn.active-test,
+.btn.active-test {
+  background: var(--accent);
+  color: #fff;
+}
+.meter-card {
+  padding: 14px 16px 10px;
+  border-radius: 18px;
+  background: var(--bg-2);
+}
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.vad-bar-wrap {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  margin: 10px 0 12px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--bg-4);
+}
+.vad-bar-wrap.small {
+  height: 6px;
+  margin: 0;
+}
+.vad-bar {
+  width: 0;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--ok), #c8e64c 70%, var(--warn));
+  transition: width 0.08s linear;
+}
+.vad-gate-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  opacity: 0.85;
+}
+.quick-sliders {
+  display: grid;
+  gap: 2px;
+}
+.mic-test-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mic-test-row .vad-bar-wrap {
+  margin: 0;
+}
+.slider-lbl.disabled {
+  opacity: 0.45;
+}
+.dev-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 10px;
+}
+.invite {
+  margin: 4px 0 16px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg);
+}
+.invite-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.invite-title .ic {
+  width: 15px;
+  height: 15px;
+  color: var(--ok);
+}
+.invite .btn-row {
+  margin-top: 8px;
+}
+#callOwnerBox {
+  margin-bottom: 12px;
+}
+
+/* ---------- 11. Экран звонка ---------- */
+.call-screen {
+  --ctrl-h: 178px;
+  background: #000;
+  color: #fff;
+}
+@media (min-width: 920px) {
+  .call-screen {
+    --ctrl-h: 104px;
+  }
+}
+.stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 30%, #1b2a3b 0%, #0b1118 62%, #05080c 100%);
+}
+#remote {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+#remote.fill {
+  object-fit: cover;
+}
+.video-off {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 80px 16px var(--ctrl-h);
+  background: radial-gradient(120% 90% at 50% 30%, #1d2d40 0%, #0d141c 60%, #070a0e 100%);
+  color: var(--text-2);
+  text-align: center;
+}
+.preview .video-off {
+  padding: 16px;
+  font-size: 14px;
+}
+.avatar-ring {
+  padding: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.08);
+  transition: box-shadow 0.2s;
+}
+.avatar-ring.speaking {
+  box-shadow: 0 0 0 3px rgba(79, 206, 93, 0.85), 0 0 26px 6px rgba(79, 206, 93, 0.28);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5aaaf8, #2b62c9);
+  color: #fff;
+  font-size: 44px;
+  font-weight: 650;
+}
+.preview .avatar {
+  width: 88px;
+  height: 88px;
+}
+.peer-title {
+  margin-top: 8px;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 650;
+}
+.wait-sub {
+  max-width: 340px;
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+.voice-wave {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+}
+.voice-wave i {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ok);
+  transform: scaleY(0.25);
+  animation: wave 1s ease-in-out infinite;
+}
+.voice-wave i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.voice-wave i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.voice-wave i:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.voice-wave i:nth-child(5) {
+  animation-delay: 0.24s;
+}
+.voice-wave i:nth-child(6) {
+  animation-delay: 0.12s;
+}
+@keyframes wave {
+  50% {
+    transform: scaleY(1);
+  }
+}
+.conn {
+  width: min(360px, 100%);
+  margin-top: 14px;
+  padding: 14px 16px 12px;
+  border-radius: 18px;
+  background: rgba(23, 33, 43, 0.88);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+.conn-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.conn-top b {
+  color: #fff;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.bar {
+  height: 4px;
+  margin: 10px 0 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-4);
+}
+.bar i {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-ink));
+  transition: width 0.4s var(--ease);
+}
+.conn-method {
+  color: var(--text-3);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.conn-method:empty {
+  display: none;
+}
+.conn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.conn-ver {
+  margin-top: 10px;
+  color: var(--text-3);
+  font-size: 11.5px;
+  text-align: right;
+}
+#local {
+  position: absolute;
+  right: 12px;
+  bottom: calc(var(--ctrl-h) + var(--safe-b) + 8px);
+  z-index: 3;
+  width: min(30vw, 220px);
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  background: #0a0e13;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  object-fit: cover;
+  transform: scaleX(-1);
+  cursor: pointer;
+}
+@media (min-width: 720px) {
+  #local {
+    aspect-ratio: 4 / 3;
+  }
+}
+/* Телефон, видео собеседника нет (ожидание, голосовой звонок): своё окно
+   уходит в правый верхний угол и уменьшается, чтобы не закрывать карточку
+   соединения и аватар в центре. */
+@media (max-width: 719px) {
+  .video-off:not(.hidden) ~ #local {
+    top: calc(var(--safe-t) + 60px);
+    bottom: auto;
+    width: min(24vw, 120px);
+    border-radius: 12px;
+  }
+}
+#local.rear-cam,
+#local.screen {
+  transform: none;
+}
+#local.screen {
+  aspect-ratio: 16 / 9;
+  width: min(36vw, 320px);
+  object-fit: contain;
+}
+.tiles {
+  position: absolute;
+  top: calc(var(--safe-t) + 60px);
+  right: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100% - var(--ctrl-h) - 90px);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.tile {
+  position: relative;
+  flex: none;
+  width: 148px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #0d1116;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+.tile video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.tile-name {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+#unmuteHint {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: 6;
+  transform: translateX(-50%);
+  box-shadow: var(--shadow);
+}
+
+/* Верхняя панель звонка */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(var(--safe-t) + 10px) 12px 24px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent);
+  pointer-events: none;
+}
+.tb-left,
+.tb-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  pointer-events: auto;
+}
+.tb-right {
+  justify-content: flex-end;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  /* v37: без backdrop-filter. Размытие поверх ДВИЖУЩЕГОСЯ видео GPU
+     пересчитывает каждый кадр (30 раз в секунду на каждую плашку) — заметный
+     вклад в нагрев телефона. Плотный фон читается так же. */
+  background: rgba(16, 22, 30, 0.74);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.pill .ic {
+  width: 16px;
+  height: 16px;
+}
+button.pill:hover {
+  background: rgba(20, 28, 38, 0.82);
+}
+.mono-pill {
+  font-variant-numeric: tabular-nums;
+}
+.pill.good {
+  background: rgba(46, 125, 60, 0.55);
+  color: #c9f7cf;
+}
+.pill.mid {
+  background: rgba(150, 98, 20, 0.6);
+  color: #ffe2b0;
+}
+.pill.bad {
+  background: rgba(160, 40, 38, 0.62);
+  color: #ffd0cf;
+}
+.bridge-pill {
+  background: rgba(118, 76, 200, 0.6);
+  color: #eadcff;
+}
+@media (max-width: 600px) {
+  .tb-right .pill > span:not(#safetyPill),
+  #btnLockTop {
+    display: none;
+  }
+  .tb-right .pill {
+    padding: 0 9px;
+  }
+}
+
+/* Всплывающие карточки звонка: статистика и звук */
+.call-pop {
+  position: absolute;
+  top: calc(var(--safe-t) + 54px);
+  right: 12px;
+  z-index: 12;
+  width: min(360px, calc(100% - 24px));
+  max-height: calc(100% - var(--safe-t) - 54px - var(--ctrl-h));
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+  border-radius: 18px;
+  background: rgba(23, 33, 43, 0.94);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  animation: pop-in 0.14s var(--ease);
+}
+.stats-pop {
+  left: 12px;
+  right: auto;
+}
+@media (max-width: 600px) {
+  .call-pop {
+    left: 8px;
+    right: 8px;
+    width: auto;
+  }
+}
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -2px -6px 8px 0;
+}
+.pop-head b {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+.pop-head b .ic {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-ink);
+}
+.qa-meter-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+.qa-toggles {
+  margin-bottom: 10px;
+}
+.qa-toggles .check {
+  font-size: 14px;
+}
+
+/* Живая статистика (stats-ui.js → renderLiveStats) */
+.cs-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0 12px;
+}
+.cs-score {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 64px;
+}
+.cs-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.cs-ring-bg,
+.cs-ring-fg {
+  fill: none;
+  stroke-width: 4;
+}
+.cs-ring-bg {
+  stroke: var(--bg-4);
+}
+.cs-ring-fg {
+  stroke: var(--ok);
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.5s var(--ease);
+}
+[data-level='mid'] .cs-ring-fg {
+  stroke: var(--warn);
+}
+[data-level='bad'] .cs-ring-fg {
+  stroke: var(--bad);
+}
+.cs-score-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cs-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--text-2);
+  font-size: 13.5px;
+}
+.cs-hero-text b {
+  color: var(--text);
+  font-size: 16px;
+}
+.cs-sub {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.cs-grid:empty {
+  display: none;
+}
+.cs-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 9px 6px;
+  border-radius: 12px;
+  background: var(--bg-3);
+}
+.cs-tile-k {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+.cs-tile-v {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.cs-tile-v small {
+  margin-left: 3px;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+}
+.cs-spark {
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin-top: 4px;
+  overflow: visible;
+}
+.cs-spark-line {
+  fill: none;
+  stroke: var(--accent-ink);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.cs-spark-area {
+  fill: rgba(106, 179, 243, 0.14);
+}
+.cs-rows {
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.cs-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 13px;
+}
+.cs-row:last-child {
+  border-bottom: 0;
+}
+.cs-row b {
+  color: var(--text);
+  font-weight: 550;
+  text-align: right;
+}
+
+/* Кнопки управления звонком.
+   .round — круг с иконкой; в панели звонка круг рисует ::before,
+   а подпись .lbl стоит под ним, как в Telegram. */
+.round {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  transition: background 0.15s, color 0.15s, transform 0.12s;
+}
+.round:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.round:active {
+  transform: scale(0.94);
+}
+.round .ic {
+  width: 24px;
+  height: 24px;
+}
+.round.off {
+  background: #fff;
+  color: #111a24;
+}
+.round.on {
+  background: var(--accent);
+}
+.round.red {
+  background: var(--danger);
+}
+.controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 36px 10px calc(14px + var(--safe-b));
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.62), transparent);
+}
+.ctrl-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+.ctrl-extra .round {
+  width: 44px;
+  height: 44px;
+}
+.ctrl-extra .round .ic {
+  width: 21px;
+  height: 21px;
+}
+.ctrl-extra .lbl {
+  display: none;
+}
+.ctrl-main {
+  gap: 14px;
+}
+.ctrl-main .round {
+  isolation: isolate;
+  grid-template-rows: 58px auto;
+  place-items: start center;
+  width: 70px;
+  height: auto;
+  border-radius: 0;
+  background: none;
+}
+.ctrl-main .round::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: -1;
+  width: 58px;
+  height: 58px;
+  margin-left: -29px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.15s;
+}
+.ctrl-main .round .ic {
+  align-self: center;
+  width: 26px;
+  height: 26px;
+}
+.ctrl-main .round:hover::before {
+  background: rgba(255, 255, 255, 0.24);
+}
+.ctrl-main .round.off {
+  background: none;
+  color: #111a24;
+}
+.ctrl-main .round.off::before {
+  background: #fff;
+}
+.ctrl-main .round.red::before {
+  background: var(--danger);
+}
+.ctrl-main .round.red:hover::before {
+  background: #f0585d;
+}
+.round .lbl {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.round.speaking {
+  box-shadow: 0 0 0 3px rgba(79, 206, 93, 0.7);
+}
+.ctrl-main .round.speaking {
+  box-shadow: none;
+}
+.ctrl-main .round.speaking::before {
+  box-shadow: 0 0 0 3px rgba(79, 206, 93, 0.75);
+}
+.badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ptt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 240px;
+  height: 56px;
+  padding: 0 26px;
+  border: 0;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  touch-action: none;
+  transition: background 0.12s, transform 0.12s;
+}
+.ptt-btn.tx {
+  background: var(--ok);
+  color: #06210b;
+  transform: scale(1.03);
+}
+@media (min-width: 920px) {
+  .controls {
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px 16px calc(18px + var(--safe-b));
+  }
+  .ctrl-row {
+    display: contents;
+  }
+  .ctrl-extra .round,
+  .ctrl-main .round {
+    width: 52px;
+    height: 52px;
+  }
+  .ctrl-extra .round .ic,
+  .ctrl-main .round .ic {
+    width: 23px;
+    height: 23px;
+  }
+  .ctrl-main .round {
+    display: inline-grid;
+    grid-template-rows: none;
+    place-items: center;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.16);
+  }
+  .ctrl-main .round::before,
+  .round .lbl {
+    display: none;
+  }
+  .ctrl-main .round:hover {
+    background: rgba(255, 255, 255, 0.24);
+  }
+  .ctrl-main .round.off {
+    background: #fff;
+  }
+  .ctrl-main .round.red {
+    background: var(--danger);
+  }
+  .ctrl-main .round.speaking {
+    box-shadow: 0 0 0 3px rgba(79, 206, 93, 0.7);
+  }
+  #cMic {
+    order: 1;
+  }
+  #cDeaf {
+    order: 2;
+  }
+  #cCam {
+    order: 3;
+  }
+  #cFlipCam {
+    order: 4;
+  }
+  #cScreen {
+    order: 5;
+  }
+  #cChat {
+    order: 6;
+  }
+  #cInvite {
+    order: 7;
+  }
+  #cLock {
+    order: 8;
+  }
+  #cSettings {
+    order: 9;
+  }
+  #cPtt {
+    order: 10;
+  }
+  #cHang {
+    order: 11;
+    width: 64px;
+    margin-left: 8px;
+    border-radius: 26px;
+  }
+}
+
+/* Блокировка экрана звонка (карманный режим) */
+.call-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(5, 8, 12, 0.9);
+  transition: background 0.3s;
+}
+.call-lock-overlay.oled-dim {
+  background: #000;
+}
+.call-lock-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+  color: var(--text-2);
+  font-size: 14px;
+  text-align: center;
+  transition: opacity 0.3s;
+}
+.oled-dim .call-lock-card {
+  opacity: 0.32;
+}
+.call-lock-card b {
+  color: #fff;
+  font-size: 20px;
+}
+.call-lock-card .mono {
+  color: #fff;
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.call-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.call-lock-actions {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin-top: 14px;
+}
+.call-unlock-btn {
+  min-height: 52px;
+}
+
+/* Чат звонка */
+.panel {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--safe-t) + 10px) 0 var(--safe-b);
+  background: var(--bg-2);
+  color: var(--text);
+}
+.panel > .pop-head {
+  margin: 0;
+  padding: 0 8px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 920px) {
+  .panel {
+    left: auto;
+    width: 360px;
+    padding-top: 10px;
+    border-left: 1px solid rgba(0, 0, 0, 0.4);
+  }
+  #call.chat-open .stage,
+  #call.chat-open .controls,
+  #call.chat-open .topbar {
+    right: 360px;
+  }
+  #call.chat-open .call-pop {
+    right: 372px;
+  }
+}
+.msgs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--bg) var(--wallpaper);
+}
+.msgs .m {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 6px 10px 7px;
+  border-radius: 14px 14px 14px 6px;
+  background: var(--bubble-in);
+  font-size: 14.5px;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+.msgs .m.me {
+  align-self: flex-end;
+  border-radius: 14px 14px 6px 14px;
+  background: var(--bubble-out);
+}
+.msgs .m.sys {
+  align-self: center;
+  max-width: 92%;
+  border-radius: 12px;
+  background: rgba(15, 25, 36, 0.62);
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: center;
+}
+.msgs .who {
+  margin-bottom: 1px;
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.msgs .m.me .who {
+  color: #a9d6ff;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.file-row .ic {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-ink);
+}
+.prog {
+  height: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.prog i {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent-ink);
+  transition: width 0.2s;
+}
+.dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.dl .ic {
+  width: 16px;
+  height: 16px;
+}
+.chat-empty-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: auto;
+  max-width: 280px;
+  padding: 20px;
+  border-radius: 18px;
+  background: rgba(15, 25, 36, 0.62);
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  text-align: center;
+}
+.chat-empty-note .ic {
+  color: var(--accent-ink);
+}
+.chat-empty-note b {
+  color: var(--text);
+  font-size: 15px;
+}
+.chatform {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px calc(8px + var(--safe-b));
+  border-top: 1px solid var(--line);
+}
+.chatform .attach {
+  cursor: pointer;
+}
+#callChatInput {
+  flex: 1;
+  min-width: 0;
+  border-radius: 20px;
+  background: var(--bg);
+}
+
+/* ---------- 12. Входящий / исходящий звонок ---------- */
+.call-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: calc(var(--safe-t) + 24px) 20px calc(var(--safe-b) + 24px);
+  background: radial-gradient(120% 80% at 50% 20%, #24405e 0%, #101a26 60%, #070b10 100%);
+  animation: fade-in 0.2s ease;
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.call-modal-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(380px, 100%);
+  text-align: center;
+}
+.big-avatar {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  margin-bottom: 14px;
+  font-size: 50px;
+  box-shadow: 0 0 0 10px rgba(90, 170, 248, 0.1), 0 0 0 22px rgba(90, 170, 248, 0.05);
+}
+/* v37: пульс вызова — только transform/opacity (композитор), без анимации
+   box-shadow, которая перерисовывала круг 60 раз в секунду весь дозвон. */
+.big-avatar.calling::after,
+#incomingCall:not(.hidden) .big-avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 14px rgba(90, 170, 248, 0.32);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: ring-pulse 1.6s ease-out infinite;
+}
+@keyframes ring-pulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.42);
+    opacity: 0;
+  }
+}
+.call-modal-name {
+  color: #fff;
+  font-size: 26px;
+  font-weight: 650;
+}
+.call-modal-meta {
+  min-height: 20px;
+  color: var(--text-2);
+  font-size: 15px;
+}
+.call-modal-row {
+  display: flex;
+  justify-content: center;
+  gap: 64px;
+  margin-top: 56px;
+}
+.call-act {
+  isolation: isolate;
+  position: relative;
+  display: grid;
+  grid-template-rows: 68px auto;
+  justify-items: center;
+  align-items: center;
+  width: 88px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 13.5px;
+}
+.call-act::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: -1;
+  width: 68px;
+  height: 68px;
+  margin-left: -34px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  transition: transform 0.12s, filter 0.15s;
+}
+.call-act.accept::before {
+  background: #34c759;
+}
+.call-act:hover::before {
+  filter: brightness(1.1);
+}
+.call-act:active::before {
+  transform: scale(0.94);
+}
+.call-act .ic {
+  width: 30px;
+  height: 30px;
+}
+.call-act span {
+  margin-top: 8px;
+}
+
+/* ---------- 13. Адаптив, движение, эко-режим ---------- */
+@media (max-width: 380px) {
+  .ctrl-main {
+    gap: 6px;
+  }
+  .ctrl-extra {
+    gap: 6px;
+  }
+  .call-modal-row {
+    gap: 40px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .call-screen {
+    --ctrl-h: 96px;
+  }
+  .controls {
+    flex-direction: row;
+    gap: 10px;
+    padding-top: 20px;
+  }
+  .ctrl-extra .lbl,
+  .round .lbl {
+    display: none;
+  }
+  .ctrl-main .round {
+    grid-template-rows: 52px;
+    width: 52px;
+  }
+  .ctrl-main .round::before {
+    width: 52px;
+    height: 52px;
+    margin-left: -26px;
+  }
+  .video-off {
+    padding-top: 56px;
+  }
+  .avatar {
+    width: 76px;
+    height: 76px;
+    font-size: 30px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* ---------- v38: возврат в звонок, ранние сообщения, подсказка push ---------- */
+.call-return-bar {
+  position: fixed;
+  top: calc(8px + var(--safe-t));
+  left: 50%;
+  z-index: 190;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(92vw, 420px);
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: var(--shadow);
+  color: #062b0c;
+  font-size: 14px;
+  font-weight: 650;
+  transform: translateX(-50%);
+  animation: toast-in 0.2s var(--ease);
+}
+.call-return-bar .ic {
+  width: 18px;
+  height: 18px;
+}
+.call-return-time {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+.chat-more-btn {
+  display: block;
+  margin: 8px auto 12px;
+  padding: 7px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 13px;
+}
+.chat-more-btn:hover {
+  color: var(--text);
+  background: var(--bg-4);
+}
+.push-hint {
+  margin: 0 0 12px;
+}
+
+/* Эко-режим: никаких размытий и бесконечных анимаций — меньше нагрев */
+body.eco-mode .pill,
+body.eco-mode .round,
+body.eco-mode .hud-tag {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body.eco-mode .voice-wave i,
+body.eco-mode .big-avatar::after,
+body.eco-mode .chat-rec-dot,
+body.eco-mode .chat-gcallbar::before {
+  animation: none;
+}
+body.eco-mode .avatar-ring {
+  transition: none;
+}
+
+/* ---------- v38: анонимные имена, контакты, смена номера, стирание ---------- */
+.dice-btn {
+  flex: none;
+  min-width: 46px;
+  padding: 0 10px;
+  font-size: 19px;
+  line-height: 1;
+}
+.nick-row {
+  width: 100%;
+}
+.nick-row > input {
+  text-align: center;
+}
+.list-sub {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+.call-li.has-menu,
+.contact-li {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.call-li.has-menu:hover,
+.contact-li:hover {
+  background: var(--bg-3);
+}
+.call-li:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.call-back {
+  color: var(--ok);
+}
+.call-back:hover {
+  background: rgba(79, 206, 93, 0.14);
+  color: var(--ok);
+}
+.contact-li .call-av {
+  background: linear-gradient(135deg, #4fd1a5, #1f9a73);
+}
+.contacts-empty {
+  padding: 14px 24px 18px;
+}
+.contact-add {
+  display: grid;
+  gap: 8px;
+  margin: 4px 12px 10px;
+}
+.contact-add .note:empty {
+  display: none;
+}
+.danger-zone {
+  margin-top: 12px;
+}
+.list-item.danger,
+.list-item.danger .ic {
+  color: var(--bad);
+}
+.danger-card {
+  border: 1px solid rgba(239, 83, 80, 0.35);
+}
+.danger-card .hint {
+  line-height: 1.5;
+}
+.danger-opt {
+  margin: 4px 0 8px;
+  font-size: 13px;
+}
+
+/* ---------- v39: Мои устройства и привязка ----------
+   Классы строит devices.js: .device-row(.self), .device-ic, .device-main,
+   .device-meta, .link-word; app.js — содержимое .danger-keep. */
+.status-line.good {
+  color: var(--ok);
+}
+.status-line.warn,
+.note.warn {
+  color: var(--warn);
+}
+.note.good {
+  color: var(--ok);
+}
+.devices-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.devices-head .card-title {
+  margin-bottom: 0;
+}
+.devices-head .pill {
+  height: 24px;
+  padding: 0 10px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+.devices-list {
+  list-style: none;
+  margin: 8px 0 4px;
+  padding: 0;
+}
+.device-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.device-row + .device-row {
+  border-top: 1px solid var(--line);
+}
+.device-ic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: var(--text-2);
+}
+.device-ic .ic {
+  width: 20px;
+  height: 20px;
+}
+.device-row.self .device-ic {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.device-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.device-main b {
+  font-size: 14.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-meta {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-3);
+}
+.device-row > .btn {
+  flex: none;
+}
+.devices-excluded {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: var(--r);
+  background: rgba(240, 169, 64, 0.1);
+  color: var(--warn);
+  font-size: 13.5px;
+}
+.devices-excluded p {
+  margin: 0 0 10px;
+}
+#btnLinkDevice {
+  margin-top: 6px;
+}
+.link-box {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.link-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.link-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 16px;
+  letter-spacing: 0.06em;
+}
+.link-row .btn {
+  flex: none;
+  min-height: 42px;
+}
+.link-qr {
+  width: min(220px, 100%);
+  margin: 6px auto 10px;
+  padding: 10px;
+  border-radius: var(--r);
+  background: #fff;
+  line-height: 0;
+}
+.link-qr:empty {
+  display: none;
+}
+.link-qr svg {
+  width: 100%;
+  height: auto;
+}
+.link-code {
+  margin: 4px 0 8px;
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.link-code:empty {
+  display: none;
+}
+.link-words {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.link-word {
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+.link-scan {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  margin: 10px 0 4px;
+  border-radius: var(--r);
+  background: #000;
+  object-fit: cover;
+}
+.link-confirm {
+  margin-top: 12px;
+}
+.link-warn {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0 0 10px;
+  padding: 12px;
+  border: 1px solid rgba(240, 169, 64, 0.35);
+  border-radius: var(--r);
+  background: rgba(240, 169, 64, 0.1);
+  color: #f6d7a4;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.link-warn .ic {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  color: var(--warn);
+}
+.link-warn b {
+  color: #ffe2b0;
+}
+.danger-keep {
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  border-radius: var(--r);
+  background: var(--bg);
+}
+.danger-keep .hint {
+  margin: 8px 0 2px;
+}
+.danger-keep .check {
+  font-size: 13.5px;
+}
+@media (max-width: 380px) {
+  .link-code {
+    font-size: 22px;
+  }
+  .device-row {
+    flex-wrap: wrap;
+  }
+  .device-row > .btn {
+    margin-left: 50px;
+  }
+}

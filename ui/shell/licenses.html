@@ -1,0 +1,60 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Лицензии — ZVONochek</title>
+<style>body{font:13px/1.5 "Segoe UI",system-ui,sans-serif;margin:0;padding:18px 22px;color:#1a2633;background:#fff}h1{font-size:18px;margin:0 0 6px}h2{font-size:15px;margin:22px 0 6px}h3{font-size:13px;margin:16px 0 4px}ul{margin:4px 0 8px;padding-left:18px}pre{white-space:pre-wrap;background:#f5f7fa;border:1px solid #e3e8ee;border-radius:8px;padding:10px;font:11.5px/1.45 Consolas,monospace;max-height:320px;overflow:auto}a{color:#2569bd}.m{color:#6b7a89}</style></head><body>
+<h1>Сторонние компоненты</h1>
+<p>ZVONochek для ПК © ZVONochek. Все права защищены.</p><p>В программу входят сторонние компоненты с открытыми лицензиями; ниже — их список и тексты лицензий. Microsoft Edge WebView2 Runtime не входит в состав программы: он устанавливается из Windows или загрузчиком Microsoft по условиям Microsoft.</p>
+<p class="m">Всего компонентов: 2.</p><h2>Компоненты</h2><ul>
+<li><b>QR Code Generator for JavaScript (qrcode.js)</b> — MIT <span class="m">https://github.com/kazuhikoarase/qrcode-generator</span> — <a href="#t1">[1]</a></li>
+<li><b>noble-secp256k1</b> — MIT <span class="m">https://github.com/paulmillr/noble-secp256k1</span> — <a href="#t2">[2]</a></li>
+</ul><h2>Тексты лицензий</h2>
+<h3 id="t1">[1] LICENSE <span class="m">— QR Code Generator for JavaScript (qrcode.js)</span></h3><pre>Copyright (c) 2009 Kazuhiko Arase
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+— шапка файла:
+//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word &#x27;QR Code&#x27; is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------</pre>
+<h3 id="t2">[2] LICENSE <span class="m">— noble-secp256k1</span></h3><pre>Copyright (c) 2019 Paul Miller (https://paulmillr.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+— шапка файла:
+/*! noble-secp256k1 - MIT License (c) 2019 Paul Miller (paulmillr.com) */
+/**
+ * 5KB JS implementation of secp256k1 ECDSA / Schnorr signatures &amp; ECDH.
+ * Compliant with RFC6979 &amp; BIP340.
+ * @module
+ */
+/**
+ * Curve params from SEC 2 v2 §2.4.1.
+ * secp256k1 is a short Weierstrass / Koblitz curve with equation
+ * `y² == x³ + ax + b`.
+ * * P = `2n**256n - 2n**32n - 977n` // field over which calculations are done
+ * * N = `2n**256n - 0x14551231950b75fc4402da1732fc9bebfn` // group order, amount of curve points
+ * * h = `1n` // cofactor
+ * * a = `0n` // equation param
+ * * b = `7n` // equation param
+ * * Gx, Gy are coordinates of Generator / base point
+ */</pre>
+</body></html>

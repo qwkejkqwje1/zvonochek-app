@@ -1,14 +1,970 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+//! Ядро ZVONochek: комнаты веб-протокола (RoomHub), «Мои ссылки» с ожиданием звонка,
+//! входящие, журнал, настройки, прокси HTTP для встроенного веб-клиента.
+//!
+//! Хосты (Tauri-приложение и тестовый стенд zv-devhost) вызывают `Core::dispatch(cmd, args)`
+//! и подписываются на события `Core::subscribe()` — `{event, payload}`.
+
+pub mod fetch;
+pub mod model;
+pub mod protect;
+pub mod store;
+
+use model::{HISTORY_MAX, History, HistoryEntry, LinkEntry, Links, Settings};
+use serde::Serialize;
+use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, Weak};
+use std::time::Duration;
+use store::JsonFile;
+use tokio::sync::{broadcast, mpsc};
+use zv_proto::ids::{now_ms, rand_hex};
+use zv_signal::{HubEvent, HubStatus, Profile, RoomHub, SendOpts, SignalConfig};
+
+/// Сколько молчания от звонящего считаем «положил трубку» (веб шлёт hello каждые 4,5 с).
+const RING_SILENCE_MS: u64 = 15_000;
+/// Дольше этого не звоним (звонящий может ждать бесконечно).
+const RING_MAX_MS: u64 = 180_000;
+/// Отклонённый/завершённый звонящий (по `inst`) не звонит снова, пока не замолчит на это время.
+const SUPPRESS_MS: u64 = 30_000;
+
+#[derive(Debug, Clone)]
+pub struct CoreOptions {
+    pub data_dir: PathBuf,
+    pub app_version: String,
+    /// Версия встроенного веб-клиента (`ver`).
+    pub web_version: u32,
+    pub platform: String,
+    /// Режим разработки: прокси HTTP пускает localhost.
+    pub dev: bool,
+    /// Переопределение каналов (тесты, локальная инфраструктура).
+    pub signal: Option<SignalConfig>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CoreEvent {
+    pub event: String,
+    pub payload: Value,
+}
+
+#[derive(Clone)]
+pub struct Core {
+    inner: Arc<Inner>,
+}
+
+struct Inner {
+    opts: CoreOptions,
+    /// Рантайм, в котором запущено ядро: синхронные команды хоста (`dispatch_sync`)
+    /// приходят из чужих потоков (главный поток Tauri) и входят в него.
+    rt: tokio::runtime::Handle,
+    events: broadcast::Sender<CoreEvent>,
+    state: Mutex<State>,
+    settings_file: JsonFile,
+    links_file: JsonFile,
+    history_file: JsonFile,
+}
+
+struct State {
+    settings: Settings,
+    links: Links,
+    history: History,
+    rooms: HashMap<String, RoomEntry>,
+    incoming: HashMap<String, Incoming>,
+    /// inst звонящего → когда слышали последний раз
+    suppressed: HashMap<String, u64>,
+}
+
+struct RoomEntry {
+    hub: RoomHub,
+    /// Своя ссылка, по которой ждём звонка.
+    link_id: Option<String>,
+    joined: bool,
+    session: Option<Session>,
+    /// Ответили на входящий — следующий room_join будет входящим звонком.
+    answered: Option<Incoming>,
+    status: Option<HubStatus>,
+}
+
+#[derive(Debug, Clone)]
+struct Session {
+    started: u64,
+    dir: &'static str,
+    peer: String,
+    peer_inst: Option<String>,
+    peer_seen: bool,
+    link_id: Option<String>,
+    link_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Incoming {
+    pub call_id: String,
+    pub room_id: String,
+    pub link_id: String,
+    pub link_name: String,
+    pub from: String,
+    pub inst: String,
+    pub name: String,
+    pub started: u64,
+    pub last_seen: u64,
+    /// Звонящий — приложение ZVONochek.
+    pub app: bool,
+    /// Уже идёт другой звонок.
+    pub busy: bool,
+}
+
+fn s<'a>(args: &'a Value, k: &str) -> Result<&'a str, String> {
+    args.get(k).and_then(|v| v.as_str()).ok_or_else(|| format!("нет аргумента {k}"))
+}
+
+fn ok<T: Serialize>(v: T) -> Result<Value, String> {
+    serde_json::to_value(v).map_err(|e| e.to_string())
+}
+
+impl Core {
+    /// Запуск ядра (внутри tokio-runtime).
+    pub fn start(opts: CoreOptions) -> anyhow::Result<Core> {
+        std::fs::create_dir_all(&opts.data_dir)?;
+        let settings_file = JsonFile::new(&opts.data_dir, "settings.json", false);
+        let links_file = JsonFile::new(&opts.data_dir, "links.dat", true);
+        let history_file = JsonFile::new(&opts.data_dir, "history.json", false);
+        let state = State {
+            settings: settings_file.load(),
+            links: links_file.load(),
+            history: history_file.load(),
+            rooms: HashMap::new(),
+            incoming: HashMap::new(),
+            suppressed: HashMap::new(),
+        };
+        let (events, _) = broadcast::channel(4096);
+        let rt = tokio::runtime::Handle::current();
+        let inner =
+            Arc::new(Inner { opts, rt, events, state: Mutex::new(state), settings_file, links_file, history_file });
+        let core = Core { inner };
+        core.inner.sync_listeners();
+        tokio::spawn(ticker(Arc::downgrade(&core.inner)));
+        Ok(core)
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<CoreEvent> {
+        self.inner.events.subscribe()
+    }
+
+    pub fn settings(&self) -> Settings {
+        self.inner.lock().settings.clone()
+    }
+
+    /// Закрыть все комнаты (выход из приложения): в звонках — `bye`.
+    pub async fn shutdown(&self) {
+        let hubs: Vec<(RoomHub, bool)> = {
+            let st = self.inner.lock();
+            st.rooms.values().map(|r| (r.hub.clone(), r.joined)).collect()
+        };
+        for (h, joined) in &hubs {
+            if *joined {
+                h.bye();
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(400)).await;
+        for (h, _) in hubs {
+            h.close();
+        }
+    }
+
+    /// Асинхронные команды (сеть, опрос каналов); остальные — через `dispatch_sync`.
+    pub async fn dispatch(&self, cmd: &str, args: Value) -> Result<Value, String> {
+        if let Some(r) = self.dispatch_sync(cmd, &args) {
+            return r;
+        }
+        let i = &self.inner;
+        match cmd {
+            "room_stats" => match i.hub(s(&args, "roomId")?) {
+                Some(h) => Ok(h.delivery_stats().await),
+                None => Ok(Value::Null),
+            },
+            "room_status" => match i.hub(s(&args, "roomId")?) {
+                Some(h) => ok(h.status().await),
+                None => Ok(Value::Null),
+            },
+            "http_fetch" => {
+                let wh = i.worker_host();
+                fetch::http_fetch(&args, wh.as_deref(), i.opts.dev).await
+            }
+            "diag_snapshot" => Ok(i.diag().await),
+            _ => Err(format!("неизвестная команда {cmd}")),
+        }
+    }
+
+    /// Быстрые команды, выполняемые сразу и по порядку (отправка сигналов звонка не должна
+    /// перемешиваться). `None` — команда асинхронная, нужен `dispatch`.
+    pub fn dispatch_sync(&self, cmd: &str, args: &Value) -> Option<Result<Value, String>> {
+        const ASYNC: [&str; 4] = ["room_stats", "room_status", "http_fetch", "diag_snapshot"];
+        if ASYNC.contains(&cmd) {
+            return None;
+        }
+        let _rt = self.inner.rt.enter();
+        Some(self.run_sync(cmd, args.clone()))
+    }
+
+    fn run_sync(&self, cmd: &str, args: Value) -> Result<Value, String> {
+        let i = &self.inner;
+        match cmd {
+            "app_info" => Ok(json!({
+                "version": i.opts.app_version,
+                "webVersion": i.opts.web_version,
+                "platform": i.opts.platform,
+                "protected": protect::ENABLED,
+            })),
+            "settings_get" => ok(i.lock().settings.clone()),
+            "settings_set" => i.settings_set(&args),
+            "link_parse" => Ok(link_parse(s(&args, "text")?)),
+            "links_list" => Ok(i.links_list()),
+            "link_create" => i.link_create(&args),
+            "link_save" => i.link_save(&args),
+            "link_rename" => i.link_update(&args, |l, a| {
+                if let Some(n) = a.get("name").and_then(|v| v.as_str()) {
+                    l.name = n.trim().chars().take(60).collect();
+                }
+            }),
+            "link_set_listen" => i.link_update(&args, |l, a| {
+                if l.kind == "mine" {
+                    l.listen = a.get("listen").and_then(|v| v.as_bool()).unwrap_or(true);
+                }
+            }),
+            "link_rotate" => i.link_update(&args, |l, _| {
+                if l.kind == "mine" {
+                    l.secret = zv_proto::link::new_secret();
+                }
+            }),
+            "link_touch" => i.link_update(&args, |l, _| l.last_used = now_ms()),
+            "link_delete" => i.link_delete(&args),
+            "room_join" => i.room_join(&args),
+            "room_send" => i.room_send(&args),
+            "room_leave" => i.room_leave(&args),
+            "room_bye" => {
+                if let Some(h) = args.get("roomId").and_then(|v| v.as_str()).and_then(|r| i.hub(r)) {
+                    h.bye();
+                }
+                Ok(Value::Null)
+            }
+            "rooms_leave_all" => i.rooms_leave_all(args.get("bye").and_then(|v| v.as_bool()).unwrap_or(true)),
+            "incoming_list" => ok(i.lock().incoming.values().cloned().collect::<Vec<_>>()),
+            "call_answer" => i.call_answer(&args),
+            "call_decline" => i.call_decline(&args),
+            "history_list" => {
+                let st = i.lock();
+                let mut v = st.history.items.clone();
+                v.reverse();
+                ok(v)
+            }
+            "history_delete" => {
+                let id = s(&args, "id")?.to_string();
+                let mut st = i.lock();
+                st.history.items.retain(|h| h.id != id);
+                let _ = i.history_file.save(&st.history);
+                drop(st);
+                i.emit("history:changed", Value::Null);
+                Ok(Value::Null)
+            }
+            "history_clear" => {
+                let mut st = i.lock();
+                st.history.items.clear();
+                let _ = i.history_file.save(&st.history);
+                drop(st);
+                i.emit("history:changed", Value::Null);
+                Ok(Value::Null)
+            }
+            _ => Err(format!("неизвестная команда {cmd}")),
+        }
+    }
+}
+
+fn link_parse(text: &str) -> Value {
+    match zv_proto::parse_link(text) {
+        Some(zv_proto::Link::Call { secret, d }) => json!({
+            "kind": "call",
+            "secret": secret,
+            "d": d,
+            "url": zv_proto::link::call_url(&secret),
+        }),
+        Some(zv_proto::Link::Chat(_)) => json!({"kind": "chat"}),
+        Some(zv_proto::Link::DeviceLink(_)) => json!({"kind": "link"}),
+        None => json!({"kind": "none"}),
+    }
+}
+
+async fn ticker(w: Weak<Inner>) {
+    let mut t = tokio::time::interval(Duration::from_secs(1));
+    loop {
+        t.tick().await;
+        let Some(inner) = w.upgrade() else { return };
+        inner.tick();
+    }
+}
+
+impl Inner {
+    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
+        self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn emit(&self, event: &str, payload: Value) {
+        let _ = self.events.send(CoreEvent { event: event.to_string(), payload });
+    }
+
+    fn hub(&self, room_id: &str) -> Option<RoomHub> {
+        self.lock().rooms.get(room_id).map(|r| r.hub.clone())
+    }
+
+    fn worker_host(&self) -> Option<String> {
+        let cfg = self.signal_config();
+        cfg.worker_url.and_then(|u| url::Url::parse(&u).ok()).and_then(|u| u.host_str().map(str::to_string))
+    }
+
+    fn signal_config(&self) -> SignalConfig {
+        let st = self.lock();
+        let mut c = self.opts.signal.clone().unwrap_or_default();
+        c.mqtt_tcp = c.mqtt_tcp && st.settings.mqtt_tcp;
+        let w = st.settings.worker_url.trim();
+        if !w.is_empty() {
+            c.worker_url = Some(w.trim_end_matches('/').to_string());
+        }
+        c.user_agent = format!("ZVONochek-Desktop/{}", self.opts.app_version);
+        c
+    }
+
+    /// `cfg` берётся заранее (`signal_config()` сам берёт блокировку состояния).
+    fn spawn_hub(self: &Arc<Self>, room: zv_proto::Room, profile: Profile, cfg: Arc<SignalConfig>) -> RoomHub {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let room_id = room.topic.clone();
+        let hub = RoomHub::spawn(room, cfg, profile, tx);
+        let mut extras = serde_json::Map::new();
+        extras.insert("app".into(), json!("zvd"));
+        extras.insert("av".into(), json!(self.opts.app_version));
+        hub.set_extras(extras);
+        self.rt.spawn(pump(Arc::downgrade(self), room_id, rx));
+        hub
+    }
+
+    // ---------- настройки ----------
+
+    fn settings_set(&self, args: &Value) -> Result<Value, String> {
+        let patch = args.get("patch").unwrap_or(args);
+        let mut st = self.lock();
+        let mut cur = serde_json::to_value(&st.settings).map_err(|e| e.to_string())?;
+        if let (Some(c), Some(p)) = (cur.as_object_mut(), patch.as_object()) {
+            for (k, v) in p {
+                c.insert(k.clone(), v.clone());
+            }
+        }
+        let mut new: Settings = serde_json::from_value(cur).map_err(|e| e.to_string())?;
+        new.name = new.name.trim().chars().take(40).collect();
+        st.settings = new.clone();
+        self.settings_file.save(&st.settings).map_err(|e| e.to_string())?;
+        drop(st);
+        self.emit("settings:changed", serde_json::to_value(&new).unwrap_or_default());
+        ok(new)
+    }
+
+    // ---------- ссылки ----------
+
+    fn link_json(&self, l: &LinkEntry, st: &State) -> Value {
+        let topic = zv_proto::Room::derive(&l.secret).map(|r| r.topic).unwrap_or_default();
+        let room = st.rooms.get(&topic);
+        json!({
+            "id": l.id,
+            "name": l.name,
+            "kind": l.kind,
+            "listen": l.listen,
+            "created": l.created,
+            "lastUsed": l.last_used,
+            "secret": l.secret,
+            "url": zv_proto::link::call_url(&l.secret),
+            "appUrl": zv_proto::link::app_url(&l.secret),
+            "roomId": topic,
+            "status": room.and_then(|r| r.status.clone()),
+            "inCall": room.map(|r| r.joined).unwrap_or(false),
+        })
+    }
+
+    fn links_list(&self) -> Value {
+        let st = self.lock();
+        Value::Array(st.links.items.iter().map(|l| self.link_json(l, &st)).collect())
+    }
+
+    fn save_links(&self, st: &State) -> Result<(), String> {
+        self.links_file.save(&st.links).map_err(|e| e.to_string())
+    }
+
+    fn link_create(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
+        let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").trim().chars().take(60).collect::<String>();
+        let listen = args.get("listen").and_then(|v| v.as_bool()).unwrap_or(true);
+        let entry = LinkEntry {
+            id: rand_hex(6),
+            name: if name.is_empty() { "Моя ссылка".into() } else { name },
+            secret: zv_proto::link::new_secret(),
+            kind: "mine".into(),
+            listen,
+            created: now_ms(),
+            last_used: 0,
+        };
+        let v = {
+            let mut st = self.lock();
+            st.links.items.push(entry.clone());
+            self.save_links(&st)?;
+            self.link_json(&entry, &st)
+        };
+        self.sync_listeners();
+        self.emit("links:changed", Value::Null);
+        Ok(v)
+    }
+
+    fn link_save(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
+        let text = s(args, "secret").or_else(|_| s(args, "url"))?;
+        let secret = zv_proto::parse_link(text)
+            .and_then(|l| l.secret().map(str::to_string))
+            .ok_or("это не ссылка звонка")?;
+        let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("").trim().chars().take(60).collect::<String>();
+        let v = {
+            let mut st = self.lock();
+            if let Some(l) = st.links.items.iter_mut().find(|l| l.secret == secret) {
+                if !name.is_empty() {
+                    l.name = name;
+                }
+                let l = l.clone();
+                self.save_links(&st)?;
+                self.link_json(&l, &st)
+            } else {
+                let entry = LinkEntry {
+                    id: rand_hex(6),
+                    name: if name.is_empty() { "Ссылка".into() } else { name },
+                    secret,
+                    kind: "saved".into(),
+                    listen: false,
+                    created: now_ms(),
+                    last_used: now_ms(),
+                };
+                st.links.items.push(entry.clone());
+                self.save_links(&st)?;
+                self.link_json(&entry, &st)
+            }
+        };
+        self.emit("links:changed", Value::Null);
+        Ok(v)
+    }
+
+    fn link_update(self: &Arc<Self>, args: &Value, f: impl FnOnce(&mut LinkEntry, &Value)) -> Result<Value, String> {
+        let id = s(args, "id")?;
+        let v = {
+            let mut st = self.lock();
+            let l = st.links.items.iter_mut().find(|l| l.id == id).ok_or("нет такой ссылки")?;
+            f(l, args);
+            let l = l.clone();
+            self.save_links(&st)?;
+            self.link_json(&l, &st)
+        };
+        self.sync_listeners();
+        self.emit("links:changed", Value::Null);
+        Ok(v)
+    }
+
+    fn link_delete(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
+        let id = s(args, "id")?;
+        {
+            let mut st = self.lock();
+            st.links.items.retain(|l| l.id != id);
+            self.save_links(&st)?;
+        }
+        self.sync_listeners();
+        self.emit("links:changed", Value::Null);
+        Ok(Value::Null)
+    }
+
+    /// Поднять ожидание для своих ссылок с `listen`, снять — для остальных.
+    fn sync_listeners(self: &Arc<Self>) {
+        let cfg = Arc::new(self.signal_config());
+        let mut st = self.lock();
+        let want: HashMap<String, String> = st
+            .links
+            .items
+            .iter()
+            .filter(|l| l.kind == "mine" && l.listen)
+            .filter_map(|l| zv_proto::Room::derive(&l.secret).ok().map(|r| (r.topic, l.id.clone())))
+            .collect();
+        // снять лишние
+        let mut remove = Vec::new();
+        for (topic, r) in st.rooms.iter_mut() {
+            if r.link_id.is_some() && !want.contains_key(topic) {
+                r.link_id = None;
+                if !r.joined {
+                    r.hub.close();
+                    remove.push(topic.clone());
+                }
+            }
+        }
+        for t in remove {
+            st.rooms.remove(&t);
+        }
+        st.incoming.retain(|_, inc| want.contains_key(&inc.room_id));
+        // поднять недостающие
+        for (topic, link_id) in want {
+            if let Some(r) = st.rooms.get_mut(&topic) {
+                r.link_id = Some(link_id);
+                continue;
+            }
+            let secret = st.links.items.iter().find(|l| l.id == link_id).map(|l| l.secret.clone());
+            let Some(room) = secret.and_then(|s| zv_proto::Room::derive(&s).ok()) else { continue };
+            let hub = self.spawn_hub(room, Profile::Listen, cfg.clone());
+            st.rooms.insert(
+                topic,
+                RoomEntry { hub, link_id: Some(link_id), joined: false, session: None, answered: None, status: None },
+            );
+        }
+    }
+
+    // ---------- комнаты ----------
+
+    fn room_join(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
+        let self_id = s(args, "selfId")?.to_string();
+        let inst = s(args, "inst")?.to_string();
+        let want_topic = args.get("topic").and_then(|v| v.as_str()).map(str::to_string);
+        let mut secrets: Vec<String> = Vec::new();
+        if let Some(sv) = args.get("secret").and_then(|v| v.as_str()) {
+            secrets.push(sv.to_string());
+        }
+        if let Some(arr) = args.get("secrets").and_then(|v| v.as_array()) {
+            secrets.extend(arr.iter().filter_map(|v| v.as_str().map(str::to_string)));
+        }
+        let room = secrets
+            .iter()
+            .filter_map(|s| zv_proto::Room::derive(s).ok())
+            .find(|r| want_topic.as_ref().is_none_or(|t| *t == r.topic))
+            .ok_or("не найден секрет комнаты")?;
+        let room_id = room.topic.clone();
+        let cfg = Arc::new(self.signal_config());
+        let mut st = self.lock();
+        let busy_other = st.rooms.iter().any(|(t, r)| r.joined && *t != room_id);
+        let link_name = |st: &State, lid: &Option<String>| -> Option<String> {
+            lid.as_ref().and_then(|id| st.links.items.iter().find(|l| &l.id == id).map(|l| l.name.clone()))
+        };
+        let saved_name = st
+            .links
+            .items
+            .iter()
+            .find(|l| zv_proto::Room::derive(&l.secret).map(|r| r.topic == room_id).unwrap_or(false))
+            .map(|l| (l.id.clone(), l.name.clone()));
+        let entry = match st.rooms.remove(&room_id) {
+            Some(e) => {
+                e.hub.set_identity(&self_id, &inst);
+                e.hub.set_profile(Profile::Full);
+                e
+            }
+            None => {
+                let hub = self.spawn_hub(room, Profile::Full, cfg);
+                hub.set_identity(&self_id, &inst);
+                RoomEntry { hub, link_id: None, joined: false, session: None, answered: None, status: None }
+            }
+        };
+        let mut entry = entry;
+        entry.joined = true;
+        let answered = entry.answered.take();
+        let (dir, peer, lname) = match &answered {
+            Some(inc) => ("in", inc.name.clone(), Some(inc.link_name.clone())),
+            None => ("out", String::new(), link_name(&st, &entry.link_id).or(saved_name.as_ref().map(|x| x.1.clone()))),
+        };
+        entry.session = Some(Session {
+            started: now_ms(),
+            dir,
+            peer,
+            peer_inst: answered.as_ref().map(|a| a.inst.clone()),
+            peer_seen: answered.is_some(),
+            link_id: entry.link_id.clone().or(saved_name.map(|x| x.0)),
+            link_name: lname,
+        });
+        let up = entry.status.as_ref().map(|s| s.mqtt_up + s.nostr_up + s.ntfy_up > 0 || s.worker == "up").unwrap_or(false);
+        let status = entry.status.clone();
+        // входящие по этой комнате больше не звонят
+        let ended: Vec<Incoming> = st.incoming.values().filter(|x| x.room_id == room_id).cloned().collect();
+        for inc in &ended {
+            st.incoming.remove(&inc.call_id);
+        }
+        st.rooms.insert(room_id.clone(), entry);
+        drop(st);
+        for inc in ended {
+            self.emit("call:ended", json!({"callId": inc.call_id, "reason": "answered"}));
+        }
+        if up {
+            // каналы уже подняты (ожидание по своей ссылке) — сразу сообщаем, чтобы веб отправил hello
+            let me = self.clone();
+            let rid = room_id.clone();
+            self.rt.spawn(async move {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                if let Some(st) = status {
+                    me.emit("room:status", json!({"roomId": rid, "status": st}));
+                }
+                me.emit("room:up", json!({"roomId": rid}));
+            });
+        }
+        Ok(json!({"roomId": room_id, "busyOther": busy_other}))
+    }
+
+    fn room_send(&self, args: &Value) -> Result<Value, String> {
+        let room_id = s(args, "roomId")?;
+        let msg = args.get("msg").cloned().ok_or("нет msg")?;
+        if !msg.is_object() {
+            return Err("msg — не объект".into());
+        }
+        let voice = args.get("voice").and_then(|v| v.as_bool()).unwrap_or(false);
+        let hub = self.hub(room_id).ok_or("комната закрыта")?;
+        let mid = hub.send(msg, SendOpts { voice });
+        Ok(json!({"mid": mid}))
+    }
+
+    fn room_leave(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
+        let room_id = s(args, "roomId")?.to_string();
+        let mut st = self.lock();
+        let Some(r) = st.rooms.get_mut(&room_id) else { return Ok(Value::Null) };
+        if !r.joined {
+            return Ok(Value::Null);
+        }
+        r.joined = false;
+        let session = r.session.take();
+        let listen = r.link_id.is_some();
+        if listen {
+            r.hub.set_identity(&rand_hex(8), &rand_hex(6));
+            r.hub.set_profile(Profile::Listen);
+        } else {
+            // bye/последние сигналы уже в очереди каналов — даём им уйти
+            let h = r.hub.clone();
+            self.rt.spawn(async move {
+                tokio::time::sleep(Duration::from_millis(400)).await;
+                h.close();
+            });
+            st.rooms.remove(&room_id);
+        }
+        if let Some(sess) = session {
+            if let Some(pi) = &sess.peer_inst {
+                st.suppressed.insert(pi.clone(), now_ms());
+            }
+            let result = match (sess.dir, sess.peer_seen) {
+                ("in", _) => "answered",
+                (_, true) => "outgoing",
+                _ => "cancelled",
+            };
+            let e = HistoryEntry {
+                id: rand_hex(6),
+                dir: sess.dir.into(),
+                result: result.into(),
+                peer: sess.peer,
+                link_id: sess.link_id,
+                link_name: sess.link_name,
+                started: sess.started,
+                duration: now_ms().saturating_sub(sess.started) / 1000,
+                peer_seen: sess.peer_seen,
+            };
+            self.push_history(&mut st, e);
+        }
+        drop(st);
+        self.emit("history:changed", Value::Null);
+        self.emit("links:changed", Value::Null);
+        Ok(Value::Null)
+    }
+
+    /// Окно звонка закрыто: выйти из всех комнат звонка (с `bye`, если окно не успело).
+    fn rooms_leave_all(self: &Arc<Self>, bye: bool) -> Result<Value, String> {
+        let joined: Vec<(String, RoomHub)> = {
+            let st = self.lock();
+            st.rooms.iter().filter(|(_, r)| r.joined).map(|(t, r)| (t.clone(), r.hub.clone())).collect()
+        };
+        for (room_id, hub) in joined {
+            if bye {
+                hub.bye();
+            }
+            self.room_leave(&json!({"roomId": room_id}))?;
+        }
+        Ok(Value::Null)
+    }
+
+    fn push_history(&self, st: &mut State, e: HistoryEntry) {
+        st.history.items.push(e);
+        if st.history.items.len() > HISTORY_MAX {
+            let n = st.history.items.len() - HISTORY_MAX;
+            st.history.items.drain(..n);
+        }
+        let _ = self.history_file.save(&st.history);
+    }
+
+    // ---------- входящие ----------
+
+    fn on_msg(&self, room_id: &str, msg: Value) {
+        let mut st = self.lock();
+        let Some(r) = st.rooms.get_mut(room_id) else { return };
+        let typ = msg.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let from = msg.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let inst = msg.get("inst").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let name = msg.get("name").and_then(|v| v.as_str()).map(|s| s.chars().take(60).collect::<String>());
+        if r.joined {
+            if let Some(sess) = r.session.as_mut()
+                && !from.is_empty()
+                && matches!(typ.as_str(), "hello" | "hi" | "desc" | "cand" | "g_hi" | "ack")
+            {
+                sess.peer_seen = true;
+                if sess.peer_inst.is_none() {
+                    sess.peer_inst = Some(inst.clone());
+                }
+                if let Some(n) = &name
+                    && sess.peer.is_empty()
+                {
+                    sess.peer = n.clone();
+                }
+            }
+            drop(st);
+            self.emit("room:msg", json!({"roomId": room_id, "msg": msg}));
+            return;
+        }
+        let Some(link_id) = r.link_id.clone() else { return };
+        if inst.is_empty() || from.is_empty() {
+            return;
+        }
+        let now = now_ms();
+        if typ == "bye" {
+            // звонящий вышел из комнаты: следующий его hello — новый звонок, а не хвост старого
+            st.suppressed.remove(&inst);
+            let id = st.incoming.values().find(|x| x.room_id == room_id && x.inst == inst).map(|x| x.call_id.clone());
+            if let Some(id) = id {
+                drop(st);
+                self.end_incoming(&id, "missed");
+            }
+            return;
+        }
+        if !matches!(typ.as_str(), "hello" | "g_hi") {
+            return;
+        }
+        if let Some(t) = st.suppressed.get_mut(&inst) {
+            *t = now;
+            return;
+        }
+        if let Some(x) = st.incoming.values_mut().find(|x| x.room_id == room_id) {
+            if x.inst == inst {
+                x.last_seen = now;
+                if let Some(n) = name
+                    && n != x.name
+                {
+                    x.name = n;
+                    let v = serde_json::to_value(&*x).unwrap_or_default();
+                    drop(st);
+                    self.emit("call:update", v);
+                }
+            }
+            return;
+        }
+        let link_name = st.links.items.iter().find(|l| l.id == link_id).map(|l| l.name.clone()).unwrap_or_default();
+        let busy = st.rooms.values().any(|r| r.joined);
+        let inc = Incoming {
+            call_id: rand_hex(6),
+            room_id: room_id.to_string(),
+            link_id,
+            link_name,
+            from,
+            inst: inst.clone(),
+            name: name.unwrap_or_default(),
+            started: now,
+            last_seen: now,
+            app: msg.get("app").and_then(|v| v.as_str()) == Some("zvd"),
+            busy,
+        };
+        if st.settings.dnd {
+            st.suppressed.insert(inst, now);
+            let e = HistoryEntry {
+                id: rand_hex(6),
+                dir: "in".into(),
+                result: "missed".into(),
+                peer: inc.name.clone(),
+                link_id: Some(inc.link_id.clone()),
+                link_name: Some(inc.link_name.clone()),
+                started: now,
+                duration: 0,
+                peer_seen: true,
+            };
+            self.push_history(&mut st, e);
+            drop(st);
+            self.emit("history:changed", Value::Null);
+            return;
+        }
+        st.incoming.insert(inc.call_id.clone(), inc.clone());
+        drop(st);
+        self.emit("call:incoming", serde_json::to_value(&inc).unwrap_or_default());
+    }
+
+    fn end_incoming(&self, call_id: &str, reason: &str) {
+        let mut st = self.lock();
+        let Some(inc) = st.incoming.remove(call_id) else { return };
+        if reason != "answered" {
+            st.suppressed.insert(inc.inst.clone(), now_ms());
+            let e = HistoryEntry {
+                id: rand_hex(6),
+                dir: "in".into(),
+                result: reason.into(),
+                peer: inc.name.clone(),
+                link_id: Some(inc.link_id.clone()),
+                link_name: Some(inc.link_name.clone()),
+                started: inc.started,
+                duration: 0,
+                peer_seen: true,
+            };
+            self.push_history(&mut st, e);
+        }
+        drop(st);
+        self.emit("call:ended", json!({"callId": call_id, "reason": reason}));
+        self.emit("history:changed", Value::Null);
+    }
+
+    fn call_answer(&self, args: &Value) -> Result<Value, String> {
+        let id = s(args, "callId")?;
+        let mut st = self.lock();
+        let inc = st.incoming.remove(id).ok_or("звонок уже завершён")?;
+        let secret = st.links.items.iter().find(|l| l.id == inc.link_id).map(|l| l.secret.clone()).ok_or("ссылка удалена")?;
+        if let Some(r) = st.rooms.get_mut(&inc.room_id) {
+            r.answered = Some(inc.clone());
+        }
+        drop(st);
+        self.emit("call:ended", json!({"callId": id, "reason": "answered"}));
+        Ok(json!({"secret": secret, "roomId": inc.room_id, "name": inc.name, "linkName": inc.link_name}))
+    }
+
+    fn call_decline(&self, args: &Value) -> Result<Value, String> {
+        self.end_incoming(s(args, "callId")?, "declined");
+        Ok(Value::Null)
+    }
+
+    fn tick(&self) {
+        let now = now_ms();
+        let expired: Vec<String> = {
+            let mut st = self.lock();
+            st.suppressed.retain(|_, t| now.saturating_sub(*t) < SUPPRESS_MS);
+            st.incoming
+                .values()
+                .filter(|x| now.saturating_sub(x.last_seen) > RING_SILENCE_MS || now.saturating_sub(x.started) > RING_MAX_MS)
+                .map(|x| x.call_id.clone())
+                .collect()
+        };
+        for id in expired {
+            self.end_incoming(&id, "missed");
+        }
+    }
+
+    fn on_status(&self, room_id: &str, status: HubStatus) {
+        let mut st = self.lock();
+        if let Some(r) = st.rooms.get_mut(room_id) {
+            r.status = Some(status.clone());
+        }
+        drop(st);
+        self.emit("room:status", json!({"roomId": room_id, "status": status}));
+    }
+
+    fn joined(&self, room_id: &str) -> bool {
+        self.lock().rooms.get(room_id).map(|r| r.joined).unwrap_or(false)
+    }
+
+    async fn diag(&self) -> Value {
+        let rooms: Vec<(String, RoomHub, bool, Option<String>)> = {
+            let st = self.lock();
+            st.rooms
+                .iter()
+                .map(|(t, r)| {
+                    let ln = r.link_id.as_ref().and_then(|id| st.links.items.iter().find(|l| &l.id == id).map(|l| l.name.clone()));
+                    (t.clone(), r.hub.clone(), r.joined, ln)
+                })
+                .collect()
+        };
+        let mut out = Vec::new();
+        for (topic, hub, joined, link) in rooms {
+            let channels = hub.channels().await;
+            let status = hub.status().await;
+            let stats = hub.delivery_stats().await;
+            out.push(json!({
+                "room": &topic[..8.min(topic.len())],
+                "joined": joined,
+                "link": link,
+                "status": status,
+                "delivery": stats,
+                "channels": channels,
+            }));
+        }
+        json!({"rooms": out, "time": now_ms(), "version": self.opts.app_version})
+    }
+}
+
+async fn pump(w: Weak<Inner>, room_id: String, mut rx: mpsc::UnboundedReceiver<HubEvent>) {
+    while let Some(ev) = rx.recv().await {
+        let Some(inner) = w.upgrade() else { return };
+        match ev {
+            HubEvent::Message { msg, .. } => inner.on_msg(&room_id, msg),
+            HubEvent::Status(st) => inner.on_status(&room_id, st),
+            HubEvent::TransportUp => {
+                if inner.joined(&room_id) {
+                    inner.emit("room:up", json!({"roomId": room_id}));
+                }
+            }
+            HubEvent::PeerJoined => {
+                if inner.joined(&room_id) {
+                    inner.emit("room:peer_joined", json!({"roomId": room_id}));
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn opts(dir: &std::path::Path) -> CoreOptions {
+        let mut sig = SignalConfig::default();
+        sig.brokers.clear();
+        sig.nostr_relays.clear();
+        sig.worker_url = None;
+        sig.ntfy_base = None;
+        CoreOptions {
+            data_dir: dir.to_path_buf(),
+            app_version: "test".into(),
+            web_version: 40,
+            platform: "test".into(),
+            dev: true,
+            signal: Some(sig),
+        }
+    }
+
+    #[tokio::test]
+    async fn links_and_settings_persist() {
+        let d = tempfile::tempdir().unwrap();
+        let core = Core::start(opts(d.path())).unwrap();
+        let l = core.dispatch("link_create", json!({"name": "Мама"})).await.unwrap();
+        assert_eq!(l["name"], "Мама");
+        assert!(l["url"].as_str().unwrap().contains("#k="));
+        core.dispatch("settings_set", json!({"patch": {"name": "  Аня  "}})).await.unwrap();
+        drop(core);
+        let core2 = Core::start(opts(d.path())).unwrap();
+        let list = core2.dispatch("links_list", Value::Null).await.unwrap();
+        assert_eq!(list.as_array().unwrap().len(), 1);
+        assert_eq!(core2.settings().name, "Аня");
+        let p = core2.dispatch("link_parse", json!({"text": l["url"]})).await.unwrap();
+        assert_eq!(p["kind"], "call");
+    }
+
+    #[tokio::test]
+    async fn join_send_leave() {
+        let d = tempfile::tempdir().unwrap();
+        let core = Core::start(opts(d.path())).unwrap();
+        let secret = zv_proto::link::new_secret();
+        let r = core
+            .dispatch("room_join", json!({"secrets": [secret], "selfId": "a1", "inst": "b1"}))
+            .await
+            .unwrap();
+        let rid = r["roomId"].as_str().unwrap().to_string();
+        core.dispatch("room_send", json!({"roomId": rid, "msg": {"type": "hello"}})).await.unwrap();
+        core.dispatch("room_leave", json!({"roomId": rid})).await.unwrap();
+        let h = core.dispatch("history_list", Value::Null).await.unwrap();
+        assert_eq!(h[0]["result"], "cancelled");
     }
 }

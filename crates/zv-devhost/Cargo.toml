@@ -5,3 +5,12 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+anyhow = "1.0.104"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "ws", "query"] }
+futures-util = "0.3.34"
+serde_json = "1.0.154"
+tokio = { version = "1.54.1", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zv-core = { path = "../zv-core" }
+zv-signal = { path = "../zv-signal" }
