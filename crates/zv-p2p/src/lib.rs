@@ -1802,6 +1802,44 @@ mod tests {
         println!("через 3 с путь {:?}; статус {}", a.path(la), a.status());
     }
 
+    /// libp2p через публичную инфраструктуру (нужен интернет): бутстрап DHT, AutoNAT, публичные релеи,
+    /// поиск по одному ID. `cargo test -p zv-p2p libp2p_live -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore]
+    async fn libp2p_live() {
+        let cfg = || LpConfig {
+            port: 0,
+            mdns: false,
+            upnp: false,
+            ..Default::default()
+        };
+        let (a, mut arx) = node_with(21, false, Some(cfg())).await;
+        let (b, _brx) = node_with(22, false, Some(cfg())).await;
+        let t0 = std::time::Instant::now();
+        loop {
+            let lp = a.status()["libp2p"].clone();
+            let relay = lp["relays"]
+                .as_array()
+                .is_some_and(|r| r.iter().any(|x| x["ok"] == true));
+            if relay || t0.elapsed() > Duration::from_secs(120) {
+                println!("a через {:?}: {lp}", t0.elapsed());
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+        println!("b: {}", b.status()["libp2p"]);
+        // только ID: адрес — из DHT (провайдер-запись присутствия)
+        let t1 = std::time::Instant::now();
+        let r = tokio::time::timeout(Duration::from_secs(120), b.connect(a.id(), None)).await;
+        println!("по одному ID: {:?} → {r:?}", t1.elapsed());
+        let lb = r.expect("тайм-аут").expect("не соединились");
+        b.send(lb, &json!({"t": "bind"}));
+        let (_, m) = next_msg(&mut arx).await;
+        assert_eq!(m["t"], "bind");
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        println!("путь {:?}; статус {}", b.path(lb), b.status());
+    }
+
     #[tokio::test]
     async fn extra_streams_for_files() {
         let (a, _arx) = node(5).await;
