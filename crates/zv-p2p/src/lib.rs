@@ -1,38 +1,64 @@
-//! P2P между приложениями ZVONochek (протокол ZV4) поверх iroh.
+//! P2P между приложениями ZVONochek (протокол ZV4) поверх двух транспортов: iroh и libp2p
+//! (ADR-0002, ADR-0007).
 //!
-//! Постоянный ID устройства — EndpointId (Ed25519 из мастер-сида). Соединения — QUIC с пробитием
-//! NAT, релеями n0 (HTTPS, TCP 443) и поиском адреса по ID (DNS/pkarr n0). Каждое соединение —
-//! «линк»: один двунаправленный управляющий поток с кадрами JSON (длина u32 BE + UTF-8, ≤ 256 КБ)
-//! и QUIC-датаграммы (голос). Первый кадр с обеих сторон — `hello4`.
+//! Постоянный ID устройства — EndpointId (Ed25519 из мастер-сида); тот же ключ даёт PeerId libp2p.
+//! iroh: QUIC с пробитием NAT, релеями n0 и поиском адреса по ID (DNS/pkarr n0). libp2p: TCP/QUIC,
+//! mDNS, DHT Amino, релеи circuit v2 и DCUtR (см. `lp`).
+//!
+//! «Линк» — логическое соединение с собеседником. Под ним один или несколько «путей»
+//! (соединение iroh или поток libp2p), у каждого свой управляющий поток с кадрами JSON
+//! (длина u32 BE + UTF-8, ≤ 256 КБ); первый кадр с обеих сторон — `hello4`. Кадры идут по лучшему
+//! пути (прямой лучше релея, при равенстве — iroh). Умер путь — линк живёт на остальных; не осталось
+//! ни одного из-за сбоя — 5 с ждём переподключения, кадры копятся. Датаграммы (голос) — только по
+//! пути iroh, иначе ядро шлёт голос кадрами. Собеседники 4.0 (без `mp` в `hello4`) — как раньше:
+//! каждое соединение — отдельный линк.
 //!
 //! Допуск входящих решает ядро: до `authorize()` принимаются только `bind`, `contact_req`,
 //! `contact_offer`, `ping`/`pong`; не допущенный за 8 с линк закрывается.
 
 pub mod crypto;
+mod lp;
+mod stream;
 
 use bytes::Bytes;
-use iroh::endpoint::{Connection, RecvStream, SendStream, presets};
+use iroh::endpoint::{Connection, ConnectionError, presets};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayUrl, SecretKey, TransportAddr, Watcher};
 use serde_json::{Map, Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tokio::sync::mpsc;
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::time::{Duration, Instant};
+use tokio::sync::{Notify, mpsc};
 
 pub use iroh;
-pub use iroh::endpoint::{RecvStream as StreamRecv, SendStream as StreamSend};
+pub use lp::{DEFAULT_PORT as LP_PORT, LpConfig};
+pub use stream::{LpRecv, LpSend, StreamRecv, StreamSend, read_frame};
 
 pub const ALPN: &[u8] = b"zv/4";
 pub const PROTO: u64 = 1;
 pub const MAX_FRAME: usize = 256 * 1024;
 const HELLO_TIMEOUT: Duration = Duration::from_secs(8);
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// libp2p: дозвон, при необходимости поиск в DHT, открытие потока.
+const LP_CONNECT_TIMEOUT: Duration = Duration::from_secs(40);
 const ADMIT_TIMEOUT: Duration = Duration::from_secs(8);
+/// Сколько линк без путей ждёт переподключения.
+const GRACE: Duration = Duration::from_secs(5);
+const PENDING_MAX: usize = 512;
+/// Не чаще: попытка добавить к линку недостающий транспорт.
+const ENSURE_EVERY_MS: u64 = 25_000;
 /// Что принимается до допуска (ядро проверит доказательства).
 const PRE_AUTH: [&str; 5] = ["bind", "contact_req", "contact_offer", "ping", "pong"];
+/// libp2p: пустой кадр `pk4` раз в 10 с простоя; тишина 35 с — путь мёртв (поток Yamux не всегда
+/// узнаёт о гибели своего соединения).
+const LP_KEEPALIVE_MS: u64 = 10_000;
+const LP_DEAD_MS: u64 = 35_000;
+const LP_PROBE_MS: u64 = 3_000;
+/// Коды закрытия соединения iroh: 0 — линк закрыт приложением, 1 — не допущен, 2 — рукопожатие,
+/// 4 — закрыт только этот путь (линк живёт).
+const CLOSE_PATH: u32 = 4;
 
 pub type LinkId = u64;
 
@@ -63,8 +89,8 @@ pub enum Event {
     Stream {
         link: LinkId,
         peer: String,
-        send: SendStream,
-        recv: RecvStream,
+        send: StreamSend,
+        recv: StreamRecv,
     },
 }
 
@@ -89,37 +115,93 @@ pub struct Config {
     pub app_version: String,
     pub name: String,
     pub caps: Vec<String>,
+    /// Транспорт iroh.
+    pub iroh: bool,
     /// Релеи и поиск адресов n0. `false` — только прямые адреса (тесты в изоляции).
     pub n0: bool,
+    /// Транспорт libp2p; `None` — выключен.
+    pub lp: Option<LpConfig>,
+}
+
+enum Tr {
+    Iroh(Connection),
+    Lp(libp2p::PeerId),
+}
+
+impl Tr {
+    fn name(&self) -> &'static str {
+        match self {
+            Tr::Iroh(_) => "iroh",
+            Tr::Lp(_) => "libp2p",
+        }
+    }
+    fn kind(&self) -> usize {
+        match self {
+            Tr::Iroh(_) => 0,
+            Tr::Lp(_) => 1,
+        }
+    }
+}
+
+/// Путь линка: транспортное соединение со своим управляющим потоком.
+struct Path {
+    pid: u64,
+    tr: Tr,
+    /// Открыт нами.
+    outbound: bool,
+    tx: Mutex<Option<mpsc::UnboundedSender<Bytes>>>,
+    kill: Notify,
+    /// Закрываем только путь (линк живёт): для собеседника это сбой, а не закрытие линка.
+    drop_only: AtomicBool,
+    /// Когда пришёл последний кадр / ушёл последний кадр, мс.
+    last_rx: AtomicU64,
+    last_tx: AtomicU64,
+    /// libp2p: проверка «жив ли поток» — срок ответа, мс (0 — не проверяем).
+    probe: AtomicU64,
 }
 
 struct Link {
     id: LinkId,
     peer_s: String,
-    conn: Connection,
-    tx: mpsc::UnboundedSender<Bytes>,
     outbound: bool,
+    /// Собеседник умеет несколько путей в одном линке (`mp` в `hello4`).
+    mp: bool,
     authorized: AtomicBool,
     alive: AtomicBool,
+    closing: AtomicBool,
     opened: u64,
     remote: Mutex<Value>,
     sent: AtomicU64,
     recvd: AtomicU64,
+    paths: Mutex<Vec<Arc<Path>>>,
+    primary: AtomicU64,
+    /// Кадры, пока нет ни одного пути.
+    pending: Mutex<VecDeque<Bytes>>,
+    /// Когда последний раз пробовали добавить путь iroh / libp2p.
+    tried: Mutex<[u64; 2]>,
 }
 
 struct Inner {
-    ep: Endpoint,
+    ep: Option<Endpoint>,
+    lp: Option<lp::Lp>,
     me: String,
+    pk: [u8; 32],
+    secret: [u8; 32],
     links: Mutex<HashMap<LinkId, Arc<Link>>>,
     next: AtomicU64,
     events: mpsc::UnboundedSender<Event>,
     hello: Mutex<Map<String, Value>>,
+    closed: AtomicBool,
 }
 
 /// Узел P2P. Клонируется.
 #[derive(Clone)]
 pub struct Node {
     inner: Arc<Inner>,
+}
+
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 fn now_ms() -> u64 {
@@ -135,20 +217,6 @@ pub fn encode_frame(v: &Value) -> Bytes {
     b.extend_from_slice(&(body.len() as u32).to_be_bytes());
     b.extend_from_slice(&body);
     Bytes::from(b)
-}
-
-pub async fn read_frame(recv: &mut RecvStream) -> anyhow::Result<Option<Value>> {
-    let mut len = [0u8; 4];
-    match recv.read_exact(&mut len).await {
-        Ok(()) => {}
-        Err(iroh::endpoint::ReadExactError::FinishedEarly(0)) => return Ok(None),
-        Err(e) => return Err(e.into()),
-    }
-    let n = u32::from_be_bytes(len) as usize;
-    anyhow::ensure!(n <= MAX_FRAME, "кадр {n} байт — больше предела");
-    let mut buf = vec![0u8; n];
-    recv.read_exact(&mut buf).await?;
-    Ok(Some(serde_json::from_slice(&buf)?))
 }
 
 fn is_hello4(v: &Value) -> bool {
@@ -208,28 +276,55 @@ pub fn valid_id(s: &str) -> bool {
 impl Node {
     pub async fn start(cfg: Config, events: mpsc::UnboundedSender<Event>) -> anyhow::Result<Node> {
         let sk = SecretKey::from_bytes(&cfg.secret);
-        let b = if cfg.n0 {
-            Endpoint::builder(presets::N0)
+        let pk = sk.public();
+        let ep = if cfg.iroh {
+            let b = if cfg.n0 {
+                Endpoint::builder(presets::N0)
+            } else {
+                Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled)
+            };
+            Some(b.secret_key(sk).alpns(vec![ALPN.to_vec()]).bind().await?)
         } else {
-            Endpoint::builder(presets::Minimal).relay_mode(iroh::RelayMode::Disabled)
+            None
         };
-        let ep = b.secret_key(sk).alpns(vec![ALPN.to_vec()]).bind().await?;
-        let me = ep.id().to_string();
+        let (lp, lp_rx) = match cfg.lp.clone() {
+            Some(c) => match lp::Lp::start(&cfg.secret, c) {
+                Ok((l, rx)) => (Some(l), Some(rx)),
+                Err(e) if ep.is_some() => {
+                    tracing::warn!("p2p: libp2p не запустился: {e}");
+                    (None, None)
+                }
+                Err(e) => return Err(e),
+            },
+            None => (None, None),
+        };
+        anyhow::ensure!(ep.is_some() || lp.is_some(), "нет ни одного транспорта");
         let mut hello = Map::new();
         hello.insert("t".into(), json!("hello4"));
         hello.insert("proto".into(), json!(PROTO));
+        hello.insert("mp".into(), json!(1));
         hello.insert("app".into(), json!(cfg.app_version));
         hello.insert("caps".into(), json!(cfg.caps));
         hello.insert("name".into(), json!(cfg.name));
         let inner = Arc::new(Inner {
             ep,
-            me,
+            lp,
+            me: pk.to_string(),
+            pk: *pk.as_bytes(),
+            secret: cfg.secret,
             links: Mutex::new(HashMap::new()),
             next: AtomicU64::new(1),
             events,
             hello: Mutex::new(hello),
+            closed: AtomicBool::new(false),
         });
-        tokio::spawn(accept_loop(inner.clone()));
+        if inner.ep.is_some() {
+            tokio::spawn(accept_loop(inner.clone()));
+        }
+        if let Some(rx) = lp_rx {
+            tokio::spawn(lp_events(Arc::downgrade(&inner), rx));
+        }
+        tokio::spawn(maintain(Arc::downgrade(&inner)));
         Ok(Node { inner })
     }
 
@@ -238,53 +333,72 @@ impl Node {
     }
 
     pub fn id_bytes(&self) -> [u8; 32] {
-        *self.inner.ep.id().as_bytes()
+        self.inner.pk
     }
 
     pub fn secret_bytes(&self) -> [u8; 32] {
-        self.inner.ep.secret_key().to_bytes()
+        self.inner.secret
     }
 
     pub fn set_name(&self, name: &str) {
-        self.inner.lock_hello().insert("name".into(), json!(name));
+        lock(&self.inner.hello).insert("name".into(), json!(name));
     }
 
-    /// Наш адрес для `hello` веб-протокола и кодов приглашения: `{id, r, a}`.
+    /// Наш адрес для `hello` веб-протокола и кодов приглашения: `{id, r, a, l}`.
     pub fn addr_json(&self) -> Value {
-        addr_of(&self.inner.ep, &self.inner.me)
+        self.inner.addr_now()
     }
 
-    /// Подождать подключения к домашнему релею (не дольше `t`).
+    /// Подождать подключения к домашнему релею iroh (не дольше `t`).
     pub async fn online(&self, t: Duration) -> bool {
-        tokio::time::timeout(t, self.inner.ep.online())
-            .await
-            .is_ok()
+        match &self.inner.ep {
+            Some(ep) => tokio::time::timeout(t, ep.online()).await.is_ok(),
+            None => true,
+        }
     }
 
-    /// Установить исходящий линк (или вернуть живой допущенный к этому собеседнику).
+    /// Установить исходящий линк (или вернуть живой допущенный к этому собеседнику). Транспорты
+    /// дозваниваются параллельно: первый ответивший даёт линк, остальные добавятся к нему путями.
     pub async fn connect(&self, peer: &str, hint: Option<&Value>) -> anyhow::Result<LinkId> {
         if let Some(l) = self.link_for(peer) {
+            if let Some(link) = self.inner.get(l) {
+                self.inner.ensure_paths(&link, hint);
+            }
             return Ok(l);
         }
-        let addr = endpoint_addr(peer, hint)?;
-        anyhow::ensure!(addr.id != self.inner.ep.id(), "это ваш собственный ID");
-        let conn = tokio::time::timeout(CONNECT_TIMEOUT, self.inner.ep.connect(addr, ALPN))
+        let peer = peer.trim().to_string();
+        anyhow::ensure!(valid_id(&peer), "неверный ID");
+        anyhow::ensure!(peer != self.inner.me, "это ваш собственный ID");
+        let (tx, mut rx) = mpsc::unbounded_channel::<(&'static str, anyhow::Result<LinkId>)>();
+        for kind in [0usize, 1] {
+            if (kind == 0 && self.inner.ep.is_none()) || (kind == 1 && self.inner.lp.is_none()) {
+                continue;
+            }
+            let (me, tx, peer, hint) = (self.inner.clone(), tx.clone(), peer.clone(), hint.cloned());
+            tokio::spawn(async move {
+                let r = me.dial(kind, &peer, hint.as_ref()).await;
+                let _ = tx.send((if kind == 0 { "iroh" } else { "libp2p" }, r));
+            });
+        }
+        drop(tx);
+        let first = async {
+            let mut errs = Vec::new();
+            while let Some((name, r)) = rx.recv().await {
+                match r {
+                    Ok(l) => return Ok(l),
+                    Err(e) => errs.push(format!("{name}: {e}")),
+                }
+            }
+            Err(anyhow::anyhow!(errs.join("; ")))
+        };
+        tokio::time::timeout(CONNECT_TIMEOUT, first)
             .await
-            .map_err(|_| anyhow::anyhow!("нет ответа"))??;
-        let (mut send, mut recv) = conn.open_bi().await?;
-        let hello = self.inner.hello_now();
-        send.write_all(&encode_frame(&hello)).await?;
-        let first = tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv))
-            .await
-            .map_err(|_| anyhow::anyhow!("нет hello4"))??
-            .ok_or_else(|| anyhow::anyhow!("поток закрыт"))?;
-        anyhow::ensure!(is_hello4(&first), "собеседник не ZVONochek 4");
-        Ok(self.inner.clone().add_link(conn, true, first, send, recv))
+            .map_err(|_| anyhow::anyhow!("нет ответа"))?
     }
 
     /// Лучший живой допущенный линк к собеседнику (самый новый).
     pub fn link_for(&self, peer: &str) -> Option<LinkId> {
-        let links = self.inner.lock_links();
+        let links = lock(&self.inner.links);
         links
             .values()
             .filter(|l| {
@@ -297,48 +411,43 @@ impl Node {
     }
 
     pub fn peer_of(&self, link: LinkId) -> Option<String> {
-        self.inner.lock_links().get(&link).map(|l| l.peer_s.clone())
+        self.inner.get(link).map(|l| l.peer_s.clone())
     }
 
     pub fn is_alive(&self, link: LinkId) -> bool {
         self.inner
-            .lock_links()
-            .get(&link)
-            .map(|l| l.alive.load(Ordering::Relaxed))
-            .unwrap_or(false)
+            .get(link)
+            .is_some_and(|l| l.alive.load(Ordering::Relaxed))
     }
 
     pub fn is_authorized(&self, link: LinkId) -> bool {
         self.inner
-            .lock_links()
-            .get(&link)
-            .map(|l| l.authorized.load(Ordering::Relaxed))
-            .unwrap_or(false)
+            .get(link)
+            .is_some_and(|l| l.authorized.load(Ordering::Relaxed))
     }
 
     pub fn remote_hello(&self, link: LinkId) -> Value {
         self.inner
-            .lock_links()
-            .get(&link)
-            .map(|l| l.remote.lock().unwrap_or_else(|e| e.into_inner()).clone())
+            .get(link)
+            .map(|l| lock(&l.remote).clone())
             .unwrap_or(Value::Null)
     }
 
     pub fn authorize(&self, link: LinkId) {
-        if let Some(l) = self.inner.lock_links().get(&link) {
+        if let Some(l) = self.inner.get(link) {
             l.authorized.store(true, Ordering::Relaxed);
         }
     }
 
     pub fn send(&self, link: LinkId, msg: &Value) -> bool {
-        let Some(l) = self.inner.lock_links().get(&link).cloned() else {
+        let Some(l) = self.inner.get(link) else {
             return false;
         };
         if !l.alive.load(Ordering::Relaxed) {
             return false;
         }
         l.sent.fetch_add(1, Ordering::Relaxed);
-        l.tx.send(encode_frame(msg)).is_ok()
+        self.inner.push(&l, encode_frame(msg))
     }
 
     /// Отправить собеседнику по лучшему линку.
@@ -349,79 +458,106 @@ impl Node {
         }
     }
 
-    /// Датаграмма (без гарантий). `false` — не влезла или линк мёртв.
+    /// Датаграмма (без гарантий) по основному пути, если это iroh. `false` — не влезла, путь не
+    /// iroh или линк мёртв: тогда ядро шлёт кадром.
     pub fn send_datagram(&self, link: LinkId, data: Bytes) -> bool {
-        let Some(l) = self.inner.lock_links().get(&link).cloned() else {
+        let Some(l) = self.inner.get(link) else {
             return false;
         };
         if !l.alive.load(Ordering::Relaxed) {
             return false;
         }
-        match l.conn.max_datagram_size() {
+        let Some(p) = self.inner.primary(&l) else {
+            return false;
+        };
+        let Tr::Iroh(c) = &p.tr else {
+            return false;
+        };
+        match c.max_datagram_size() {
             Some(max) if data.len() <= max => {
                 l.sent.fetch_add(1, Ordering::Relaxed);
-                l.conn.send_datagram(data).is_ok()
+                c.send_datagram(data).is_ok()
             }
             _ => false,
         }
     }
 
-    /// Открыть дополнительный поток к собеседнику (файлы). Первый кадр пишет вызывающий.
-    pub async fn open_stream(&self, link: LinkId) -> anyhow::Result<(SendStream, RecvStream)> {
+    /// Открыть дополнительный поток к собеседнику (файлы) по основному пути. Первый кадр пишет
+    /// вызывающий.
+    pub async fn open_stream(&self, link: LinkId) -> anyhow::Result<(StreamSend, StreamRecv)> {
         let l = self
             .inner
-            .lock_links()
-            .get(&link)
-            .cloned()
+            .get(link)
             .ok_or_else(|| anyhow::anyhow!("нет линка"))?;
         anyhow::ensure!(l.alive.load(Ordering::Relaxed), "линк закрыт");
-        Ok(l.conn.open_bi().await?)
-    }
-
-    pub fn close_link(&self, link: LinkId, reason: &str) {
-        let l = self.inner.lock_links().get(&link).cloned();
-        if let Some(l) = l {
-            l.conn.close(0u32.into(), reason.as_bytes());
+        let p = self
+            .inner
+            .primary(&l)
+            .ok_or_else(|| anyhow::anyhow!("нет пути"))?;
+        match &p.tr {
+            Tr::Iroh(c) => {
+                let (s, r) = c.open_bi().await?;
+                Ok((StreamSend::Iroh(s), StreamRecv::Iroh(r)))
+            }
+            Tr::Lp(peer) => {
+                let lp = self
+                    .inner
+                    .lp
+                    .clone()
+                    .ok_or_else(|| anyhow::anyhow!("libp2p выключен"))?;
+                let s = lp.open(*peer, vec![], lp::P_FILE).await?;
+                Ok(stream::lp_pair(s))
+            }
         }
     }
 
-    /// Путь линка: `direct` / `relay` и RTT, мс.
+    pub fn close_link(&self, link: LinkId, reason: &str) {
+        if let Some(l) = self.inner.get(link) {
+            self.inner.close_paths(&l, 0, reason);
+        }
+    }
+
+    /// Путь линка: `direct` / `relay` и RTT, мс (по основному пути).
     pub fn path(&self, link: LinkId) -> (String, Option<u64>) {
-        let Some(l) = self.inner.lock_links().get(&link).cloned() else {
+        let Some(l) = self.inner.get(link) else {
             return ("none".into(), None);
         };
-        let paths = l.conn.paths();
-        let sel = paths.iter().find(|p| p.is_selected());
-        match sel {
-            Some(p) => (
-                (if p.is_relay() { "relay" } else { "direct" }).into(),
-                Some(p.rtt().as_millis() as u64),
-            ),
+        match self.inner.primary(&l) {
+            Some(p) => self.inner.path_info(&p),
             None => ("none".into(), None),
         }
     }
 
+    /// Транспорт основного пути: `iroh` / `libp2p`.
+    pub fn transport(&self, link: LinkId) -> Option<&'static str> {
+        let l = self.inner.get(link)?;
+        self.inner.primary(&l).map(|p| p.tr.name())
+    }
+
     /// Для диагностики.
     pub fn status(&self) -> Value {
-        let relays: Vec<Value> = self
-            .inner
-            .ep
-            .home_relay_status()
-            .get()
-            .iter()
-            .map(|r| json!({"url": r.url().to_string(), "connected": r.is_connected()}))
-            .collect();
-        let links: Vec<Arc<Link>> = self.inner.lock_links().values().cloned().collect();
+        let relays: Vec<Value> = match &self.inner.ep {
+            Some(ep) => ep
+                .home_relay_status()
+                .get()
+                .iter()
+                .map(|r| json!({"url": r.url().to_string(), "connected": r.is_connected()}))
+                .collect(),
+            None => vec![],
+        };
+        let links: Vec<Arc<Link>> = lock(&self.inner.links).values().cloned().collect();
         let mut lv = Vec::new();
         for l in links {
             let (path, rtt) = self.path(l.id);
-            let name = l
-                .remote
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .get("name")
-                .cloned()
-                .unwrap_or(Value::Null);
+            let name = lock(&l.remote).get("name").cloned().unwrap_or(Value::Null);
+            let main = l.primary.load(Ordering::Relaxed);
+            let paths: Vec<Value> = lock(&l.paths)
+                .iter()
+                .map(|p| {
+                    let (k, rtt) = self.inner.path_info(p);
+                    json!({"tr": p.tr.name(), "path": k, "rttMs": rtt, "main": p.pid == main, "outbound": p.outbound})
+                })
+                .collect();
             lv.push(json!({
                 "link": l.id,
                 "peer": &l.peer_s[..12.min(l.peer_s.len())],
@@ -430,174 +566,669 @@ impl Node {
                 "authorized": l.authorized.load(Ordering::Relaxed),
                 "path": path,
                 "rttMs": rtt,
+                "transport": self.transport(l.id),
+                "paths": paths,
                 "ageS": now_ms().saturating_sub(l.opened) / 1000,
                 "tx": l.sent.load(Ordering::Relaxed),
                 "rx": l.recvd.load(Ordering::Relaxed),
             }));
         }
-        json!({"id": self.inner.me, "addr": self.addr_json(), "relays": relays, "links": lv})
+        json!({
+            "id": self.inner.me,
+            "addr": self.addr_json(),
+            "iroh": self.inner.ep.is_some(),
+            "relays": relays,
+            "libp2p": self.inner.lp.as_ref().map(|l| l.status()),
+            "links": lv,
+        })
     }
 
     pub async fn shutdown(&self) {
-        let links: Vec<Arc<Link>> = self.inner.lock_links().values().cloned().collect();
+        self.inner.closed.store(true, Ordering::Relaxed);
+        let links: Vec<Arc<Link>> = lock(&self.inner.links).values().cloned().collect();
         for l in links {
-            l.conn.close(0u32.into(), b"bye");
+            self.inner.close_paths(&l, 0, "bye");
         }
-        let _ = tokio::time::timeout(Duration::from_secs(2), self.inner.ep.close()).await;
+        if let Some(lp) = &self.inner.lp {
+            // дать кадрам закрытия уйти
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            lp.shutdown();
+        }
+        if let Some(ep) = &self.inner.ep {
+            let _ = tokio::time::timeout(Duration::from_secs(2), ep.close()).await;
+        }
     }
 }
 
 impl Inner {
-    fn lock_links(&self) -> std::sync::MutexGuard<'_, HashMap<LinkId, Arc<Link>>> {
-        self.links.lock().unwrap_or_else(|e| e.into_inner())
+    fn get(&self, link: LinkId) -> Option<Arc<Link>> {
+        lock(&self.links).get(&link).cloned()
     }
-    fn lock_hello(&self) -> std::sync::MutexGuard<'_, Map<String, Value>> {
-        self.hello.lock().unwrap_or_else(|e| e.into_inner())
+
+    fn addr_now(&self) -> Value {
+        let mut o = match &self.ep {
+            Some(ep) => addr_of(ep, &self.me),
+            None => json!({"id": self.me}),
+        };
+        if let Some(lp) = &self.lp {
+            let l = lp.hint();
+            if !l.is_empty() {
+                o["l"] = json!(l);
+            }
+        }
+        o
     }
 
     /// `hello4` с текущими адресами (релей появляется не сразу).
     fn hello_now(&self) -> Value {
-        let mut h = self.lock_hello().clone();
-        h.insert("addr".into(), addr_of(&self.ep, &self.me));
+        let mut h = lock(&self.hello).clone();
+        h.insert("addr".into(), self.addr_now());
         Value::Object(h)
     }
 
-    fn add_link(
-        self: Arc<Self>,
-        conn: Connection,
+    /// Дозвон одним транспортом: 0 — iroh, 1 — libp2p. Успех — путь в линке собеседника.
+    async fn dial(self: &Arc<Self>, kind: usize, peer: &str, hint: Option<&Value>) -> anyhow::Result<LinkId> {
+        let (tr, mut send, mut recv) = if kind == 0 {
+            let ep = self
+                .ep
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("iroh выключен"))?;
+            let addr = endpoint_addr(peer, hint)?;
+            let conn = tokio::time::timeout(CONNECT_TIMEOUT, ep.connect(addr, ALPN))
+                .await
+                .map_err(|_| anyhow::anyhow!("нет ответа"))??;
+            let (s, r) = conn.open_bi().await?;
+            (Tr::Iroh(conn), StreamSend::Iroh(s), StreamRecv::Iroh(r))
+        } else {
+            let lp = self
+                .lp
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("libp2p выключен"))?;
+            let pid = lp::peer_of_id(peer).ok_or_else(|| anyhow::anyhow!("неверный ID"))?;
+            let addrs = lp::hint_addrs(hint, &pid);
+            let s = tokio::time::timeout(LP_CONNECT_TIMEOUT, lp.open(pid, addrs, lp::P_CTL))
+                .await
+                .map_err(|_| anyhow::anyhow!("нет ответа"))??;
+            let (s, r) = stream::lp_pair(s);
+            (Tr::Lp(pid), s, r)
+        };
+        let r = async {
+            send.write_all(&encode_frame(&self.hello_now())).await?;
+            let first = tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv))
+                .await
+                .map_err(|_| anyhow::anyhow!("нет hello4"))??
+                .ok_or_else(|| anyhow::anyhow!("поток закрыт"))?;
+            anyhow::ensure!(is_hello4(&first), "собеседник не ZVONochek 4");
+            Ok(first)
+        }
+        .await;
+        match r {
+            Ok(first) => Ok(self.attach(peer.to_string(), tr, true, first, send, recv, None)),
+            Err(e) => {
+                if let Tr::Iroh(c) = &tr {
+                    c.close(2u32.into(), b"handshake");
+                }
+                Err(e)
+            }
+        }
+    }
+
+    /// Новый путь: в линк собеседника (если оба умеют `mp`) или в новый линк.
+    #[allow(clippy::too_many_arguments)]
+    fn attach(
+        self: &Arc<Self>,
+        peer_s: String,
+        tr: Tr,
         outbound: bool,
         remote: Value,
-        send: SendStream,
-        recv: RecvStream,
+        send: StreamSend,
+        recv: StreamRecv,
+        first: Option<Bytes>,
     ) -> LinkId {
-        let id = self.next.fetch_add(1, Ordering::Relaxed);
+        let pid = self.next.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = mpsc::unbounded_channel();
-        let peer = conn.remote_id();
-        let link = Arc::new(Link {
-            id,
-            peer_s: peer.to_string(),
-            conn,
-            tx,
+        if let Some(b) = first {
+            let _ = tx.send(b);
+        }
+        let path = Arc::new(Path {
+            pid,
+            tr,
             outbound,
-            authorized: AtomicBool::new(outbound),
-            alive: AtomicBool::new(true),
-            opened: now_ms(),
-            remote: Mutex::new(remote.clone()),
-            sent: AtomicU64::new(0),
-            recvd: AtomicU64::new(0),
+            tx: Mutex::new(Some(tx)),
+            kill: Notify::new(),
+            drop_only: AtomicBool::new(false),
+            last_rx: AtomicU64::new(now_ms()),
+            last_tx: AtomicU64::new(now_ms()),
+            probe: AtomicU64::new(0),
         });
-        self.lock_links().insert(id, link.clone());
-        let _ = self.events.send(Event::LinkUp {
-            link: id,
-            peer: link.peer_s.clone(),
-            outbound,
-            hello: remote,
-        });
-        if !outbound {
-            let l = link.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(ADMIT_TIMEOUT).await;
-                if !l.authorized.load(Ordering::Relaxed) {
-                    l.conn.close(1u32.into(), b"unauthorized");
+        let mp = remote.get("mp").is_some();
+        let (link, created) = {
+            let mut links = lock(&self.links);
+            let found = mp
+                .then(|| {
+                    links
+                        .values()
+                        .filter(|l| {
+                            l.mp && l.peer_s == peer_s
+                                && l.alive.load(Ordering::Relaxed)
+                                && !l.closing.load(Ordering::Relaxed)
+                        })
+                        .max_by_key(|l| l.id)
+                        .cloned()
+                })
+                .flatten();
+            let (l, created) = match found {
+                Some(l) => (l, false),
+                None => {
+                    let id = self.next.fetch_add(1, Ordering::Relaxed);
+                    let l = Arc::new(Link {
+                        id,
+                        peer_s: peer_s.clone(),
+                        outbound,
+                        mp,
+                        authorized: AtomicBool::new(outbound),
+                        alive: AtomicBool::new(true),
+                        closing: AtomicBool::new(false),
+                        opened: now_ms(),
+                        remote: Mutex::new(remote.clone()),
+                        sent: AtomicU64::new(0),
+                        recvd: AtomicU64::new(0),
+                        paths: Mutex::new(Vec::new()),
+                        primary: AtomicU64::new(0),
+                        pending: Mutex::new(VecDeque::new()),
+                        tried: Mutex::new([0; 2]),
+                    });
+                    links.insert(id, l.clone());
+                    (l, true)
                 }
-            });
+            };
+            lock(&l.paths).push(path.clone());
+            (l, created)
+        };
+        if outbound {
+            link.authorized.store(true, Ordering::Relaxed);
         }
-        tokio::spawn(self.clone().accept_streams(link.clone()));
-        tokio::spawn(self.run_link(link, send, recv, rx));
-        id
-    }
-
-    /// Дополнительные потоки линка (передача файлов): только у допущенных.
-    async fn accept_streams(self: Arc<Self>, link: Arc<Link>) {
-        while let Ok((send, mut recv)) = link.conn.accept_bi().await {
-            if !link.authorized.load(Ordering::Relaxed) {
-                let _ = recv.stop(3u32.into());
-                continue;
-            }
-            let _ = self.events.send(Event::Stream {
+        if !created {
+            *lock(&link.remote) = remote.clone();
+        }
+        tracing::debug!(
+            "p2p: линк {} + путь {} {} {}",
+            link.id,
+            pid,
+            path.tr.name(),
+            if outbound { "→" } else { "←" }
+        );
+        if created {
+            let _ = self.events.send(Event::LinkUp {
                 link: link.id,
-                peer: link.peer_s.clone(),
-                send,
-                recv,
+                peer: peer_s,
+                outbound,
+                hello: remote,
             });
+            if !outbound {
+                let (me, l) = (self.clone(), link.clone());
+                tokio::spawn(async move {
+                    tokio::time::sleep(ADMIT_TIMEOUT).await;
+                    if !l.authorized.load(Ordering::Relaxed) && l.alive.load(Ordering::Relaxed) {
+                        me.close_paths(&l, 1, "unauthorized");
+                    }
+                });
+            }
         }
+        self.spawn_path(link.clone(), path, send, recv, rx);
+        self.pick_primary(&link);
+        self.flush(&link);
+        self.prune(&link);
+        link.id
     }
 
-    async fn run_link(
-        self: Arc<Self>,
+    fn spawn_path(
+        self: &Arc<Self>,
         link: Arc<Link>,
-        mut send: SendStream,
-        mut recv: RecvStream,
+        path: Arc<Path>,
+        mut send: StreamSend,
+        mut recv: StreamRecv,
         mut rx: mpsc::UnboundedReceiver<Bytes>,
     ) {
+        let wp = path.clone();
         let writer = tokio::spawn(async move {
             while let Some(b) = rx.recv().await {
-                if send.write_all(&b).await.is_err() {
-                    break;
+                if let Err(e) = send.write_all(&b).await {
+                    tracing::debug!("p2p: путь {}: запись: {e}", wp.pid);
+                    wp.drop_only.store(true, Ordering::Relaxed);
+                    wp.kill.notify_one();
+                    return;
+                }
+                wp.last_tx.store(now_ms(), Ordering::Relaxed);
+            }
+            let _ = send.finish().await;
+        });
+        if let Tr::Iroh(conn) = &path.tr {
+            let (me, l, c) = (self.clone(), link.clone(), conn.clone());
+            tokio::spawn(async move {
+                while let Ok(data) = c.read_datagram().await {
+                    l.recvd.fetch_add(1, Ordering::Relaxed);
+                    if l.authorized.load(Ordering::Relaxed) {
+                        let _ = me.events.send(Event::Datagram {
+                            link: l.id,
+                            peer: l.peer_s.clone(),
+                            data,
+                        });
+                    }
+                }
+            });
+            let (me, l, c) = (self.clone(), link.clone(), conn.clone());
+            tokio::spawn(async move {
+                while let Ok((s, mut r)) = c.accept_bi().await {
+                    if !l.authorized.load(Ordering::Relaxed) {
+                        let _ = r.stop(3u32.into());
+                        continue;
+                    }
+                    let _ = me.events.send(Event::Stream {
+                        link: l.id,
+                        peer: l.peer_s.clone(),
+                        send: StreamSend::Iroh(s),
+                        recv: StreamRecv::Iroh(r),
+                    });
+                }
+            });
+        }
+        let me = self.clone();
+        tokio::spawn(async move {
+            let mut dropped = false;
+            let (mut reason, mut explicit) = loop {
+                let f = tokio::select! {
+                    f = read_frame(&mut recv) => f,
+                    _ = path.kill.notified() => break ("закрыт".to_string(), !path.drop_only.load(Ordering::Relaxed)),
+                };
+                if f.as_ref().is_ok_and(|x| x.is_some()) {
+                    path.last_rx.store(now_ms(), Ordering::Relaxed);
+                    path.probe.store(0, Ordering::Relaxed);
+                }
+                match f {
+                    Ok(Some(v)) if v.get("t").and_then(|t| t.as_str()) == Some("path_drop4") => {
+                        dropped = true;
+                    }
+                    Ok(Some(v)) if v.get("t").and_then(|t| t.as_str()) == Some("pk4") => {
+                        if v.get("q").is_some()
+                            && let Some(tx) = lock(&path.tx).as_ref()
+                        {
+                            let _ = tx.send(encode_frame(&json!({"t": "pk4"})));
+                        }
+                    }
+                    Ok(Some(v)) => me.on_frame(&link, v),
+                    Ok(None) => break ("поток закрыт".to_string(), !dropped),
+                    Err(e) => break (e.to_string(), false),
+                }
+            };
+            if let Tr::Iroh(c) = &path.tr {
+                match c.close_reason() {
+                    Some(ConnectionError::ApplicationClosed(a)) => {
+                        explicit = a.error_code != CLOSE_PATH.into();
+                        reason = String::from_utf8_lossy(&a.reason).into_owned();
+                    }
+                    Some(ConnectionError::LocallyClosed) => {
+                        explicit = !path.drop_only.load(Ordering::Relaxed)
+                    }
+                    _ => {}
                 }
             }
-            let _ = send.finish();
-        });
-        let reason = loop {
-            tokio::select! {
-                f = read_frame(&mut recv) => match f {
-                    Ok(Some(v)) => {
-                        link.recvd.fetch_add(1, Ordering::Relaxed);
-                        let t = v.get("t").and_then(|t| t.as_str()).unwrap_or("");
-                        if t == "hello4" {
-                            *link.remote.lock().unwrap_or_else(|e| e.into_inner()) = v;
-                            continue;
-                        }
-                        if !link.authorized.load(Ordering::Relaxed) && !PRE_AUTH.contains(&t) {
-                            continue;
-                        }
-                        let _ = self.events.send(Event::Msg { link: link.id, peer: link.peer_s.clone(), msg: v });
-                    }
-                    Ok(None) => break "поток закрыт".to_string(),
-                    Err(e) => break e.to_string(),
-                },
-                d = link.conn.read_datagram() => match d {
-                    Ok(data) => {
-                        link.recvd.fetch_add(1, Ordering::Relaxed);
-                        if link.authorized.load(Ordering::Relaxed) {
-                            let _ = self.events.send(Event::Datagram { link: link.id, peer: link.peer_s.clone(), data });
-                        }
-                    }
-                    Err(e) => break e.to_string(),
-                },
+            drop(lock(&path.tx).take());
+            if explicit {
+                // дописать очередь и закрыть поток аккуратно
+                let _ = tokio::time::timeout(Duration::from_secs(2), writer).await;
+            } else {
+                writer.abort();
             }
+            if let Tr::Iroh(c) = &path.tr {
+                c.close(CLOSE_PATH.into(), b"path");
+            }
+            me.path_gone(&link, &path, reason, explicit);
+        });
+    }
+
+    fn on_frame(&self, l: &Link, v: Value) {
+        l.recvd.fetch_add(1, Ordering::Relaxed);
+        let t = v.get("t").and_then(|t| t.as_str()).unwrap_or("");
+        if t == "hello4" {
+            *lock(&l.remote) = v;
+            return;
+        }
+        if !l.authorized.load(Ordering::Relaxed) && !PRE_AUTH.contains(&t) {
+            return;
+        }
+        let _ = self.events.send(Event::Msg {
+            link: l.id,
+            peer: l.peer_s.clone(),
+            msg: v,
+        });
+    }
+
+    fn score(&self, p: &Path) -> u8 {
+        match &p.tr {
+            Tr::Iroh(c) => {
+                if iroh_direct(c).unwrap_or(false) {
+                    4
+                } else {
+                    2
+                }
+            }
+            Tr::Lp(peer) => {
+                if self.lp.as_ref().and_then(|lp| lp.is_direct(peer)).unwrap_or(false) {
+                    3
+                } else {
+                    1
+                }
+            }
+        }
+    }
+
+    /// Выбрать основной путь: лучший по оценке; текущий меняем только на строго лучший.
+    fn pick_primary(&self, l: &Link) -> Option<Arc<Path>> {
+        let ps = lock(&l.paths);
+        let cur = l.primary.load(Ordering::Relaxed);
+        let mut best: Option<(u8, &Arc<Path>)> = None;
+        for p in ps.iter() {
+            let s = self.score(p);
+            if best.is_none_or(|(bs, _)| s > bs) {
+                best = Some((s, p));
+            }
+        }
+        let (bs, bp) = best?;
+        let chosen = match ps.iter().find(|p| p.pid == cur) {
+            Some(c) if self.score(c) >= bs => c,
+            _ => bp,
+        }
+        .clone();
+        if chosen.pid != cur {
+            l.primary.store(chosen.pid, Ordering::Relaxed);
+            tracing::debug!("p2p: линк {} идёт по {} (путь {})", l.id, chosen.tr.name(), chosen.pid);
+        }
+        Some(chosen)
+    }
+
+    fn primary(&self, l: &Link) -> Option<Arc<Path>> {
+        let pid = l.primary.load(Ordering::Relaxed);
+        if let Some(p) = lock(&l.paths).iter().find(|p| p.pid == pid) {
+            return Some(p.clone());
+        }
+        self.pick_primary(l)
+    }
+
+    fn primary_tx(&self, l: &Link) -> Option<mpsc::UnboundedSender<Bytes>> {
+        self.primary(l).and_then(|p| lock(&p.tx).clone())
+    }
+
+    /// Кадр в основной путь; путей нет — в очередь до переподключения.
+    fn push(&self, l: &Link, b: Bytes) -> bool {
+        let mut q = lock(&l.pending);
+        if let Some(tx) = self.primary_tx(l) {
+            while let Some(x) = q.front() {
+                if tx.send(x.clone()).is_err() {
+                    break;
+                }
+                q.pop_front();
+            }
+            if q.is_empty() && tx.send(b.clone()).is_ok() {
+                return true;
+            }
+        }
+        if !l.alive.load(Ordering::Relaxed) {
+            return false;
+        }
+        if q.len() >= PENDING_MAX {
+            q.pop_front();
+        }
+        q.push_back(b);
+        true
+    }
+
+    fn flush(&self, l: &Link) {
+        let mut q = lock(&l.pending);
+        if q.is_empty() {
+            return;
+        }
+        if let Some(tx) = self.primary_tx(l) {
+            while let Some(x) = q.front() {
+                if tx.send(x.clone()).is_err() {
+                    break;
+                }
+                q.pop_front();
+            }
+        }
+    }
+
+    /// Два пути одного транспорта (встречный дозвон) — оставляем один, одинаково на обеих сторонах:
+    /// открытый стороной с меньшим ID, из них самый новый.
+    fn prune(&self, l: &Link) {
+        if !l.mp {
+            return;
+        }
+        let small = self.me < l.peer_s;
+        let victims: Vec<Arc<Path>> = {
+            let ps = lock(&l.paths);
+            let mut v = Vec::new();
+            for kind in [0usize, 1] {
+                let same: Vec<&Arc<Path>> = ps.iter().filter(|p| p.tr.kind() == kind).collect();
+                if same.len() < 2 {
+                    continue;
+                }
+                let keep = same
+                    .iter()
+                    .filter(|p| p.outbound == small)
+                    .max_by_key(|p| p.pid)
+                    .or_else(|| same.iter().max_by_key(|p| p.pid))
+                    .map(|p| p.pid);
+                v.extend(same.into_iter().filter(|p| Some(p.pid) != keep).cloned());
+            }
+            v
         };
-        link.alive.store(false, Ordering::Relaxed);
-        writer.abort();
-        link.conn.close(0u32.into(), b"done");
-        self.lock_links().remove(&link.id);
+        for p in victims {
+            tracing::debug!("p2p: линк {}: лишний путь {} {}", l.id, p.pid, p.tr.name());
+            self.kill_path(&p, CLOSE_PATH, "dup");
+        }
+    }
+
+    fn kill_path(&self, p: &Path, code: u32, reason: &str) {
+        if code == CLOSE_PATH {
+            p.drop_only.store(true, Ordering::Relaxed);
+        }
+        match &p.tr {
+            Tr::Iroh(c) => c.close(code.into(), reason.as_bytes()),
+            Tr::Lp(_) => {
+                if code == CLOSE_PATH {
+                    // собеседник поймёт, что закрыт только путь
+                    if let Some(tx) = lock(&p.tx).as_ref() {
+                        let _ = tx.send(encode_frame(&json!({"t": "path_drop4"})));
+                    }
+                }
+                p.kill.notify_one()
+            }
+        }
+    }
+
+    fn close_paths(&self, l: &Link, code: u32, reason: &str) {
+        l.closing.store(true, Ordering::Relaxed);
+        let ps: Vec<Arc<Path>> = lock(&l.paths).clone();
+        if ps.is_empty() {
+            self.link_down(l, reason.to_string());
+        }
+        for p in ps {
+            self.kill_path(&p, code, reason);
+        }
+    }
+
+    fn path_gone(self: &Arc<Self>, l: &Arc<Link>, p: &Arc<Path>, reason: String, explicit: bool) {
+        let left = {
+            let mut ps = lock(&l.paths);
+            ps.retain(|x| x.pid != p.pid);
+            ps.len()
+        };
+        tracing::debug!("p2p: линк {} − путь {} {}: {reason}", l.id, p.pid, p.tr.name());
+        if left > 0 {
+            self.pick_primary(l);
+            self.flush(l);
+            return;
+        }
+        if !l.alive.load(Ordering::Relaxed) {
+            return;
+        }
+        if explicit
+            || !l.mp
+            || l.closing.load(Ordering::Relaxed)
+            || !l.authorized.load(Ordering::Relaxed)
+            || self.closed.load(Ordering::Relaxed)
+        {
+            self.link_down(l, reason);
+            return;
+        }
+        // сбой единственного пути: ждём переподключения, кадры копятся в `pending`
+        let (me, l) = (self.clone(), l.clone());
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            *lock(&l.tried) = [0; 2];
+            me.ensure_paths(&l, None);
+            let t0 = Instant::now();
+            while t0.elapsed() < GRACE {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                if !lock(&l.paths).is_empty() || !l.alive.load(Ordering::Relaxed) {
+                    return;
+                }
+            }
+            me.link_down(&l, reason);
+        });
+    }
+
+    fn link_down(&self, l: &Link, reason: String) {
+        {
+            let mut links = lock(&self.links);
+            if !lock(&l.paths).is_empty() || !l.alive.swap(false, Ordering::Relaxed) {
+                return;
+            }
+            links.remove(&l.id);
+        }
+        lock(&l.pending).clear();
         let _ = self.events.send(Event::LinkDown {
-            link: link.id,
-            peer: link.peer_s.clone(),
+            link: l.id,
+            peer: l.peer_s.clone(),
             reason,
         });
     }
+
+    /// Добавить к допущенному линку недостающие транспорты (не чаще раза в 25 с на транспорт).
+    fn ensure_paths(self: &Arc<Self>, l: &Arc<Link>, hint: Option<&Value>) {
+        if !l.mp
+            || !l.alive.load(Ordering::Relaxed)
+            || !l.authorized.load(Ordering::Relaxed)
+            || l.closing.load(Ordering::Relaxed)
+            || self.closed.load(Ordering::Relaxed)
+        {
+            return;
+        }
+        let have: Vec<usize> = lock(&l.paths).iter().map(|p| p.tr.kind()).collect();
+        let hint = hint
+            .cloned()
+            .or_else(|| lock(&l.remote).get("addr").cloned());
+        let now = now_ms();
+        let mut tried = lock(&l.tried);
+        for kind in [0usize, 1] {
+            let on = if kind == 0 { self.ep.is_some() } else { self.lp.is_some() };
+            if !on || have.contains(&kind) || now.saturating_sub(tried[kind]) < ENSURE_EVERY_MS {
+                continue;
+            }
+            tried[kind] = now;
+            let (me, peer, h) = (self.clone(), l.peer_s.clone(), hint.clone());
+            tokio::spawn(async move {
+                if let Err(e) = me.dial(kind, &peer, h.as_ref()).await {
+                    tracing::debug!("p2p: {}: путь {} не добавился: {e}", &peer[..8], if kind == 0 { "iroh" } else { "libp2p" });
+                }
+            });
+        }
+    }
+
+    fn path_info(&self, p: &Path) -> (String, Option<u64>) {
+        match &p.tr {
+            Tr::Iroh(c) => {
+                let paths = c.paths();
+                match paths.iter().find(|x| x.is_selected()) {
+                    Some(x) => (
+                        (if x.is_relay() { "relay" } else { "direct" }).into(),
+                        Some(x.rtt().as_millis() as u64),
+                    ),
+                    None => ("none".into(), None),
+                }
+            }
+            Tr::Lp(peer) => {
+                let lp = self.lp.as_ref();
+                match lp.and_then(|lp| lp.is_direct(peer)) {
+                    Some(d) => (
+                        (if d { "direct" } else { "relay" }).into(),
+                        lp.and_then(|lp| lp.rtt(peer)),
+                    ),
+                    None => ("none".into(), None),
+                }
+            }
+        }
+    }
+
+    async fn lp_inbound(self: Arc<Self>, peer: libp2p::PeerId, s: libp2p::Stream) -> anyhow::Result<()> {
+        let id = lp::id_of_peer(&peer).ok_or_else(|| anyhow::anyhow!("не ключ Ed25519"))?;
+        let (send, mut recv) = stream::lp_pair(s);
+        let first = tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv))
+            .await??
+            .ok_or_else(|| anyhow::anyhow!("пусто"))?;
+        anyhow::ensure!(is_hello4(&first), "не hello4");
+        let h = encode_frame(&self.hello_now());
+        self.attach(id, Tr::Lp(peer), false, first, send, recv, Some(h));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+impl Inner {
+    /// Тест: «сбой» пути данного транспорта (0 — iroh, 1 — libp2p).
+    fn drop_transport(&self, link: LinkId, kind: usize) {
+        let Some(l) = self.get(link) else { return };
+        let ps: Vec<Arc<Path>> = lock(&l.paths).clone();
+        for p in ps.iter().filter(|p| p.tr.kind() == kind) {
+            self.kill_path(p, CLOSE_PATH, "test");
+        }
+    }
+    fn path_count(&self, link: LinkId) -> usize {
+        self.get(link).map(|l| lock(&l.paths).len()).unwrap_or(0)
+    }
+    fn path_ids(&self, link: LinkId) -> Vec<u64> {
+        self.get(link)
+            .map(|l| lock(&l.paths).iter().map(|p| p.pid).collect())
+            .unwrap_or_default()
+    }
+}
+
+fn iroh_direct(c: &Connection) -> Option<bool> {
+    let paths = c.paths();
+    paths.iter().find(|x| x.is_selected()).map(|x| !x.is_relay())
 }
 
 async fn accept_loop(inner: Arc<Inner>) {
-    while let Some(incoming) = inner.ep.accept().await {
+    let Some(ep) = inner.ep.clone() else { return };
+    while let Some(incoming) = ep.accept().await {
         let inner = inner.clone();
         tokio::spawn(async move {
             let Ok(conn) = incoming.await else { return };
             let r = async {
-                let (mut send, mut recv) =
-                    tokio::time::timeout(HELLO_TIMEOUT, conn.accept_bi()).await??;
+                let (send, recv) = tokio::time::timeout(HELLO_TIMEOUT, conn.accept_bi()).await??;
+                let mut recv = StreamRecv::Iroh(recv);
                 let first = tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await??;
                 let first = first.ok_or_else(|| anyhow::anyhow!("пусто"))?;
                 anyhow::ensure!(is_hello4(&first), "не hello4");
-                let hello = inner.hello_now();
-                send.write_all(&encode_frame(&hello)).await?;
                 Ok::<_, anyhow::Error>((send, recv, first))
             }
             .await;
             match r {
                 Ok((send, recv, first)) => {
-                    inner.add_link(conn, false, first, send, recv);
+                    let peer = conn.remote_id().to_string();
+                    let h = encode_frame(&inner.hello_now());
+                    inner.attach(peer, Tr::Iroh(conn), false, first, StreamSend::Iroh(send), recv, Some(h));
                 }
                 Err(e) => {
                     tracing::debug!("p2p: входящее отклонено: {e}");
@@ -608,20 +1239,397 @@ async fn accept_loop(inner: Arc<Inner>) {
     }
 }
 
+async fn lp_events(w: Weak<Inner>, mut rx: mpsc::UnboundedReceiver<lp::LpEv>) {
+    while let Some(ev) = rx.recv().await {
+        let Some(inner) = w.upgrade() else { return };
+        match ev {
+            lp::LpEv::Ctl(peer, s) => {
+                tokio::spawn(async move {
+                    if let Err(e) = inner.lp_inbound(peer, s).await {
+                        tracing::debug!("p2p: входящее libp2p отклонено: {e}");
+                    }
+                });
+            }
+            lp::LpEv::File(peer, s) => {
+                let l = lp::id_of_peer(&peer).and_then(|id| {
+                    lock(&inner.links)
+                        .values()
+                        .filter(|l| {
+                            l.peer_s == id
+                                && l.alive.load(Ordering::Relaxed)
+                                && l.authorized.load(Ordering::Relaxed)
+                        })
+                        .max_by_key(|l| l.id)
+                        .cloned()
+                });
+                // нет допущенного линка — поток просто бросаем
+                if let Some(l) = l {
+                    let (send, recv) = stream::lp_pair(s);
+                    let _ = inner.events.send(Event::Stream {
+                        link: l.id,
+                        peer: l.peer_s.clone(),
+                        send,
+                        recv,
+                    });
+                }
+            }
+            lp::LpEv::Direct(peer) => {
+                // релейные соединения закрыты — путь libp2p переоткроется уже напрямую
+                let Some(id) = lp::id_of_peer(&peer) else { continue };
+                let links: Vec<Arc<Link>> = lock(&inner.links)
+                    .values()
+                    .filter(|l| l.peer_s == id)
+                    .cloned()
+                    .collect();
+                // поток мог остаться на закрытом релейном соединении: проверим, отвечает ли
+                let deadline = now_ms() + LP_PROBE_MS;
+                for l in &links {
+                    for p in lock(&l.paths).iter().filter(|p| matches!(p.tr, Tr::Lp(_))) {
+                        p.probe.store(deadline, Ordering::Relaxed);
+                        if let Some(tx) = lock(&p.tx).as_ref() {
+                            let _ = tx.send(encode_frame(&json!({"t": "pk4", "q": 1})));
+                        }
+                    }
+                }
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    for l in links {
+                        lock(&l.tried)[1] = 0;
+                        inner.ensure_paths(&l, None);
+                    }
+                });
+            }
+        }
+    }
+}
+
+/// Раз в секунду: пересмотр основного пути, живость путей libp2p; раз в 30 с — недостающие
+/// транспорты (со стороны, открывшей линк).
+async fn maintain(w: Weak<Inner>) {
+    let mut n = 0u64;
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let Some(inner) = w.upgrade() else { return };
+        if inner.closed.load(Ordering::Relaxed) {
+            return;
+        }
+        n += 1;
+        let links: Vec<Arc<Link>> = lock(&inner.links).values().cloned().collect();
+        let now = now_ms();
+        for l in links {
+            inner.pick_primary(&l);
+            if n.is_multiple_of(30) && l.outbound {
+                inner.ensure_paths(&l, None);
+            }
+            let ps: Vec<Arc<Path>> = lock(&l.paths).clone();
+            for p in ps.iter().filter(|p| matches!(p.tr, Tr::Lp(_))) {
+                let rx = p.last_rx.load(Ordering::Relaxed);
+                let probe = p.probe.load(Ordering::Relaxed);
+                if now.saturating_sub(rx) > LP_DEAD_MS || (probe != 0 && now > probe) {
+                    tracing::debug!("p2p: линк {}: путь {} libp2p молчит", l.id, p.pid);
+                    inner.kill_path(p, CLOSE_PATH, "silent");
+                } else if now.saturating_sub(p.last_tx.load(Ordering::Relaxed)) > LP_KEEPALIVE_MS
+                    && let Some(tx) = lock(&p.tx).as_ref()
+                {
+                    let _ = tx.send(encode_frame(&json!({"t": "pk4"})));
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     async fn node(seed: u8) -> (Node, mpsc::UnboundedReceiver<Event>) {
+        node_with(seed, true, None).await
+    }
+
+    async fn node_with(
+        seed: u8,
+        iroh: bool,
+        lp: Option<LpConfig>,
+    ) -> (Node, mpsc::UnboundedReceiver<Event>) {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "warn".into()))
+            .with_test_writer()
+            .try_init();
         let (tx, rx) = mpsc::unbounded_channel();
         let cfg = Config {
             secret: crypto::endpoint_secret(&[seed; 32]),
             app_version: "test".into(),
             name: format!("n{seed}"),
             caps: vec![],
+            iroh,
             n0: false,
+            lp,
         };
         (Node::start(cfg, tx).await.unwrap(), rx)
+    }
+
+    /// Адрес с libp2p-частью `l` (сокеты слушают не мгновенно).
+    async fn hint_with_l(n: &Node, need: &str) -> Value {
+        for _ in 0..100 {
+            let h = n.addr_json();
+            let ok = h["l"]
+                .as_array()
+                .is_some_and(|a| a.iter().any(|x| x.as_str().is_some_and(|s| s.contains(need))));
+            if ok {
+                return h;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        panic!("нет адреса libp2p «{need}»: {}", n.addr_json());
+    }
+
+    fn no_link_down(rx: &mut mpsc::UnboundedReceiver<Event>) {
+        while let Ok(e) = rx.try_recv() {
+            assert!(!matches!(e, Event::LinkDown { .. }), "лишний {e:?}");
+        }
+    }
+
+    async fn next_stream(rx: &mut mpsc::UnboundedReceiver<Event>) -> (LinkId, StreamSend, StreamRecv) {
+        loop {
+            match tokio::time::timeout(Duration::from_secs(10), rx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            {
+                Event::Stream {
+                    link, send, recv, ..
+                } => return (link, send, recv),
+                _ => continue,
+            }
+        }
+    }
+
+    async fn wait_down(rx: &mut mpsc::UnboundedReceiver<Event>, want: LinkId) {
+        loop {
+            if let Event::LinkDown { link, .. } =
+                tokio::time::timeout(Duration::from_secs(10), rx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+            {
+                assert_eq!(link, want);
+                return;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn libp2p_link_and_files() {
+        let (a, mut arx) = node_with(21, false, Some(LpConfig::local())).await;
+        let (b, mut brx) = node_with(22, false, Some(LpConfig::local())).await;
+        let hint = hint_with_l(&b, "/tcp/").await;
+        let la = a.connect(b.id(), Some(&hint)).await.unwrap();
+        assert_eq!(a.transport(la), Some("libp2p"));
+        a.send(la, &json!({"t": "secret"}));
+        a.send(la, &json!({"t": "bind"}));
+        let (lb, m) = next_msg(&mut brx).await;
+        assert_eq!(m["t"], "bind");
+        assert_eq!(b.peer_of(lb).as_deref(), Some(a.id()));
+        b.authorize(lb);
+        b.send(lb, &json!({"t": "pong", "n": 1}));
+        let (_, m) = next_msg(&mut arx).await;
+        assert_eq!(m["t"], "pong");
+        // датаграмм у libp2p нет: ядро отправит голос кадром
+        assert!(!a.send_datagram(la, Bytes::from_static(b"Ex")));
+        a.send(la, &json!({"t": "env", "d": "y".repeat(200_000)}));
+        let (_, m) = next_msg(&mut brx).await;
+        assert_eq!(m["d"].as_str().unwrap().len(), 200_000);
+        // файл: 1 МБ в ответ на запрос
+        let (mut s, mut r) = a.open_stream(la).await.unwrap();
+        s.write_all(&encode_frame(&json!({"t": "get"}))).await.unwrap();
+        let (l, mut bs, mut br) = next_stream(&mut brx).await;
+        assert_eq!(l, lb);
+        assert_eq!(read_frame(&mut br).await.unwrap().unwrap()["t"], "get");
+        // окно Yamux меньше 1 МБ: пишем параллельно с чтением
+        let w = tokio::spawn(async move {
+            bs.write_all(&vec![9u8; 1 << 20]).await.unwrap();
+            bs.finish().await.unwrap();
+            // ждём, пока a дочитает и закроет поток
+            tokio::time::timeout(Duration::from_secs(5), bs.stopped())
+                .await
+                .unwrap()
+                .unwrap();
+            drop(br);
+        });
+        let got = tokio::time::timeout(Duration::from_secs(10), r.read_to_end(4 << 20))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.len(), 1 << 20);
+        assert!(got.iter().all(|&x| x == 9));
+        drop((s, r));
+        w.await.unwrap();
+        assert_eq!(a.path(la).0, "direct");
+        a.close_link(la, "test");
+        wait_down(&mut brx, lb).await;
+    }
+
+    #[tokio::test]
+    async fn multipath_failover() {
+        let (a, mut arx) = node_with(23, true, Some(LpConfig::local())).await;
+        let (b, mut brx) = node_with(24, true, Some(LpConfig::local())).await;
+        let hint = hint_with_l(&b, "/tcp/").await;
+        let la = a.connect(b.id(), Some(&hint)).await.unwrap();
+        a.send(la, &json!({"t": "bind"}));
+        let (lb, _) = next_msg(&mut brx).await;
+        b.authorize(lb);
+        // второй транспорт — путём того же линка
+        for _ in 0..100 {
+            if a.inner.path_count(la) == 2 && b.inner.path_count(lb) == 2 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert_eq!(a.inner.path_count(la), 2, "{}", a.status());
+        assert_eq!(b.inner.path_count(lb), 2, "{}", b.status());
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        assert_eq!(a.transport(la), Some("iroh"), "{}", a.status());
+        // сбой пути iroh: линк живёт на libp2p
+        a.inner.drop_transport(la, 0);
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(a.is_alive(la) && b.is_alive(lb));
+        assert_eq!(a.transport(la), Some("libp2p"));
+        assert_eq!(b.transport(lb), Some("libp2p"));
+        a.send(la, &json!({"t": "ping", "n": 2}));
+        let (l, m) = next_msg(&mut brx).await;
+        assert_eq!((l, m["n"].as_u64()), (lb, Some(2)));
+        b.send(lb, &json!({"t": "pong", "n": 3}));
+        let (l, m) = next_msg(&mut arx).await;
+        assert_eq!((l, m["n"].as_u64()), (la, Some(3)));
+        no_link_down(&mut arx);
+        no_link_down(&mut brx);
+        // сбой и второго: 5 с ждём переподключения, оно и случается — линк тот же
+        let old = a.inner.path_ids(la);
+        a.inner.drop_transport(la, 1);
+        for _ in 0..50 {
+            let now = a.inner.path_ids(la);
+            if !now.is_empty() && now.iter().all(|p| !old.contains(p)) && b.inner.path_count(lb) > 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert!(a.is_alive(la) && b.is_alive(lb));
+        a.send(la, &json!({"t": "ping", "n": 4}));
+        let (l, m) = next_msg(&mut brx).await;
+        assert_eq!((l, m["n"].as_u64()), (lb, Some(4)), "{}", a.status());
+        no_link_down(&mut arx);
+        no_link_down(&mut brx);
+        a.close_link(la, "test");
+        wait_down(&mut brx, lb).await;
+    }
+
+    /// Локальный релей circuit v2 для теста.
+    async fn relay_server() -> String {
+        use futures::StreamExt;
+        use libp2p::swarm::{NetworkBehaviour, SwarmEvent};
+        #[derive(NetworkBehaviour)]
+        struct R {
+            relay: libp2p::relay::Behaviour,
+            identify: libp2p::identify::Behaviour,
+            ping: libp2p::ping::Behaviour,
+        }
+        let mut sw = libp2p::SwarmBuilder::with_new_identity()
+            .with_tokio()
+            .with_tcp(
+                libp2p::tcp::Config::default(),
+                libp2p::noise::Config::new,
+                libp2p::yamux::Config::default,
+            )
+            .unwrap()
+            .with_behaviour(|k| R {
+                relay: libp2p::relay::Behaviour::new(
+                    k.public().to_peer_id(),
+                    libp2p::relay::Config::default(),
+                ),
+                identify: libp2p::identify::Behaviour::new(libp2p::identify::Config::new(
+                    "/ipfs/0.1.0".into(),
+                    k.public(),
+                )),
+                ping: libp2p::ping::Behaviour::default(),
+            })
+            .unwrap()
+            .build();
+        sw.listen_on("/ip4/127.0.0.1/tcp/0".parse().unwrap()).unwrap();
+        let addr = loop {
+            if let SwarmEvent::NewListenAddr { address, .. } = sw.select_next_some().await {
+                break address;
+            }
+        };
+        sw.add_external_address(addr.clone());
+        let id = *sw.local_peer_id();
+        tokio::spawn(async move {
+            loop {
+                sw.select_next_some().await;
+            }
+        });
+        format!("{addr}/p2p/{id}")
+    }
+
+    #[tokio::test]
+    async fn libp2p_relay_then_direct() {
+        let relay = relay_server().await;
+        let mut ca = LpConfig::local();
+        ca.relays = vec![relay];
+        let (a, mut arx) = node_with(25, false, Some(ca)).await;
+        let (b, mut brx) = node_with(26, false, Some(LpConfig::local())).await;
+        let ha = hint_with_l(&a, "p2p-circuit").await;
+        let circ: Vec<Value> = ha["l"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|x| x.as_str().unwrap().contains("p2p-circuit"))
+            .cloned()
+            .collect();
+        // b знает только адрес через релей
+        let lb = b
+            .connect(a.id(), Some(&json!({"id": a.id(), "l": circ})))
+            .await
+            .unwrap();
+        b.send(lb, &json!({"t": "bind"}));
+        let (la, _) = next_msg(&mut arx).await;
+        a.authorize(la);
+        // DCUtR: появилось прямое соединение, релейное закрыто, путь переоткрыт в том же линке
+        let (old_a, old_b) = (a.inner.path_ids(la), b.inner.path_ids(lb));
+        let mut direct = false;
+        for _ in 0..200 {
+            let (na, nb) = (a.inner.path_ids(la), b.inner.path_ids(lb));
+            if b.path(lb).0 == "direct"
+                && a.path(la).0 == "direct"
+                && !na.is_empty()
+                && !nb.is_empty()
+                && na.iter().all(|p| !old_a.contains(p))
+                && nb.iter().all(|p| !old_b.contains(p))
+            {
+                direct = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        assert!(direct, "{}\n{}", b.status(), a.status());
+        b.send(lb, &json!({"t": "ping", "n": 7}));
+        let (l, m) = next_msg(&mut arx).await;
+        assert_eq!((l, m["n"].as_u64()), (la, Some(7)));
+        a.send(la, &json!({"t": "pong", "n": 8}));
+        let (l, m) = next_msg(&mut brx).await;
+        assert_eq!((l, m["n"].as_u64()), (lb, Some(8)));
+        no_link_down(&mut arx);
+        no_link_down(&mut brx);
+    }
+
+    #[test]
+    fn peer_id_roundtrip() {
+        let sk = SecretKey::from_bytes(&crypto::endpoint_secret(&[9; 32]));
+        let id = sk.public().to_string();
+        let p = lp::peer_of_id(&id).unwrap();
+        assert_eq!(lp::id_of_peer(&p).as_deref(), Some(id.as_str()));
+        // тот же ключ — тот же PeerId, что у libp2p из сида
+        let kp = libp2p::identity::Keypair::ed25519_from_bytes(crypto::endpoint_secret(&[9; 32])).unwrap();
+        assert_eq!(kp.public().to_peer_id(), p);
     }
 
     async fn next_msg(rx: &mut mpsc::UnboundedReceiver<Event>) -> (LinkId, Value) {
@@ -697,7 +1705,9 @@ mod tests {
                 app_version: "test".into(),
                 name: format!("r{seed}"),
                 caps: vec![],
+                iroh: true,
                 n0: true,
+                lp: None,
             };
             async move { (Node::start(cfg, tx).await.unwrap(), rx) }
         };
@@ -758,7 +1768,7 @@ mod tests {
             .await
             .unwrap();
         bs.write_all(&data).await.unwrap();
-        bs.finish().unwrap();
+        bs.finish().await.unwrap();
         let ok = read_frame(&mut r).await.unwrap().unwrap();
         assert_eq!(ok["size"], 1 << 20);
         let got = r.read_to_end(4 << 20).await.unwrap();
