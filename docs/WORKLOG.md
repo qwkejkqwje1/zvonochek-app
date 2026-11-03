@@ -60,6 +60,10 @@
   - UI телефона: `zv-devhost --mobile` + `tests/e2e/devhost-mobile.mjs` (нижние вкладки, «Назад», настройки, 360×740).
   - Проверки: `cargo clippy -p zvonochek --target aarch64-linux-android -- -D warnings`; CI — `android.yml`
     (подпись — секреты ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS, без них APK неподписанный).
+  - CI на f6cd650: CI (Linux + сборка Windows x64/ARM64) и Android (APK arm64+armv7, ≈ 24 мин) — зелёные.
+- [ ] Релиз 4.0.0 — за владельцем: секреты в GitHub (TAURI_SIGNING_PRIVATE_KEY из /data/zv4-secrets/updater.key;
+  ключ Android — создать по согласию), публичность репозитория или отдельный публичный репозиторий релизов
+  (иначе latest.json и «Страница релизов» недоступны пользователям), тег `v4.0.0`, проверка на Windows 10/11 и телефоне.
 
 ## Решения по ходу
 - ADR-0005: Android — то же ядро и интерфейс в одном окне, служба переднего плана `specialUse` вместо FCM
