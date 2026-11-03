@@ -1,0 +1,152 @@
+{
+ "generator": "tools/gen-vectors.mjs",
+ "web": "a61b11e (v39)",
+ "rooms": [
+  {
+   "secret": "AbCdEfGhIjKlMnOpQrStUv",
+   "topic": "6e6037fc5675ff6244bc8e14dce2a73e",
+   "ntfy": "zv1-a746cca72fa872fd0bdc6b6481163e16f99911cf33bde1c5",
+   "sealed": [
+    {
+     "plain": {
+      "type": "hello",
+      "name": "Аня 🙂",
+      "ver": 39,
+      "bc": 1
+     },
+     "sealed": "z1.i7oY-gDqhDNufrhj.l_05BUMoUPDJco8BfTsrD7D0LqHZFROjq1eOAqA1Z1gttcAPkUsvcFuEQVrh2lLY0BUwkdnGwTfmw_G3g4q3K6iSBDBE"
+    },
+    {
+     "plain": {
+      "type": "desc",
+      "gen": 2,
+      "desc": {
+       "type": "offer",
+       "sdp": "v=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\n"
+      }
+     },
+     "sealed": "z2.dwUT32-LCyNGdBVp.t-VhRUUm-M5Ma-dzMc1mc4Tiyq99BaaaSjpcqJrcVGEtQWrzemqp77f-0fMZGLN3KQ7Nkq9Jd5XekwQZKZbrdv2AqFgHZJgncHCPll8Xfcp_eJ6e8v3dtudDlSvOFgEUv5BbBX_dO5seXlqk9bKSDF4"
+    },
+    {
+     "plain": {
+      "type": "voice2",
+      "sr": 48000,
+      "b64": "QUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJD",
+      "_noZip": 1
+     },
+     "sealed": "z1.8GvhhJzkvzXaI7SM.gfw3OWkBEKKKwXsxVxaIO-IHo86HVPi8cfZax7GTM8KnIs1yFDDdK3_hbfSlvePoaDp-CDOcBb9HtzPqmOJVBZ2KzZdpNVCveDIeauNsElfLTpnD3o4vo9rAEEaBNpjBkBYlDxYl8DEJ9H1BGS2ySELbMaSWj_GKxQNLhPq1L__ZyyYlavXJupVajI6Z1_pd8obxlpYYjxmCQ3j568MJ0TYHv_Q1jwm2uPGut31Necx5Oe82wKFahZPenyaD6d70_8TI66cZirVEo1GNoQZ5zyRCWZC92npBa9VBDQZ9Harj3zJuIEs-IADdKj7_n-UBM_NoGfDlzCrbvQM8nMlkdD6ppy9WY4HlD-2djec4wT04PvcLZkKUa2BURHo7lAtmhh6jBhyB9yIVYcKgBd0rWmJSISVaN75g5G--82hxzEfXmbdeQfy5OlSOuy7Z3aZsKilzs9CNKZMmgGcUbt6e4Em5fpa_pr0Y9tRBH9s5HWymsnVM__XygOvo3X9R1flALa9jSb-ukhXgEgURUwCM0EwsSQmh9wCYc_R5TZ7CM7NyasMrF7lYzPaRJnoYj_tV27COLNrI6joV7rU7s0Tvi7FruPTs-dBda7QGq7gyDpZSxPduDmf6EG2Kf2o-88XODmsdPgJgFtTJbkhKKhv2PmS65npIl7GhIzkAmmaF1lgey_wf8Wf5U8B6mKW7RchhOxxcLxPxij_qmG2rh0wmQw"
+    },
+    {
+     "plain": {
+      "type": "bye",
+      "from": "0011223344556677",
+      "inst": "aabbccddeeff",
+      "mid": "1-2",
+      "ts": 1700000000000
+     },
+     "sealed": "z1.M7UINuiyFYZ5btd5.fk38G4wTzeNevaPanmpNQz-Z2FMe_YtDaTvJtXGILqH8yjmV2roAUOHbah4KKN3drcWGcftQ2IerOk6oUYjJ2u1B1U_Oq6hVrW2IzgzDH7DJBvZPV2D4kbl7pbRY0S41GeW8g70ttuHJlB3BOQ"
+    }
+   ]
+  },
+  {
+   "secret": "q0-_Zx9Yb8Wc7Vd6Ue5Tf4Sg3Rh2Qi1Pj0Ok-NlMm_A",
+   "topic": "079fa4a48610c9153b9f4ac7d1644c38",
+   "ntfy": "zv1-c6b5b401f69e6163f78e5ad83fe49ba87e23802fb906360e",
+   "sealed": [
+    {
+     "plain": {
+      "type": "hello",
+      "name": "Аня 🙂",
+      "ver": 39,
+      "bc": 1
+     },
+     "sealed": "z1.hg2jrnnO4naN-KpP.8d2PLG68FrcFki566UCyKCYuU1zHBNDLgn5YzQr-qroFS08yKh0FRGifgB6UkX4VxVdPX2LBEigVYrGSXN23zY-3ButS"
+    },
+    {
+     "plain": {
+      "type": "desc",
+      "gen": 2,
+      "desc": {
+       "type": "offer",
+       "sdp": "v=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\n"
+      }
+     },
+     "sealed": "z2.fSscFb0-GG1u4Q7d.p2WxJn7RsOPUoIqqBhTG4V8X_aNpe0ZpKDgRd5yp84b-YtRa9AUqF-KlvIE9LK1thLaTAJQfUY-uLm_DRqJph5WVPiNcEXb8VKDSGpk-S36GaTKEFJBNtmkfnuupe0nHwjRg2yCS01XYped5fbKZO2s"
+    },
+    {
+     "plain": {
+      "type": "voice2",
+      "sr": 48000,
+      "b64": "QUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJD",
+      "_noZip": 1
+     },
+     "sealed": "z1.1Jiv4VehVsYCeywP.Mua7i4oay9vD00P7g2hJcSW4LWW4R5mNHYiamUUbcBlTzaLcd5FDCsLAGvVPlaTv8CMEQ4e5P2A0XJU7LHPCjlzD_PuNqoR5xpbDr0N9cRPi4jIXK1mQU8t967ZkVfOad2vVENa9D6WNBeXFPrhUpCykZNWdtAaiDrKNHKMKdkEYtmPlxufuympWbZV8OI38U8krDhhdWY2GsYYkGkUOeHDZhtyoZavr5QYCVY0EMiKQc4bXnYS7EN9rD33XayuFRqRULpxzgdMUlxnsrxxNPCzeMLCAFDCdq3z6GqMPz3h-5X7qSO31VeQm8GtsD3aCScFtU6n8xrgZ-SHKiwvbnPGerI1Qv4zibYx8X91vcFSXpbL8nFDjlh8AenQ7Qba-uPkYZpEzjjQRQwJLcVbJj9XXaYUVEFgPDOfq9kNFFZ2qtbhngAXwMGdJ-tROyy8JaDanjHrIhI5jTVTz2NqBB3Oc9Di6wlnpz_cWP5AqlsxWodcX1X3MesQhxWi4D2howMSu_XMhECD9yKQAL7prLCLs_NSa3l12LzxhZ68Gr6J6sMcPrp7UweuAmrwqjII1StVu0h6A26yQXxZrqkTMoO_Ih8e2-duf-OI1LinCc3U-qURZxwCdKPJdPUkdhABppyh8Mokul-yJ3WWETAG5Pd6zbQDUgVJffP2hc3g6dY-7peFtioNJCq7soqHjV39qDzH88whdzGCt07jukvqlGw"
+    },
+    {
+     "plain": {
+      "type": "bye",
+      "from": "0011223344556677",
+      "inst": "aabbccddeeff",
+      "mid": "1-2",
+      "ts": 1700000000000
+     },
+     "sealed": "z1.d9Z2XFwTqdiDgPrJ.7pHlYBU8Ux_9-2E-0o7ZJUOkDMG_EvMzVqiESu7B63ksvZBgIExFTMPLnxINmtKPAVq72rgvdmHKstghwTd_t6RP5DqV2F8aSXd2TaYartDMRzo27cofpnZkfl0pbKM7pLkn0bFWCrndKOBe-g"
+    }
+   ]
+  },
+  {
+   "secret": "bdPP6YH9UOmMwsTxpW6W4JlsqsRb75lZ8A5GEB_ZrF0",
+   "topic": "ba7ccebdd4c98c4f57c02796eb175ef7",
+   "ntfy": "zv1-f1f1354d4b5109613f2ee2aa76da6ed6303f70a26ad9d0e6",
+   "sealed": [
+    {
+     "plain": {
+      "type": "hello",
+      "name": "Аня 🙂",
+      "ver": 39,
+      "bc": 1
+     },
+     "sealed": "z1.Vt6x7JJ0uTuXjqN4.bR2hHeTOX6mtKP-sVv2x1IXY1rMEyFCAJElt91PPtt2cAdtTgUWNMoCj8q9Y4UDExUCuYaMVnP7_Cx9rRF6l2QwCTeAc"
+    },
+    {
+     "plain": {
+      "type": "desc",
+      "gen": 2,
+      "desc": {
+       "type": "offer",
+       "sdp": "v=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\nv=0\r\na=fingerprint:sha-256 AB:CD\r\n"
+      }
+     },
+     "sealed": "z2.tlKf0Vd8Y7r3qd5N.639ay2XgDp9J_fGOup_1Mz4ToC7pKAfQsMPeTuKl-RCbnmGUietNIyD3J4CNafmyoGGL2UrZDj8GCxNzPgHEqTRMLd3jDFI79cB2n_Aii5B8VL8-sFTi5GweWnlidW_Li2WGKomtr9zXAthmR408ABQ"
+    },
+    {
+     "plain": {
+      "type": "voice2",
+      "sr": 48000,
+      "b64": "QUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJD",
+      "_noZip": 1
+     },
+     "sealed": "z1.2qrY8bUSe_DUHwoQ.O5Z9XsCxAMTHpjgXiu0FcNekrORQcJKTNbFsDhJ4UcQwT1Jxh93df8PdnShvYXTwiQx2g9xl9PaNoo-rs-9H5llrxJNPQK1-h5D0XZAJYrkMWSaTGd0cLWll3QviZ27f4eg9JXkTWWnmmK9_VqGK9NfEKLAczu6eB9CGGS62uBejYEIg8NSiyA3cz2a4BlV4eOo5t6uw5oI_IVuN7x3fjGUSaO3on17K20-9UySx6kBobXwVtFifW9_GjL0DizY7rstNpeUfoaF-7So4m6WA3IjCP-Fdp3dHNi4FLIlHBya1AedftYL5Iu5--bXfLvVmtX6SHT2ijO7Y1qGhx39M_2OtokIQtU3XWSbWap1n7_PtKDGwPci8LgZMQK7IYr5t72q_sN2t0Wdrl6Vm6KQzxFazc563L7tykKRk3UIsPZOSBOwYHal7wPhNUlCtEuOGFQFEe4JrZ9a6zLjS692IgSJLRWCt3bjFGwbXwM4uZVJvN8j0rAgLqHe_8G2YnBA4gKWXye7WcW6JkJfjy0ICjAXUXZfRV3Ixl3iv6ya1JYyu9U8BiriBFOX2a2VhliPsyTMNhXFIt1O84zgAE1ixzUvKa6SIWEYx1DqE7CPiivYGSLf8Az6dkK8O3flv7gkEw6BBNq5eseyqjvVR25p4kLLaCUu2Eqmoq9-GQhYKeymXWRyCV_JdXSxLAWMzw83OWvf6gPhu14IldjWBBZ4Zww"
+    },
+    {
+     "plain": {
+      "type": "bye",
+      "from": "0011223344556677",
+      "inst": "aabbccddeeff",
+      "mid": "1-2",
+      "ts": 1700000000000
+     },
+     "sealed": "z1.nBWVKvGXF_GPCmGw.hcFIs2xH67SwjVdyqXraoep4fFlOChFVNZ6fIuK4AmvIyFJIAe193XH1QWf6IMWR2-HNeHLEkB4mYkJbD3Ub-VfDaKO3toaOMEfDdi4E-5uz_ZZQuhwpv_yAjPkl_saq-dlfx0kAH-61Ngkr5g"
+    }
+   ]
+  }
+ ],
+ "safety": [
+  {
+   "sdpA": "v=0\r\na=fingerprint:sha-256 AA:BB:CC\r\n",
+   "sdpB": "v=0\r\na=fingerprint:sha-256 11:22:33\r\na=fingerprint:sha-1 de:ad\r\n",
+   "emoji": "⭐ 🦁 🍉 🍕 🍪",
+   "digits": "871 662"
+  }
+ ]
+}

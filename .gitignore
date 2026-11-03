@@ -1,24 +1,6 @@
-# Build output
+/target/
+node_modules/
+*.log
 /dist/
-/zvonochek
-/zvonochek-relay
-*.exe
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-
-# Keys & secrets (never commit node identity keys)
-*.key
-
-# Downloads & temp
-downloads/
-*.part
-*.tmp
-
-# IDE & OS
-.idea/
-.vscode/
+/app/gen/
 .DS_Store
-Thumbs.db
