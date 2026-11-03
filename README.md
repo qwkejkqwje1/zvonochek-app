@@ -101,7 +101,8 @@ Android: JDK 21, Android SDK (platform 37) и NDK, `rustup target add aarch64-li
    открытый — `KEYS_HEX` в `crates/zv-core/src/update.rs`). Для Android — `ANDROID_KEYSTORE_B64` (ключ `.jks` в
    base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`; без них APK собирается неподписанным. Оба ключа хранить
    в надёжном месте: без них обновления не встанут. Если этот репозиторий закрыт, файлы релиза кладутся в открытый:
-   переменная `ZV_RELEASE_REPO` (владелец/имя) и секрет `ZV_RELEASE_TOKEN` с правом записи в него.
+   переменная `ZV_RELEASE_REPO` (владелец/имя) и секрет `ZV_RELEASE_TOKEN` с правом записи в него (репозиторий —
+   не пустой, хотя бы README: релизу нужен коммит для тега).
 2. Поднять версию в `Cargo.toml` (workspace) и `app/tauri.conf.json`, дописать раздел версии в `CHANGELOG.md` (он же —
    «что нового» в окне обновления).
 3. `git tag v4.0.1 && git push --tags` → Actions соберёт черновик релиза (exe x64 + ARM64, подписанный `latest.json`,
