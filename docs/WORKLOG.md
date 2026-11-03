@@ -72,6 +72,13 @@
   `ZV_WEB_GUM_DELAY=мс` — браузер долго не отвечает на запрос микрофона); CI собирает тестовые установщики NSIS
   (артефакты `zvonochek-setup-<target>`, без подписи обновлений).
   Диагностика → «Сеть звонков (WebRTC)» (ui/shell/nettest.js): STUN/TURN из WebView, без IP в отчёте.
+- [x] Переносная версия Windows (app/src/portable.rs): данные в `ZVONochek-data` рядом с exe (рядом `uninstall.exe` —
+  установленная версия, как раньше AppData; нельзя писать рядом — AppData с предупреждением), копия данных прежней
+  версии при первом запуске (через `ZVONochek-data.part` + rename), профиль WebView2 — `data_directory`, размер окна —
+  свой `window.json` вместо tauri-plugin-window-state, уведомления — регистрация AUMID в
+  `HKCU\Software\Classes\AppUserModelId\com.zvonochek.app` (DisplayName, IconUri) и настройка `notifications`,
+  «Убрать следы», удаление старой копии, обновление — заменой exe. CI: артефакт `zvonochek-portable-<target>`
+  (ZVONochek.exe); release.yml — `…_portable.exe`. Не проверено на настоящей Windows: тосты без ярлыка, перенос папки.
 - [ ] Релиз 4.0.0 — за владельцем: секреты в GitHub (TAURI_SIGNING_PRIVATE_KEY — создать заново, прежний ключ потерян
   при сбросе песочницы;
   ключ Android — создать по согласию), публичность репозитория или отдельный публичный репозиторий релизов
