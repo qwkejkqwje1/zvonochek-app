@@ -23,14 +23,21 @@ pub async fn command(
         "host_info" => {
             let pending = if window.label() == "main" {
                 st.main_ready.store(true, Ordering::SeqCst);
+                wins::shell_loaded(app, window);
                 st.pending_url.lock().unwrap().take()
             } else {
                 None
             };
+            // ПК: отдельное окно входящего, автозапуск, автообновление, трей. Android — ничего из этого.
             Ok(json!({
                 "host": "tauri",
-                "incomingWindow": true,
-                "autostart": true,
+                "mobile": cfg!(mobile),
+                "incomingWindow": cfg!(desktop),
+                "autostart": cfg!(desktop),
+                "updates": cfg!(desktop),
+                "tray": cfg!(desktop),
+                // Android: кнопка «Работа в фоне» (ограничения батареи)
+                "background": cfg!(target_os = "android"),
                 "pendingUrl": pending,
                 "logDir": st.log_dir.display().to_string(),
             }))
@@ -44,9 +51,7 @@ pub async fn command(
             wins::open_call(app, secret, boot)
         }
         "host_call_done" => {
-            if window.label().starts_with("call-") {
-                let _ = window.close();
-            }
+            wins::call_done(app, window);
             Ok(Value::Null)
         }
         "host_incoming_empty" => {
@@ -69,6 +74,7 @@ pub async fn command(
                 .map_err(|e| e.to_string())?;
             Ok(Value::Null)
         }
+        #[cfg(desktop)]
         "host_open_logs" => {
             use tauri_plugin_opener::OpenerExt;
             app.opener()
@@ -76,11 +82,13 @@ pub async fn command(
                 .map_err(|e| e.to_string())?;
             Ok(Value::Null)
         }
+        #[cfg(desktop)]
         "host_autostart_get" => {
             use tauri_plugin_autostart::ManagerExt;
             let on = app.autolaunch().is_enabled().map_err(|e| e.to_string())?;
             Ok(json!({"enabled": on}))
         }
+        #[cfg(desktop)]
         "host_autostart_set" => {
             use tauri_plugin_autostart::ManagerExt;
             let on = args
@@ -91,6 +99,7 @@ pub async fn command(
             if on { a.enable() } else { a.disable() }.map_err(|e| e.to_string())?;
             Ok(json!({"enabled": on}))
         }
+        #[cfg(desktop)]
         "host_update_check" => {
             use tauri_plugin_updater::UpdaterExt;
             let upd = app
@@ -104,6 +113,7 @@ pub async fn command(
                 None => json!({"available": false}),
             })
         }
+        #[cfg(desktop)]
         "host_update_install" => {
             use tauri_plugin_updater::UpdaterExt;
             let upd = app
@@ -123,6 +133,16 @@ pub async fn command(
         }
         // выбрать файлы для отправки в чат (системный диалог; отмена — пустой список)
         // `{profile: true}` — один файл профиля `.zvp` (перенос с другого компьютера)
+        #[cfg(target_os = "android")]
+        "host_pick_files" => {
+            let profile = args
+                .get("profile")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let paths = crate::android::pick_files(app, profile).await?;
+            Ok(json!({"paths": paths}))
+        }
+        #[cfg(desktop)]
         "host_pick_files" => {
             use tauri_plugin_dialog::DialogExt;
             let profile = args
@@ -154,6 +174,31 @@ pub async fn command(
             Ok(json!({"paths": paths}))
         }
         // куда сохранить файл профиля (отмена — `path: null`)
+        // Android: файл — в кэш приложения, после записи оболочка предложит «Поделиться» (`share`)
+        #[cfg(mobile)]
+        "host_save_path" => {
+            let name = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("ZVONochek.zvp");
+            let name: String = name
+                .chars()
+                .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+                .collect();
+            let dir = app
+                .path()
+                .app_cache_dir()
+                .map_err(|e| e.to_string())?
+                .join("export");
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            let p = dir.join(if name.is_empty() {
+                "ZVONochek.zvp"
+            } else {
+                &name
+            });
+            Ok(json!({"path": p.display().to_string(), "share": true}))
+        }
+        #[cfg(desktop)]
         "host_save_path" => {
             use tauri_plugin_dialog::DialogExt;
             let name = args
@@ -192,7 +237,22 @@ pub async fn command(
         // перенос профиля подготовлен — перезапуск, ядро применит его при старте
         "host_restart" => {
             st.quitting.store(true, Ordering::SeqCst);
-            app.restart();
+            restart(app).await
+        }
+        #[cfg(target_os = "android")]
+        "host_background_settings" => {
+            crate::android::background_settings(app).await?;
+            Ok(Value::Null)
+        }
+        // Android: «Поделиться» файлом (сохранённый профиль, файл из чата)
+        #[cfg(target_os = "android")]
+        "host_share_path" => {
+            let path = args
+                .get("path")
+                .and_then(|v| v.as_str())
+                .ok_or("нет пути")?;
+            crate::android::open_file(app, path, true).await?;
+            Ok(Value::Null)
         }
         // открыть файл из чата / показать в папке: путь — только из ядра (по fid), не из страницы
         "host_open_path" => {
@@ -209,27 +269,59 @@ pub async fn command(
                 .get("reveal")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
-            use tauri_plugin_opener::OpenerExt;
-            if reveal && info.get("dir").and_then(|v| v.as_bool()) != Some(true) {
-                app.opener()
-                    .reveal_item_in_dir(&path)
-                    .map_err(|e| e.to_string())?;
-            } else {
-                app.opener()
-                    .open_path(&path, None::<&str>)
-                    .map_err(|e| e.to_string())?;
+            // Android: «Открыть» — в подходящем приложении, «Показать в папке» — «Поделиться»
+            #[cfg(target_os = "android")]
+            crate::android::open_file(app, &path, reveal).await?;
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_opener::OpenerExt;
+                if reveal && info.get("dir").and_then(|v| v.as_bool()) != Some(true) {
+                    app.opener()
+                        .reveal_item_in_dir(&path)
+                        .map_err(|e| e.to_string())?;
+                } else {
+                    app.opener()
+                        .open_path(&path, None::<&str>)
+                        .map_err(|e| e.to_string())?;
+                }
             }
             Ok(json!({"path": path, "reveal": reveal}))
         }
         "host_quit" => {
+            #[cfg(target_os = "android")]
+            crate::android::stop(app).await;
             crate::quit(app);
             Ok(Value::Null)
+        }
+        #[cfg(mobile)]
+        "host_autostart_get" | "host_autostart_set" | "host_open_logs" => {
+            Err("на телефоне недоступно".into())
+        }
+        #[cfg(mobile)]
+        "host_update_check" | "host_update_install" => {
+            Err("на Android обновление — новый APK со страницы релизов".into())
         }
         _ => Err(format!("неизвестная команда хоста {cmd}")),
     }
 }
 
+/// Перезапуск приложения (ядро применит подготовленный перенос профиля при старте).
+#[cfg(not(target_os = "android"))]
+async fn restart(app: &AppHandle) -> Result<Value, String> {
+    app.restart()
+}
+
+/// Android: ядро закрываем сами, новый процесс запускает ZvPlugin (`restart`).
+#[cfg(target_os = "android")]
+async fn restart(app: &AppHandle) -> Result<Value, String> {
+    let core = app.state::<AppState>().core.clone();
+    core.shutdown().await;
+    crate::android::restart(app).await?;
+    Ok(Value::Null)
+}
+
 /// Папка «Загрузки» пользователя.
+#[cfg(desktop)]
 fn dirs_download() -> Option<std::path::PathBuf> {
     std::env::var_os("USERPROFILE")
         .map(|h| std::path::PathBuf::from(h).join("Downloads"))

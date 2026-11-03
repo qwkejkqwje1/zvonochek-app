@@ -1,0 +1,94 @@
+name: Android
+
+# APK для Android (arm64 + armv7, один файл). Push в main — артефакт сборки (на 14 дней); из release.yml (тег vX.Y.Z) —
+# файл в черновик релиза. Подпись — секреты ANDROID_KEYSTORE_B64 (ключ .jks в base64), ANDROID_KEYSTORE_PASSWORD,
+# ANDROID_KEY_ALIAS; без них APK собирается неподписанным (только проверка сборки — установить его нельзя).
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**.md']
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release_tag:
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}-${{ inputs.release_tag }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  apk:
+    name: APK (arm64 + armv7)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install -g @tauri-apps/cli@2.12.4
+      - name: Ключ подписи
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/zvonochek.jks"
+            echo "ZV_KEYSTORE=$RUNNER_TEMP/zvonochek.jks" >> "$GITHUB_ENV"
+            echo "ZV_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "ZV_KEY_ALIAS=${KEY_ALIAS:-zvonochek}" >> "$GITHUB_ENV"
+            echo "APK будет подписан"
+          else
+            echo "::warning::Нет секрета ANDROID_KEYSTORE_B64 — APK без подписи (установить нельзя)"
+          fi
+      - name: Сборка
+        working-directory: app
+        run: |
+          export NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          tauri android build --apk --target aarch64 --target armv7 --ci
+      - name: Имя файла
+        id: apk
+        run: |
+          VER=$(jq -r .version app/tauri.conf.json)
+          SRC=$(ls app/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1)
+          SUFFIX=$([ -n "$ZV_KEYSTORE" ] && echo "" || echo "-unsigned")
+          OUT="ZVONochek_${VER}_android${SUFFIX}.apk"
+          cp "$SRC" "$OUT"
+          echo "file=$OUT" >> "$GITHUB_OUTPUT"
+          ls -la "$OUT"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: android-apk
+          path: ${{ steps.apk.outputs.file }}
+          retention-days: 14
+      - name: В черновик релиза
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          # черновик создаёт сборка Windows (tauri-action); ищем его по тегу
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" --jq ".[] | select(.tag_name==\"$TAG\") | .id" | head -1)
+          if [ -z "$ID" ]; then echo "::error::нет релиза $TAG"; exit 1; fi
+          gh api -X POST -H "Content-Type: application/vnd.android.package-archive" \
+            "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$ID/assets?name=${{ steps.apk.outputs.file }}" \
+            --input "${{ steps.apk.outputs.file }}" --jq .browser_download_url

@@ -50,9 +50,20 @@
   - Интерфейс: «Новая группа», шапка группы (участники, «печатает» с именами, звонки), диалог участников,
     служебные строки, имена авторов, только чтение после выхода; входящий групповой звонок; история «· группа».
   - Тесты: `cargo test -p zv-core --test groups` (три ядра), `tests/e2e/devhost-groups.mjs` (три devhost).
-- [ ] M6: Android.
+- [x] M6: Android (ADR-0005) — собирается и проходит проверки; на устройстве не проверено (в песочнице нет Android).
+  - Окружение: `source /data/tools/env-android.sh` (SDK /data/android/sdk: platform 37, build-tools 37, NDK r27d;
+    JDK 21; шим `rustup` в /data/tools/shims). Сборка: `/data/tools/build-apk.sh release > /data/backups/apk-build.log 2>&1`
+    → `app/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk` (arm64, ≈ 24 МБ).
+  - app: `lib.rs` (бывший main.rs, общий для ПК и Android), `android.rs` (плагин `zvandroid` + JNI-входы),
+    `wins_mobile.rs` (одно окно); `app/gen/android` — проект Gradle (MainActivity, ZvService, ZvPlugin, ZvReceiver,
+    ZvNative, манифест, тема, иконки); BuildTask.kt вызывает `tauri` из PATH.
+  - UI телефона: `zv-devhost --mobile` + `tests/e2e/devhost-mobile.mjs` (нижние вкладки, «Назад», настройки, 360×740).
+  - Проверки: `cargo clippy -p zvonochek --target aarch64-linux-android -- -D warnings`; CI — `android.yml`
+    (подпись — секреты ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS, без них APK неподписанный).
 
 ## Решения по ходу
+- ADR-0005: Android — то же ядро и интерфейс в одном окне, служба переднего плана `specialUse` вместо FCM
+  (без Firebase и аккаунтов), полноэкранный входящий с кнопками в уведомлении, без встроенного обновления.
 - ADR-0004: группы — общий секрет (комната + ящик группы), конверты с подписью ключа устройства, состав и ключ — только
   от администратора (ключ — каждому секретом пары, в т. ч. неконтактам), смена ключа при исключении/выходе; в группах
   нет отметок «прочитано» (✓✓ — получили все); сигнализация группового звонка — транспортами комнаты, не P2P.

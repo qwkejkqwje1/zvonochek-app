@@ -862,6 +862,56 @@ function onboarding() {
   );
 }
 
+// ---------- телефон (Android) ----------
+// Нет трея, автозапуска, автообновления и папки загрузок; вкладки — снизу; «Назад» закрывает диалог или чат.
+const RELEASES = 'https://github.com/qwkejkqwje1/zvonochek-app/releases/latest';
+function setupMobile() {
+  document.body.classList.add('mobile');
+  $('#aboutName').textContent = 'ZVONochek для Android';
+  $('#rowTray').classList.add('hidden');
+  $('#setDlOpen').classList.add('hidden');
+  $('.nav[data-page="links"] .label').textContent = 'Ссылки';
+  // диагностика — из настроек (внизу не помещается)
+  $('#rowDiag').classList.remove('hidden');
+  $('#diagBtn').addEventListener('click', () => go('diag'));
+  // обновление — новый APK со страницы релизов
+  const upd = $('#updBtn').cloneNode(true);
+  $('#updBtn').replaceWith(upd);
+  upd.lastChild.textContent = 'Страница релизов';
+  upd.addEventListener('click', () =>
+    call('host_open_external', { url: RELEASES }).catch((e) => toast('Не открылось: ' + (e.message || e)))
+  );
+  if (S.hostInfo.background) {
+    $('#rowBackground').classList.remove('hidden');
+    $('#bgBtn').addEventListener('click', () =>
+      call('host_background_settings').catch((e) => toast('Не открылось: ' + (e.message || e)))
+    );
+  }
+  $('#rowQuit').classList.remove('hidden');
+  $('#quitBtn').addEventListener('click', async () => {
+    if (await confirmDialog('Выйти из ZVONochek?', 'Звонки по вашим ссылкам и от контактов не дойдут, пока вы снова не откроете приложение.', 'Выйти', true))
+      call('host_quit').catch(() => {});
+  });
+  // «Назад» (MainActivity.kt): true — обработали здесь, иначе приложение свернётся
+  window.__zvBack = () => {
+    const n = $$('.overlay').length;
+    if (n) {
+      dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      if ($$('.overlay').length < n) return true;
+    }
+    const back = $('.page.chats.open .ch-back');
+    if (back && back.offsetParent !== null) {
+      back.click();
+      return true;
+    }
+    if (S.page && S.page !== 'call') {
+      go(S.page === 'diag' ? 'settings' : 'call');
+      return true;
+    }
+    return false;
+  };
+}
+
 // ---------- старт ----------
 async function start() {
   hydrateIcons();
@@ -903,8 +953,9 @@ async function start() {
     $('#rowAutostart').classList.add('hidden');
     S.hostInfo.autostart = false;
   }
+  if (S.hostInfo.mobile) setupMobile();
   // входящие поверх окна — если у хоста нет отдельного всплывающего окна
-  if (!S.hostInfo.incomingWindow) mountIncoming($('#incOverlay'));
+  if (!S.hostInfo.incomingWindow) mountIncoming($('#incOverlay'), { mobile: !!S.hostInfo.mobile });
   if (!S.settings.onboarded) onboarding();
   if (S.hostInfo.pendingUrl) handleDeepLink(S.hostInfo.pendingUrl);
 }

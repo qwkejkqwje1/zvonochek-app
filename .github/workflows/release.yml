@@ -1,7 +1,8 @@
 name: Release
 
-# Тег vX.Y.Z → черновик релиза с установщиками Windows x64/ARM64 (NSIS) и latest.json для автообновления.
-# Секреты репозитория: TAURI_SIGNING_PRIVATE_KEY (ключ подписи обновлений), TAURI_SIGNING_PRIVATE_KEY_PASSWORD (пусто).
+# Тег vX.Y.Z → черновик релиза с установщиками Windows x64/ARM64 (NSIS), latest.json для автообновления и APK для Android.
+# Секреты репозитория: TAURI_SIGNING_PRIVATE_KEY (ключ подписи обновлений), TAURI_SIGNING_PRIVATE_KEY_PASSWORD (пусто);
+# для APK — ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS (см. android.yml).
 on:
   push:
     tags: ['v*']
@@ -46,3 +47,11 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+
+  android:
+    name: Android
+    needs: build
+    uses: ./.github/workflows/android.yml
+    with:
+      release_tag: ${{ github.ref_name }}
+    secrets: inherit

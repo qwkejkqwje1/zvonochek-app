@@ -2,5 +2,5 @@
 node_modules/
 *.log
 /dist/
-/app/gen/
+/app/gen/schemas/
 .DS_Store

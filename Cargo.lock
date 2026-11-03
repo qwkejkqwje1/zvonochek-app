@@ -8075,6 +8075,7 @@ name = "zvonochek"
 version = "4.0.0-beta.1"
 dependencies = [
  "anyhow",
+ "jni 0.21.1",
  "serde",
  "serde_json",
  "tauri",

@@ -115,7 +115,7 @@
       <div class="head-row">
         <div>
           <h1>История</h1>
-          <p class="lead">Журнал хранится только на этом компьютере.</p>
+          <p class="lead">Журнал хранится только на этом устройстве.</p>
         </div>
         <button class="btn ghost" id="histClear"><i data-ic="trash"></i>Очистить</button>
       </div>
@@ -130,7 +130,7 @@
       <h2>Профиль</h2>
       <div class="card">
         <div class="set"><div class="t"><b>Имя в звонках</b><small>Его видит собеседник</small></div><input class="field" id="setName" maxlength="40" placeholder="Например, Алекс"></div>
-        <div class="set"><div class="t"><b>Перенос на другой компьютер</b><small>ID устройства, контакты, ссылки, история звонков и переписка — в один файл под паролем</small></div><div class="btns"><button class="btn sm" id="profExport"><i data-ic="download" class="sm"></i>Сохранить</button><button class="btn sm" id="profImport"><i data-ic="upload" class="sm"></i>Загрузить</button></div></div>
+        <div class="set"><div class="t"><b>Перенос на другое устройство</b><small>ID устройства, контакты, ссылки, история звонков и переписка — в один файл под паролем</small></div><div class="btns"><button class="btn sm" id="profExport"><i data-ic="download" class="sm"></i>Сохранить</button><button class="btn sm" id="profImport"><i data-ic="upload" class="sm"></i>Загрузить</button></div></div>
       </div>
 
       <h2>Звонки</h2>
@@ -150,8 +150,10 @@
       <h2>Приложение</h2>
       <div class="card">
         <div class="set" id="rowAutostart"><div class="t"><b>Запускать вместе с Windows</b><small>Чтобы звонки по своим ссылкам доходили после перезагрузки</small></div><label class="switch"><input type="checkbox" id="setAutostart"><span></span></label></div>
-        <div class="set"><div class="t"><b>Закрывать в трей</b><small>Крестик прячет окно, приложение продолжает ждать звонков</small></div><label class="switch"><input type="checkbox" id="setTray"><span></span></label></div>
+        <div class="set" id="rowTray"><div class="t"><b>Закрывать в трей</b><small>Крестик прячет окно, приложение продолжает ждать звонков</small></div><label class="switch"><input type="checkbox" id="setTray"><span></span></label></div>
         <div class="set"><div class="t"><b>Тема</b></div><div class="seg" id="setTheme"><button data-v="auto">Как в системе</button><button data-v="light">Светлая</button><button data-v="dark">Тёмная</button></div></div>
+        <div class="set hidden" id="rowBackground"><div class="t"><b>Работа в фоне</b><small>Если звонки доходят с задержкой или не доходят, когда телефон в кармане: разрешите ZVONochek работать без ограничений батареи</small></div><button class="btn sm" id="bgBtn">Настроить</button></div>
+        <div class="set hidden" id="rowQuit"><div class="t"><b>Выйти из ZVONochek</b><small>Приложение перестанет ждать звонков до следующего открытия</small></div><button class="btn sm danger" id="quitBtn">Выйти</button></div>
       </div>
 
       <h2>Сеть</h2>
@@ -163,8 +165,9 @@
 
       <h2>О программе</h2>
       <div class="card">
-        <div class="set"><div class="t"><b>ZVONochek для Windows</b><small id="aboutVer">—</small></div><button class="btn sm" id="updBtn"><i data-ic="download" class="sm"></i>Проверить обновления</button></div>
+        <div class="set"><div class="t"><b id="aboutName">ZVONochek для Windows</b><small id="aboutVer">—</small></div><button class="btn sm" id="updBtn"><i data-ic="download" class="sm"></i>Проверить обновления</button></div>
         <div class="set"><div class="t"><b>Встроенный веб-клиент</b><small id="aboutWeb">—</small></div></div>
+        <div class="set hidden" id="rowDiag"><div class="t"><b>Диагностика</b><small>Каналы связи, сеть, отчёт для поддержки</small></div><button class="btn sm" id="diagBtn">Открыть</button></div>
         <div class="set"><div class="t"><b>Лицензии</b><small>© ZVONochek. Все права защищены. Использованные компоненты и их лицензии</small></div><button class="btn sm" id="licBtn">Открыть</button></div>
       </div>
     </section>
