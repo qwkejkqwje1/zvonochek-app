@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS msgs (
   st INTEGER NOT NULL DEFAULT 0,
   edited INTEGER,
   deleted INTEGER NOT NULL DEFAULT 0,
-  via TEXT NOT NULL DEFAULT ''
+  via TEXT NOT NULL DEFAULT '',
+  sender TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS msgs_chat ON msgs(chat, lc, ts, id);
 CREATE TABLE IF NOT EXISTS outbox (
@@ -72,6 +73,8 @@ pub struct Msg {
     pub edited: Option<u64>,
     pub deleted: bool,
     pub via: String,
+    /// Группы: ID устройства автора (у своих и в чатах с контактом — пусто).
+    pub sender: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -124,10 +127,20 @@ fn msg_row(r: &rusqlite::Row) -> rusqlite::Result<Msg> {
         edited: r.get::<_, Option<i64>>(11)?.map(|v| v as u64),
         deleted: r.get::<_, i64>(12)? != 0,
         via: r.get(13)?,
+        sender: r.get(14)?,
     })
 }
 
-const MSG_COLS: &str = "id, chat, out, ts, rx, lc, kind, body, reply, file, st, edited, deleted, via";
+const MSG_COLS: &str = "id, chat, out, ts, rx, lc, kind, body, reply, file, st, edited, deleted, via, sender";
+
+/// Базы прежних версий: недостающие столбцы.
+fn migrate(c: &Connection) -> rusqlite::Result<()> {
+    let has = c.prepare("SELECT 1 FROM pragma_table_info('msgs') WHERE name = 'sender'")?.exists([])?;
+    if !has {
+        c.execute_batch("ALTER TABLE msgs ADD COLUMN sender TEXT NOT NULL DEFAULT ''")?;
+    }
+    Ok(())
+}
 
 fn file_row(r: &rusqlite::Row) -> rusqlite::Result<FileRec> {
     Ok(FileRec {
@@ -155,6 +168,7 @@ impl Db {
         c.pragma_update(None, "journal_mode", "WAL")?;
         c.pragma_update(None, "synchronous", "NORMAL")?;
         c.execute_batch(SCHEMA)?;
+        migrate(&c)?;
         Ok(Db { c: Mutex::new(c) })
     }
 
@@ -185,8 +199,8 @@ impl Db {
     pub fn insert_msg(&self, m: &Msg) -> bool {
         let file = m.file.as_ref().map(|f| f.to_string());
         let r = self.c().execute(
-            "INSERT OR IGNORE INTO msgs (id, chat, out, ts, rx, lc, kind, body, reply, file, st, edited, deleted, via)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            "INSERT OR IGNORE INTO msgs (id, chat, out, ts, rx, lc, kind, body, reply, file, st, edited, deleted, via, sender)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 m.id,
                 m.chat,
@@ -201,7 +215,8 @@ impl Db {
                 m.st as i64,
                 m.edited.map(|v| v as i64),
                 m.deleted as i64,
-                m.via
+                m.via,
+                m.sender
             ],
         );
         matches!(r, Ok(n) if n > 0)
@@ -322,6 +337,11 @@ impl Db {
     }
 
     /// Удалено у всех: текст и файл стираются, место в ленте остаётся.
+    /// Заменить вложение сообщения (заметка о групповом звонке: участники, окончание).
+    pub fn set_msg_file(&self, id: &str, file: &Value) -> bool {
+        self.c().execute("UPDATE msgs SET file = ?1 WHERE id = ?2", params![file.to_string(), id]).unwrap_or(0) > 0
+    }
+
     pub fn mark_deleted(&self, id: &str) -> bool {
         self.c()
             .execute("UPDATE msgs SET deleted = 1, body = '', file = NULL, reply = NULL WHERE id = ?1", [id])
@@ -367,6 +387,31 @@ impl Db {
 
     pub fn out_del_peer(&self, peer: &str) {
         let _ = self.c().execute("DELETE FROM outbox WHERE peer = ?1", [peer]);
+    }
+
+    pub fn out_set_frame(&self, fid: &str, peer: &str, frame: &Value) {
+        let _ = self.c().execute("UPDATE outbox SET frame = ?1 WHERE fid = ?2 AND peer = ?3", params![frame.to_string(), fid, peer]);
+    }
+
+    pub fn out_get(&self, fid: &str, peer: &str) -> Option<OutEntry> {
+        self.c()
+            .query_row(
+                "SELECT fid, peer, kind, frame, created, mailed FROM outbox WHERE fid = ?1 AND peer = ?2",
+                params![fid, peer],
+                |r| {
+                    Ok(OutEntry {
+                        fid: r.get(0)?,
+                        peer: r.get(1)?,
+                        kind: r.get(2)?,
+                        frame: serde_json::from_str(&r.get::<_, String>(3)?).unwrap_or(Value::Null),
+                        created: r.get::<_, i64>(4)? as u64,
+                        mailed: r.get::<_, i64>(5)? != 0,
+                    })
+                },
+            )
+            .optional()
+            .ok()
+            .flatten()
     }
 
     pub fn out_mailed(&self, fid: &str, peer: &str) {
@@ -480,7 +525,27 @@ mod tests {
             edited: None,
             deleted: false,
             via: String::new(),
+            sender: String::new(),
         }
+    }
+
+    #[test]
+    fn migrate_old_db() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("old.db");
+        {
+            let c = Connection::open(&p).unwrap();
+            c.execute_batch(&SCHEMA.replace(",\n  sender TEXT NOT NULL DEFAULT ''", "")).unwrap();
+            c.execute("INSERT INTO msgs (id, chat, out, ts, rx, lc, kind) VALUES ('a', 'c', 0, 1, 1, 1, 'text')", []).unwrap();
+            let has = c.prepare("SELECT 1 FROM pragma_table_info('msgs') WHERE name = 'sender'").unwrap().exists([]).unwrap();
+            assert!(!has);
+        }
+        let db = Db::open(&p).unwrap();
+        assert_eq!(db.msg("a").unwrap().sender, "");
+        let mut x = m("b", "c", false, 2);
+        x.sender = "abc".into();
+        assert!(db.insert_msg(&x));
+        assert_eq!(db.msg("b").unwrap().sender, "abc");
     }
 
     #[test]

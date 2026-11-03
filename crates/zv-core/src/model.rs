@@ -104,6 +104,9 @@ pub struct HistoryEntry {
     /// Видеозвонок контакту.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub video: bool,
+    /// Групповой звонок: id группы.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -161,6 +164,60 @@ pub struct Contacts {
     /// Секрет моего ящика.
     pub inbox: String,
     pub invite: Option<Invite>,
+    /// Группы (M5).
+    pub groups: Vec<Group>,
 }
 
 pub const INVITE_TTL_MS: u64 = 7 * 24 * 3600 * 1000;
+
+/// Участник группы — устройство (как контакт, но не обязательно мой контакт).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupMember {
+    /// EndpointId устройства (hex).
+    pub id: String,
+    /// Как участник назвался сам.
+    pub name: String,
+    /// Последние известные адреса `{r, a}` (для P2P без поиска по ID).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<serde_json::Value>,
+}
+
+/// Прежний секрет группы (после смены ключа): читаем его почтовый ящик до `until`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OldKey {
+    pub secret: String,
+    pub until: u64,
+}
+
+/// Группа до 6 устройств: общий секрет (комната группы + её почтовый ящик), состав, администратор.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    /// `g` + 16 hex — не пересекается с id контактов.
+    pub id: String,
+    pub name: String,
+    pub secret: String,
+    #[serde(default)]
+    pub old: Vec<OldKey>,
+    /// ID устройства администратора (создатель или тот, кому он передал группу).
+    pub admin: String,
+    /// Все участники, включая меня.
+    pub members: Vec<GroupMember>,
+    /// Версия состава/названия (растёт у администратора).
+    pub v: u64,
+    pub created: u64,
+    /// Когда меня добавили (более ранние сообщения из ящика не показываем).
+    #[serde(default)]
+    pub joined: u64,
+    /// Я больше не участник (вышел или исключили): переписка только для чтения.
+    #[serde(default)]
+    pub left: bool,
+    /// Бывшие участники: имена авторов в старых сообщениях.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub former: Vec<GroupMember>,
+}
+
+/// Участников в группе (со мной) — как в групповом звонке веб-клиента.
+pub const GROUP_MAX: usize = 6;
