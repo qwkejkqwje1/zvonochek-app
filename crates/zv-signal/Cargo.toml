@@ -26,4 +26,4 @@ tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots",
 tracing = "0.1.44"
 url = "2.5.8"
 webpki-roots = "1.0.11"
-zv-proto = { version = "4.0.0-beta.1", path = "../zv-proto" }
+zv-proto = { version = "4.0.0", path = "../zv-proto" }

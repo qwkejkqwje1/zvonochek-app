@@ -62,6 +62,13 @@ await step('настройки телефона: фон, выход, диагн�
   const about = await page.textContent('#aboutName');
   if (!about.includes('Android')) throw new Error(about);
 });
+await step('экономный режим: переключатель в настройках, сохраняется в ядре', async () => {
+  if (!(await visible('#rowEco'))) throw new Error('нет строки «Экономный режим»');
+  await page.click('#rowEco .switch span');
+  await page.waitForFunction(() => window.__zvIpc.call('settings_get').then((s) => s.eco === true), null, { timeout: 5000 });
+  await page.click('#rowEco .switch span');
+  await page.waitForFunction(() => window.__zvIpc.call('settings_get').then((s) => s.eco === false), null, { timeout: 5000 });
+});
 await step('диагностика из настроек, «Назад» → настройки → главная → свернуть', async () => {
   await page.click('#diagBtn');
   await page.waitForFunction(() => !document.getElementById('page-diag').classList.contains('hidden'));

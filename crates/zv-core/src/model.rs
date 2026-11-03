@@ -31,6 +31,8 @@ pub struct Settings {
     pub read_receipts: bool,
     /// Картинки до 25 МБ от контактов скачивать сразу.
     pub auto_images: bool,
+    /// Экономный режим ожидания (телефон): в комнатах ожидания по одному MQTT-брокеру и Nostr-реле вместо двух.
+    pub eco: bool,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             p2p: true,
             read_receipts: true,
             auto_images: true,
+            eco: false,
         }
     }
 }

@@ -522,11 +522,20 @@ impl Inner {
         let st = self.lock();
         let mut c = self.opts.signal.clone().unwrap_or_default();
         c.mqtt_tcp = c.mqtt_tcp && st.settings.mqtt_tcp;
+        if st.settings.eco {
+            c.listen_mqtt = c.listen_mqtt.min(1);
+            c.listen_nostr = c.listen_nostr.min(1);
+        }
         let w = st.settings.worker_url.trim();
         if !w.is_empty() {
             c.worker_url = Some(w.trim_end_matches('/').to_string());
         }
-        c.user_agent = format!("ZVONochek-Desktop/{}", self.opts.app_version);
+        let os = if cfg!(target_os = "android") {
+            "Android"
+        } else {
+            "Desktop"
+        };
+        c.user_agent = format!("ZVONochek-{os}/{}", self.opts.app_version);
         c
     }
 
@@ -559,6 +568,7 @@ impl Inner {
         let mut new: Settings = serde_json::from_value(cur).map_err(|e| e.to_string())?;
         new.name = new.name.trim().chars().take(40).collect();
         let p2p_changed = new.p2p != st.settings.p2p;
+        let eco_changed = new.eco != st.settings.eco;
         st.settings = new.clone();
         self.settings_file
             .save(&st.settings)
@@ -574,6 +584,9 @@ impl Inner {
                 self.p2p_stop();
             }
             self.sync_listeners();
+        }
+        if eco_changed {
+            self.restart_listeners();
         }
         self.emit(
             "settings:changed",
@@ -736,6 +749,25 @@ impl Inner {
     }
 
     /// Поднять ожидание для своих ссылок с `listen` (и комнат ящика/приглашения), снять — для остальных.
+    /// Пересоздать комнаты ожидания с новым набором каналов (экономный режим); идущие звонки не трогаем.
+    fn restart_listeners(self: &Arc<Self>) {
+        {
+            let mut st = self.lock();
+            let idle: Vec<String> = st
+                .rooms
+                .iter()
+                .filter(|(_, r)| !r.joined && (r.link_id.is_some() || r.role != RoomRole::Call))
+                .map(|(t, _)| t.clone())
+                .collect();
+            for t in idle {
+                if let Some(r) = st.rooms.remove(&t) {
+                    r.hub.close();
+                }
+            }
+        }
+        self.sync_listeners();
+    }
+
     fn sync_listeners(self: &Arc<Self>) {
         let cfg = Arc::new(self.signal_config());
         let mut st = self.lock();
@@ -1569,5 +1601,51 @@ mod tests {
             .unwrap();
         let h = core.dispatch("history_list", Value::Null).await.unwrap();
         assert_eq!(h[0]["result"], "cancelled");
+    }
+
+    /// Экономный режим: комнаты ожидания пересоздаются с одним MQTT-брокером и одним Nostr-реле.
+    #[tokio::test]
+    async fn eco_mode_fewer_listen_channels() {
+        let d = tempfile::tempdir().unwrap();
+        let mut o = opts(d.path());
+        let sig = o.signal.as_mut().unwrap();
+        sig.mqtt_tcp = false;
+        for i in 0..2 {
+            sig.brokers.push(zv_signal::BrokerSpec {
+                wss: format!("ws://127.0.0.1:9/mqtt{i}"),
+                tcp: None,
+                username: None,
+                password: None,
+            });
+            sig.nostr_relays.push(format!("ws://127.0.0.1:9/nostr{i}"));
+        }
+        let core = Core::start(o).unwrap();
+        core.dispatch("link_create", json!({"name": "Мама"}))
+            .await
+            .unwrap();
+        let count = |d: &Value| -> (usize, usize) {
+            let room = d["rooms"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["link"] == "Мама")
+                .cloned()
+                .unwrap_or(Value::Null);
+            let ch = room["channels"].as_array().cloned().unwrap_or_default();
+            let n = |k: &str| ch.iter().filter(|c| c["kind"] == k).count();
+            (n("mqtt"), n("nostr"))
+        };
+        let d1 = core.dispatch("diag_snapshot", Value::Null).await.unwrap();
+        assert_eq!(count(&d1), (2, 2), "{d1}");
+        core.dispatch("settings_set", json!({"patch": {"eco": true}}))
+            .await
+            .unwrap();
+        let d2 = core.dispatch("diag_snapshot", Value::Null).await.unwrap();
+        assert_eq!(count(&d2), (1, 1), "{d2}");
+        core.dispatch("settings_set", json!({"patch": {"eco": false}}))
+            .await
+            .unwrap();
+        let d3 = core.dispatch("diag_snapshot", Value::Null).await.unwrap();
+        assert_eq!(count(&d3), (2, 2), "{d3}");
     }
 }

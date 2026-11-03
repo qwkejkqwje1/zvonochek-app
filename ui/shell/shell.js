@@ -567,6 +567,7 @@ function renderSettings() {
   $('#setVolText').textContent = `${s.ringVolume ?? 80}%`;
   $('#setTray').checked = s.closeToTray !== false;
   $('#setTcp').checked = s.mqttTcp !== false;
+  $('#setEco').checked = !!s.eco;
   $('#setP2p').checked = s.p2p !== false;
   $('#setReceipts').checked = s.readReceipts !== false;
   $('#setAutoImg').checked = s.autoImages !== false;
@@ -585,6 +586,7 @@ const testRinger = new Ringer();
 $('#setVolTest').addEventListener('click', () => testRinger.once(Number($('#setVol').value) / 100));
 $('#setTray').addEventListener('change', (e) => setPatch({ closeToTray: e.target.checked }));
 $('#setTcp').addEventListener('change', (e) => setPatch({ mqttTcp: e.target.checked }));
+$('#setEco').addEventListener('change', (e) => setPatch({ eco: e.target.checked }));
 $('#setReceipts').addEventListener('change', (e) => setPatch({ readReceipts: e.target.checked }));
 $('#setAutoImg').addEventListener('change', (e) => setPatch({ autoImages: e.target.checked }));
 $('#setDlOpen').addEventListener('click', () =>
@@ -887,6 +889,7 @@ function setupMobile() {
       call('host_background_settings').catch((e) => toast('Не открылось: ' + (e.message || e)))
     );
   }
+  $('#rowEco').classList.remove('hidden');
   $('#rowQuit').classList.remove('hidden');
   $('#quitBtn').addEventListener('click', async () => {
     if (await confirmDialog('Выйти из ZVONochek?', 'Звонки по вашим ссылкам и от контактов не дойдут, пока вы снова не откроете приложение.', 'Выйти', true))

@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 targets = [a for a in sys.argv[1:] if not a.startswith('-')] or [
-    'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc', 'aarch64-linux-android']
+    'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc', 'aarch64-linux-android', 'armv7-linux-androideabi']
 
 def metadata(target):
     out = subprocess.run(['cargo', 'metadata', '--format-version', '1', '--locked', '--filter-platform', target],
@@ -113,6 +113,31 @@ entries.append(('SQLite 3 (внутри libsqlite3-sys, сборка bundled)', 
                   'notice, here is a blessing:\n\n    May you do good and not evil.\n    May you find forgiveness for '
                   'yourself and forgive others.\n    May you share freely, never taking more than you give.')]))
 
+# Android (APK): библиотеки Java/Kotlin из Gradle — все Apache-2.0. Список — по
+#   cd app/gen/android && ./gradlew -q :app:dependencies --configuration universalReleaseRuntimeClasspath
+ANDROID = [
+    ('AndroidX (Jetpack): activity 1.10.1, annotation 1.9.1, appcompat 1.7.1, arch-core 2.2.0, browser 1.8.0, '
+     'cardview 1.0.0, collection 1.4.2, concurrent-futures 1.1.0, constraintlayout 2.1.0, coordinatorlayout 1.1.0, '
+     'core 1.13.1, cursoradapter 1.0.0, customview 1.1.0, drawerlayout 1.1.1, dynamicanimation 1.1.0, emoji2 1.3.0, '
+     'fragment 1.5.4, graphics-shapes 1.0.1, interpolator 1.0.0, lifecycle 2.10.0, loader 1.0.0, profileinstaller 1.4.0, '
+     'recyclerview 1.2.1, resourceinspection 1.0.1, savedstate 1.4.0, startup 1.1.1, tracing 1.0.0, transition 1.5.0, '
+     'vectordrawable 1.1.0, versionedparcelable 1.1.1, viewpager 1.0.0, viewpager2 1.0.0, webkit 1.14.0',
+     'https://developer.android.com/jetpack/androidx'),
+    ('Material Components for Android 1.13.0', 'https://github.com/material-components/material-components-android'),
+    ('Kotlin Standard Library 2.2.10', 'https://github.com/JetBrains/kotlin'),
+    ('kotlinx.coroutines 1.9.0', 'https://github.com/Kotlin/kotlinx.coroutines'),
+    ('kotlinx.serialization 1.7.3', 'https://github.com/Kotlin/kotlinx.serialization'),
+    ('JetBrains Java Annotations 23.0.0', 'https://github.com/JetBrains/java-annotations'),
+    ('Jackson (core, annotations, databind, datatype-json-org) 2.15.3', 'https://github.com/FasterXML/jackson'),
+    ('Guava ListenableFuture 1.0', 'https://github.com/google/guava'),
+    ('Error Prone annotations 2.15.0', 'https://github.com/google/error-prone'),
+    ('JSpecify 1.0.0', 'https://github.com/jspecify/jspecify'),
+]
+apache = next(((n, t) for _, _, _, texts in entries for n, t in texts
+               if 'Apache License' in t and 'Version 2.0' in t and 'TERMS AND CONDITIONS' in t), None)
+for title, repo in ANDROID:
+    entries.append((title + ' — только Android', 'Apache-2.0', repo, [apache] if apache else []))
+
 # одинаковые тексты — один раз (сравнение без учёта пробелов)
 texts_by_key = {}
 text_order = []
@@ -128,10 +153,11 @@ for title, lic, repo, texts in entries:
         refs.append(key)
     crate_refs.append((title, lic, repo, refs))
 
-intro = ('ZVONochek для ПК © ZVONochek. Все права защищены.\n\n'
+intro = ('ZVONochek для Windows и Android © ZVONochek. Все права защищены.\n\n'
          'В программу входят сторонние компоненты с открытыми лицензиями; ниже — их список и тексты лицензий. '
          'Microsoft Edge WebView2 Runtime не входит в состав программы: он устанавливается из Windows '
-         'или загрузчиком Microsoft по условиям Microsoft.')
+         'или загрузчиком Microsoft по условиям Microsoft. Android System WebView — часть Android и тоже '
+         'не входит в состав программы.')
 
 md = ['# Сторонние компоненты (THIRD-PARTY-NOTICES)', '', intro, '',
       f'Всего компонентов: {len(entries)}.', '', '## Компоненты', '']

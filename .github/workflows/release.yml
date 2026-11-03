@@ -42,7 +42,7 @@ jobs:
           args: --target ${{ matrix.target }}
           tagName: ${{ github.ref_name }}
           releaseName: ZVONochek ${{ github.ref_name }}
-          releaseBody: Что нового — в CHANGELOG.md. Установщик для обычных ПК — x64, для ПК на ARM (Snapdragon) — arm64.
+          releaseBody: 'Что нового — в CHANGELOG.md. Windows: установщик x64 — для обычных ПК, arm64 — для ПК на ARM (Snapdragon). Android 7.0+: файл …_android.apk.'
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true

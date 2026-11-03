@@ -1,10 +1,10 @@
 # Сторонние компоненты (THIRD-PARTY-NOTICES)
 
-ZVONochek для ПК © ZVONochek. Все права защищены.
+ZVONochek для Windows и Android © ZVONochek. Все права защищены.
 
-В программу входят сторонние компоненты с открытыми лицензиями; ниже — их список и тексты лицензий. Microsoft Edge WebView2 Runtime не входит в состав программы: он устанавливается из Windows или загрузчиком Microsoft по условиям Microsoft.
+В программу входят сторонние компоненты с открытыми лицензиями; ниже — их список и тексты лицензий. Microsoft Edge WebView2 Runtime не входит в состав программы: он устанавливается из Windows или загрузчиком Microsoft по условиям Microsoft. Android System WebView — часть Android и тоже не входит в состав программы.
 
-Всего компонентов: 514.
+Всего компонентов: 521.
 
 ## Компоненты
 
@@ -102,7 +102,6 @@ ZVONochek для ПК © ZVONochek. Все права защищены.
 - **diatomic-waker 0.2.3** — MIT OR Apache-2.0 — https://github.com/asynchronics/diatomic-waker — тексты: [4](#t4), [78](#t78)
 - **digest 0.10.7** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [79](#t79)
 - **digest 0.11.3** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [80](#t80)
-- **dirs 6.0.0** — MIT OR Apache-2.0 — https://github.com/soc/dirs-rs — тексты: [81](#t81), [82](#t82)
 - **dirs 7.0.0** — MIT OR Apache-2.0 — https://codeberg.org/dirs/dirs-rs — тексты: [81](#t81), [82](#t82)
 - **dirs-sys 0.5.0** — MIT OR Apache-2.0 — https://github.com/dirs-dev/dirs-sys-rs — тексты: [81](#t81), [82](#t82)
 - **displaydoc 0.2.7** — MIT OR Apache-2.0 — https://github.com/yaahc/displaydoc — тексты: [4](#t4), [3](#t3)
@@ -220,126 +219,124 @@ ZVONochek для ПК © ZVONochek. Все права защищены.
 - **lazy_static 1.5.1** — MIT OR Apache-2.0 — https://github.com/rust-lang-nursery/lazy-static.rs — тексты: [4](#t4), [3](#t3)
 - **libc 0.2.191** — MIT OR Apache-2.0 — https://github.com/rust-lang/libc — тексты: [17](#t17), [163](#t163)
 - **libsqlite3-sys 0.39.1** — MIT — https://github.com/rusqlite/rusqlite — тексты: [164](#t164)
-- **linux-raw-sys 0.12.1** — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT — https://github.com/sunfishcode/linux-raw-sys — тексты: [165](#t165), [4](#t4), [166](#t166), [3](#t3)
 - **litemap 0.8.3** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
-- **lock_api 0.4.14** — MIT OR Apache-2.0 — https://github.com/Amanieu/parking_lot — тексты: [4](#t4), [167](#t167)
+- **lock_api 0.4.14** — MIT OR Apache-2.0 — https://github.com/Amanieu/parking_lot — тексты: [4](#t4), [165](#t165)
 - **log 0.4.35** — MIT OR Apache-2.0 — https://github.com/rust-lang/log — тексты: [4](#t4), [31](#t31)
-- **lru 0.18.5** — MIT — https://github.com/jeromefroe/lru-rs.git — тексты: [168](#t168)
-- **lru-slab 0.1.3** — MIT OR Apache-2.0 OR Zlib — https://github.com/Ralith/lru-slab — тексты: [4](#t4), [169](#t169), [170](#t170)
-- **mac-addr 0.3.0** — MIT — https://github.com/shellrow/mac-addr — тексты: [171](#t171)
+- **lru 0.18.5** — MIT — https://github.com/jeromefroe/lru-rs.git — тексты: [166](#t166)
+- **lru-slab 0.1.3** — MIT OR Apache-2.0 OR Zlib — https://github.com/Ralith/lru-slab — тексты: [4](#t4), [167](#t167), [168](#t168)
+- **mac-addr 0.3.0** — MIT — https://github.com/shellrow/mac-addr — тексты: [169](#t169)
 - **markup5ever 0.39.0** — MIT OR Apache-2.0 — https://github.com/servo/html5ever — тексты: [4](#t4), [121](#t121)
-- **matchers 0.2.0** — MIT — https://github.com/hawkw/matchers — тексты: [172](#t172)
+- **matchers 0.2.0** — MIT — https://github.com/hawkw/matchers — тексты: [170](#t170)
 - **memchr 2.8.3** — Unlicense OR MIT — https://github.com/BurntSushi/memchr — тексты: [11](#t11), [12](#t12), [13](#t13)
-- **mime 0.3.17** — MIT OR Apache-2.0 — https://github.com/hyperium/mime — тексты: [4](#t4), [173](#t173)
-- **minisign-verify 0.3.0** — MIT — https://github.com/jedisct1/rust-minisign-verify — тексты: [174](#t174)
-- **miniz_oxide 0.8.9** — MIT OR Zlib OR Apache-2.0 — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide — тексты: [175](#t175), [17](#t17), [175](#t175), [176](#t176)
-- **miniz_oxide 0.9.1** — MIT OR Zlib OR Apache-2.0 — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide — тексты: [175](#t175), [17](#t17), [175](#t175), [176](#t176)
-- **mio 1.2.4** — MIT — https://github.com/tokio-rs/mio — тексты: [177](#t177)
-- **moxcms 0.8.1** — BSD-3-Clause OR Apache-2.0 — https://github.com/awxkee/moxcms.git — тексты: [178](#t178), [179](#t179)
-- **muda 0.20.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/muda — тексты: [4](#t4), [180](#t180), [181](#t181)
-- **n0-dns-resolver 0.1.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/iroh — тексты: [182](#t182), [183](#t183)
+- **mime 0.3.17** — MIT OR Apache-2.0 — https://github.com/hyperium/mime — тексты: [4](#t4), [171](#t171)
+- **minisign-verify 0.3.0** — MIT — https://github.com/jedisct1/rust-minisign-verify — тексты: [172](#t172)
+- **miniz_oxide 0.8.9** — MIT OR Zlib OR Apache-2.0 — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide — тексты: [173](#t173), [17](#t17), [173](#t173), [174](#t174)
+- **miniz_oxide 0.9.1** — MIT OR Zlib OR Apache-2.0 — https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide — тексты: [173](#t173), [17](#t17), [173](#t173), [174](#t174)
+- **mio 1.2.4** — MIT — https://github.com/tokio-rs/mio — тексты: [175](#t175)
+- **moxcms 0.8.1** — BSD-3-Clause OR Apache-2.0 — https://github.com/awxkee/moxcms.git — тексты: [176](#t176), [177](#t177)
+- **muda 0.20.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/muda — тексты: [4](#t4), [178](#t178), [179](#t179)
+- **n0-dns-resolver 0.1.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/iroh — тексты: [180](#t180), [181](#t181)
 - **n0-error 1.0.1** — MIT OR Apache-2.0 — https://github.com/n0-computer/n0-error — тексты: [148](#t148), [149](#t149)
 - **n0-error-macros 1.0.1** — MIT OR Apache-2.0 — https://github.com/n0-computer/n0-error — тексты: [150](#t150)
-- **n0-future 0.3.2** — MIT OR Apache-2.0 — https://github.com/n0-computer/n0-future — тексты: [184](#t184), [185](#t185)
+- **n0-future 0.3.2** — MIT OR Apache-2.0 — https://github.com/n0-computer/n0-future — тексты: [182](#t182), [183](#t183)
 - **n0-watcher 1.0.1** — MIT OR Apache-2.0 — https://github.com/n0-computer/n0-watcher — тексты: [148](#t148), [149](#t149)
-- **ndk 0.9.0** — MIT OR Apache-2.0 — https://github.com/rust-mobile/ndk — тексты: [186](#t186)
-- **ndk-context 0.1.1** — MIT OR Apache-2.0 — https://github.com/rust-windowing/android-ndk-rs — тексты: [187](#t187)
-- **ndk-sys 0.6.0+11769913** — MIT OR Apache-2.0 — https://github.com/rust-mobile/ndk — тексты: [187](#t187)
-- **netdev 0.45.1** — MIT — https://github.com/shellrow/netdev — тексты: [188](#t188)
-- **netdev 0.46.3** — MIT — https://github.com/shellrow/netdev — тексты: [188](#t188)
-- **netlink-packet-core 0.8.2** — MIT — https://github.com/rust-netlink/netlink-packet-core — тексты: [189](#t189)
-- **netlink-packet-core 0.9.0** — MIT — https://github.com/rust-netlink/netlink-packet-core — тексты: [189](#t189)
-- **netlink-packet-route 0.31.0** — MIT — https://github.com/rust-netlink/netlink-packet-route — тексты: [190](#t190)
-- **netlink-packet-route 0.33.0** — MIT — https://github.com/rust-netlink/netlink-packet-route — тексты: [190](#t190)
-- **netlink-proto 0.12.2** — MIT — https://github.com/rust-netlink/netlink-proto — тексты: [189](#t189)
-- **netlink-sys 0.8.8** — MIT — https://github.com/rust-netlink/netlink-sys — тексты: [189](#t189)
-- **netlink-sys 0.9.0** — MIT — https://github.com/rust-netlink/netlink-sys — тексты: [189](#t189)
+- **ndk 0.9.0** — MIT OR Apache-2.0 — https://github.com/rust-mobile/ndk — тексты: [184](#t184)
+- **ndk-context 0.1.1** — MIT OR Apache-2.0 — https://github.com/rust-windowing/android-ndk-rs — тексты: [185](#t185)
+- **ndk-sys 0.6.0+11769913** — MIT OR Apache-2.0 — https://github.com/rust-mobile/ndk — тексты: [185](#t185)
+- **netdev 0.45.1** — MIT — https://github.com/shellrow/netdev — тексты: [186](#t186)
+- **netdev 0.46.3** — MIT — https://github.com/shellrow/netdev — тексты: [186](#t186)
+- **netlink-packet-core 0.8.2** — MIT — https://github.com/rust-netlink/netlink-packet-core — тексты: [187](#t187)
+- **netlink-packet-core 0.9.0** — MIT — https://github.com/rust-netlink/netlink-packet-core — тексты: [187](#t187)
+- **netlink-packet-route 0.31.0** — MIT — https://github.com/rust-netlink/netlink-packet-route — тексты: [188](#t188)
+- **netlink-packet-route 0.33.0** — MIT — https://github.com/rust-netlink/netlink-packet-route — тексты: [188](#t188)
+- **netlink-proto 0.12.2** — MIT — https://github.com/rust-netlink/netlink-proto — тексты: [187](#t187)
+- **netlink-sys 0.8.8** — MIT — https://github.com/rust-netlink/netlink-sys — тексты: [187](#t187)
+- **netlink-sys 0.9.0** — MIT — https://github.com/rust-netlink/netlink-sys — тексты: [187](#t187)
 - **netwatch 0.19.3** — MIT OR Apache-2.0 — https://github.com/n0-computer/net-tools — тексты: [147](#t147)
-- **new_debug_unreachable 1.0.6** — MIT — https://github.com/mbrubeck/rust-debug-unreachable — тексты: [191](#t191)
-- **noq 1.4.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/noq — тексты: [192](#t192), [193](#t193)
-- **noq-proto 1.4.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/noq — тексты: [192](#t192), [193](#t193)
-- **noq-udp 1.4.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/noq — тексты: [192](#t192), [193](#t193)
-- **notify-rust 4.18.2** — MIT OR Apache-2.0 — https://github.com/hoodie/notify-rust — тексты: [53](#t53), [194](#t194)
-- **nu-ansi-term 0.50.3** — MIT — https://github.com/nushell/nu-ansi-term — тексты: [195](#t195)
-- **num-conv 0.2.2** — MIT OR Apache-2.0 — https://github.com/jhpratt/num-conv — тексты: [17](#t17), [196](#t196)
+- **new_debug_unreachable 1.0.6** — MIT — https://github.com/mbrubeck/rust-debug-unreachable — тексты: [189](#t189)
+- **noq 1.4.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/noq — тексты: [190](#t190), [191](#t191)
+- **noq-proto 1.4.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/noq — тексты: [190](#t190), [191](#t191)
+- **noq-udp 1.4.0** — MIT OR Apache-2.0 — https://github.com/n0-computer/noq — тексты: [190](#t190), [191](#t191)
+- **notify-rust 4.18.2** — MIT OR Apache-2.0 — https://github.com/hoodie/notify-rust — тексты: [53](#t53), [192](#t192)
+- **nu-ansi-term 0.50.3** — MIT — https://github.com/nushell/nu-ansi-term — тексты: [193](#t193)
+- **num-conv 0.2.2** — MIT OR Apache-2.0 — https://github.com/jhpratt/num-conv — тексты: [17](#t17), [194](#t194)
 - **num-traits 0.2.19** — MIT OR Apache-2.0 — https://github.com/rust-num/num-traits — тексты: [4](#t4), [31](#t31)
-- **num_enum 0.7.6** — BSD-3-Clause OR MIT OR Apache-2.0 — https://github.com/illicitonion/num_enum — тексты: [17](#t17), [197](#t197), [3](#t3)
-- **num_enum_derive 0.7.6** — BSD-3-Clause OR MIT OR Apache-2.0 — https://github.com/illicitonion/num_enum — тексты: [17](#t17), [197](#t197), [3](#t3)
+- **num_enum 0.7.6** — BSD-3-Clause OR MIT OR Apache-2.0 — https://github.com/illicitonion/num_enum — тексты: [17](#t17), [195](#t195), [3](#t3)
+- **num_enum_derive 0.7.6** — BSD-3-Clause OR MIT OR Apache-2.0 — https://github.com/illicitonion/num_enum — тексты: [17](#t17), [195](#t195), [3](#t3)
 - **once_cell 1.21.4** — MIT OR Apache-2.0 — https://github.com/matklad/once_cell — тексты: [4](#t4), [3](#t3)
-- **opaque-debug 0.3.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/utils — тексты: [4](#t4), [198](#t198)
-- **open 5.4.5** — MIT — https://github.com/Byron/open-rs — тексты: [199](#t199)
-- **option-ext 0.2.0** — MPL-2.0 — https://github.com/soc/option-ext.git — тексты: [200](#t200)
-- **os_info 3.15.0** — MIT — https://github.com/stanislav-tkach/os_info — тексты: [201](#t201)
+- **opaque-debug 0.3.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/utils — тексты: [4](#t4), [196](#t196)
+- **open 5.4.5** — MIT — https://github.com/Byron/open-rs — тексты: [197](#t197)
+- **option-ext 0.2.0** — MPL-2.0 — https://github.com/soc/option-ext.git — тексты: [198](#t198)
+- **os_info 3.15.0** — MIT — https://github.com/stanislav-tkach/os_info — тексты: [199](#t199)
 - **papaya 0.2.5** — MIT — https://github.com/ibraheemdev/papaya — тексты: [99](#t99)
-- **parking 2.2.1** — Apache-2.0 OR MIT — https://github.com/smol-rs/parking — тексты: [4](#t4), [3](#t3), [202](#t202)
-- **parking_lot 0.12.5** — MIT OR Apache-2.0 — https://github.com/Amanieu/parking_lot — тексты: [4](#t4), [167](#t167)
-- **parking_lot_core 0.9.12** — MIT OR Apache-2.0 — https://github.com/Amanieu/parking_lot — тексты: [4](#t4), [167](#t167)
+- **parking 2.2.1** — Apache-2.0 OR MIT — https://github.com/smol-rs/parking — тексты: [4](#t4), [3](#t3), [200](#t200)
+- **parking_lot 0.12.5** — MIT OR Apache-2.0 — https://github.com/Amanieu/parking_lot — тексты: [4](#t4), [165](#t165)
+- **parking_lot_core 0.9.12** — MIT OR Apache-2.0 — https://github.com/Amanieu/parking_lot — тексты: [4](#t4), [165](#t165)
 - **password-hash 0.6.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [90](#t90)
 - **paste 1.0.15** — MIT OR Apache-2.0 — https://github.com/dtolnay/paste — тексты: [17](#t17), [3](#t3)
-- **pem-rfc7468 1.0.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [203](#t203)
+- **pem-rfc7468 1.0.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [201](#t201)
 - **percent-encoding 2.3.2** — MIT OR Apache-2.0 — https://github.com/servo/rust-url/ — тексты: [4](#t4), [136](#t136)
 - **phc 0.6.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [19](#t19)
-- **phf 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [204](#t204)
-- **phf_codegen 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [204](#t204)
-- **phf_generator 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [204](#t204)
-- **phf_macros 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [204](#t204)
-- **phf_shared 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [204](#t204)
+- **phf 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [202](#t202)
+- **phf_codegen 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [202](#t202)
+- **phf_generator 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [202](#t202)
+- **phf_macros 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [202](#t202)
+- **phf_shared 0.13.1** — MIT — https://github.com/rust-phf/rust-phf — тексты: [202](#t202)
 - **pin-project 1.1.13** — Apache-2.0 OR MIT — https://github.com/taiki-e/pin-project — тексты: [17](#t17), [3](#t3)
 - **pin-project-internal 1.1.13** — Apache-2.0 OR MIT — https://github.com/taiki-e/pin-project — тексты: [17](#t17), [3](#t3)
 - **pin-project-lite 0.2.17** — Apache-2.0 OR MIT — https://github.com/taiki-e/pin-project-lite — тексты: [17](#t17), [3](#t3)
 - **pkcs8 0.11.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [56](#t56)
 - **pkg-config 0.3.34** — MIT OR Apache-2.0 — https://github.com/rust-lang/pkg-config-rs — тексты: [4](#t4), [44](#t44)
-- **plist 1.10.3** — MIT — https://github.com/ebarnard/rust-plist/ — тексты: [205](#t205)
-- **png 0.18.1** — MIT OR Apache-2.0 — https://github.com/image-rs/image-png — тексты: [4](#t4), [206](#t206)
-- **poly1305 0.9.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/universal-hashes — тексты: [4](#t4), [207](#t207)
-- **polyval 0.6.2** — Apache-2.0 OR MIT — https://github.com/RustCrypto/universal-hashes — тексты: [4](#t4), [208](#t208)
+- **plist 1.10.3** — MIT — https://github.com/ebarnard/rust-plist/ — тексты: [203](#t203)
+- **png 0.18.1** — MIT OR Apache-2.0 — https://github.com/image-rs/image-png — тексты: [4](#t4), [204](#t204)
+- **poly1305 0.9.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/universal-hashes — тексты: [4](#t4), [205](#t205)
+- **polyval 0.6.2** — Apache-2.0 OR MIT — https://github.com/RustCrypto/universal-hashes — тексты: [4](#t4), [206](#t206)
 - **polyval 0.7.3** — Apache-2.0 OR MIT — https://github.com/RustCrypto/universal-hashes — тексты: [4](#t4), [10](#t10)
 - **portable-atomic 1.15.0** — Apache-2.0 OR MIT — https://github.com/taiki-e/portable-atomic — тексты: [17](#t17), [3](#t3)
 - **portmapper 0.19.3** — MIT OR Apache-2.0 — https://github.com/n0-computer/net-tools — тексты: [147](#t147)
-- **postcard 1.1.3** — MIT OR Apache-2.0 — https://github.com/jamesmunns/postcard — тексты: [4](#t4), [209](#t209)
-- **postcard-derive 0.2.2** — MIT OR Apache-2.0 — https://github.com/jamesmunns/postcard — тексты: [4](#t4), [209](#t209)
+- **postcard 1.1.3** — MIT OR Apache-2.0 — https://github.com/jamesmunns/postcard — тексты: [4](#t4), [207](#t207)
+- **postcard-derive 0.2.2** — MIT OR Apache-2.0 — https://github.com/jamesmunns/postcard — тексты: [4](#t4), [207](#t207)
 - **potential_utf 0.1.6** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
-- **powerfmt 0.2.1** — MIT OR Apache-2.0 — https://github.com/jhpratt/powerfmt — тексты: [210](#t210), [211](#t211)
-- **precomputed-hash 0.1.1** — MIT — https://github.com/emilio/precomputed-hash — тексты: [212](#t212)
-- **primefield 0.14.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/elliptic-curves — тексты: [4](#t4), [213](#t213)
-- **primeorder 0.14.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/elliptic-curves — тексты: [4](#t4), [214](#t214)
+- **powerfmt 0.2.1** — MIT OR Apache-2.0 — https://github.com/jhpratt/powerfmt — тексты: [208](#t208), [209](#t209)
+- **precomputed-hash 0.1.1** — MIT — https://github.com/emilio/precomputed-hash — тексты: [210](#t210)
+- **primefield 0.14.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/elliptic-curves — тексты: [4](#t4), [211](#t211)
+- **primeorder 0.14.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/elliptic-curves — тексты: [4](#t4), [212](#t212)
 - **proc-macro-crate 3.5.0** — MIT OR Apache-2.0 — https://github.com/bkchr/proc-macro-crate — тексты: [2](#t2), [3](#t3)
 - **proc-macro2 1.0.107** — MIT OR Apache-2.0 — https://github.com/dtolnay/proc-macro2 — тексты: [17](#t17), [3](#t3)
-- **pxfm 0.1.30** — BSD-3-Clause OR Apache-2.0 — https://github.com/awxkee/pxfm — тексты: [178](#t178), [179](#t179)
-- **quick-xml 0.42.0** — MIT — https://github.com/tafia/quick-xml — тексты: [215](#t215)
+- **pxfm 0.1.30** — BSD-3-Clause OR Apache-2.0 — https://github.com/awxkee/pxfm — тексты: [176](#t176), [177](#t177)
+- **quick-xml 0.42.0** — MIT — https://github.com/tafia/quick-xml — тексты: [213](#t213)
 - **quote 1.0.47** — MIT OR Apache-2.0 — https://github.com/dtolnay/quote — тексты: [17](#t17), [3](#t3)
-- **rand 0.10.3** — MIT OR Apache-2.0 — https://github.com/rust-random/rand — тексты: [216](#t216), [217](#t217), [218](#t218)
-- **rand_core 0.10.1** — MIT OR Apache-2.0 — https://github.com/rust-random/rand_core — тексты: [219](#t219), [220](#t220), [221](#t221)
-- **rand_pcg 0.10.2** — MIT OR Apache-2.0 — https://github.com/rust-random/rngs — тексты: [216](#t216), [220](#t220), [222](#t222)
-- **raw-window-handle 0.6.2** — MIT OR Apache-2.0 OR Zlib — https://github.com/rust-windowing/raw-window-handle — тексты: [17](#t17), [223](#t223), [224](#t224)
+- **rand 0.10.3** — MIT OR Apache-2.0 — https://github.com/rust-random/rand — тексты: [214](#t214), [215](#t215), [216](#t216)
+- **rand_core 0.10.1** — MIT OR Apache-2.0 — https://github.com/rust-random/rand_core — тексты: [217](#t217), [218](#t218), [219](#t219)
+- **rand_pcg 0.10.2** — MIT OR Apache-2.0 — https://github.com/rust-random/rngs — тексты: [214](#t214), [218](#t218), [220](#t220)
+- **raw-window-handle 0.6.2** — MIT OR Apache-2.0 OR Zlib — https://github.com/rust-windowing/raw-window-handle — тексты: [17](#t17), [221](#t221), [222](#t222)
 - **ref-cast 1.0.27** — MIT OR Apache-2.0 — https://github.com/dtolnay/ref-cast — тексты: [17](#t17), [3](#t3)
 - **ref-cast-impl 1.0.27** — MIT OR Apache-2.0 — https://github.com/dtolnay/ref-cast — тексты: [17](#t17), [3](#t3)
 - **regex 1.13.1** — MIT OR Apache-2.0 — https://github.com/rust-lang/regex — тексты: [4](#t4), [31](#t31)
 - **regex-automata 0.4.18** — MIT OR Apache-2.0 — https://github.com/rust-lang/regex — тексты: [4](#t4), [31](#t31)
 - **regex-syntax 0.8.11** — MIT OR Apache-2.0 — https://github.com/rust-lang/regex — тексты: [4](#t4), [31](#t31)
-- **reqwest 0.13.5** — MIT OR Apache-2.0 — https://github.com/seanmonstar/reqwest — тексты: [225](#t225), [226](#t226)
+- **reqwest 0.13.5** — MIT OR Apache-2.0 — https://github.com/seanmonstar/reqwest — тексты: [223](#t223), [224](#t224)
 - **rfc6979 0.6.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/signatures — тексты: [87](#t87), [88](#t88)
-- **rfd 0.17.2** — MIT — https://github.com/PolyMeilex/rfd — тексты: [227](#t227)
-- **ring 0.17.14** — Apache-2.0 AND ISC — https://github.com/briansmith/ring — тексты: [228](#t228), [229](#t229), [230](#t230)
+- **rfd 0.17.2** — MIT — https://github.com/PolyMeilex/rfd — тексты: [225](#t225)
+- **ring 0.17.14** — Apache-2.0 AND ISC — https://github.com/briansmith/ring — тексты: [226](#t226), [227](#t227), [228](#t228)
 - **rusqlite 0.41.1** — MIT — https://github.com/rusqlite/rusqlite — тексты: [164](#t164)
 - **rustc-hash 2.1.3** — Apache-2.0 OR MIT — https://github.com/rust-lang/rustc-hash — тексты: [17](#t17), [3](#t3)
-- **rustc_version 0.4.1** — MIT OR Apache-2.0 — https://github.com/djc/rustc-version-rs — тексты: [4](#t4), [167](#t167)
-- **rustix 1.1.6** — Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT — https://github.com/bytecodealliance/rustix — тексты: [231](#t231), [4](#t4), [166](#t166), [3](#t3)
+- **rustc_version 0.4.1** — MIT OR Apache-2.0 — https://github.com/djc/rustc-version-rs — тексты: [4](#t4), [165](#t165)
 - **rustls 0.23.46** — Apache-2.0 OR ISC OR MIT — https://github.com/rustls/rustls — тексты: [4](#t4), [128](#t128), [129](#t129)
-- **rustls-pki-types 1.15.1** — MIT OR Apache-2.0 — https://github.com/rustls/pki-types — тексты: [232](#t232), [233](#t233)
-- **rustls-platform-verifier 0.7.1** — MIT OR Apache-2.0 — https://github.com/rustls/rustls-platform-verifier — тексты: [4](#t4), [234](#t234)
-- **rustls-platform-verifier-android 0.2.0** — MIT OR Apache-2.0 — https://github.com/rustls/rustls-platform-verifier — тексты: [235](#t235)
-- **rustls-webpki 0.103.16** — ISC — https://github.com/rustls/webpki — тексты: [236](#t236)
+- **rustls-pki-types 1.15.1** — MIT OR Apache-2.0 — https://github.com/rustls/pki-types — тексты: [229](#t229), [230](#t230)
+- **rustls-platform-verifier 0.7.1** — MIT OR Apache-2.0 — https://github.com/rustls/rustls-platform-verifier — тексты: [4](#t4), [231](#t231)
+- **rustls-platform-verifier-android 0.2.0** — MIT OR Apache-2.0 — https://github.com/rustls/rustls-platform-verifier — тексты: [232](#t232)
+- **rustls-webpki 0.103.16** — ISC — https://github.com/rustls/webpki — тексты: [233](#t233)
 - **rustversion 1.0.23** — MIT OR Apache-2.0 — https://github.com/dtolnay/rustversion — тексты: [17](#t17), [3](#t3)
-- **ryu 1.0.23** — Apache-2.0 OR BSL-1.0 — https://github.com/dtolnay/ryu — тексты: [17](#t17), [237](#t237)
-- **same-file 1.0.6** — Unlicense/MIT — https://github.com/BurntSushi/same-file — тексты: [11](#t11), [238](#t238), [13](#t13)
-- **schemars 0.8.22** — MIT — https://github.com/GREsau/schemars — тексты: [239](#t239)
-- **schemars 0.9.0** — MIT — https://github.com/GREsau/schemars — тексты: [239](#t239)
-- **schemars 1.2.3** — MIT — https://github.com/GREsau/schemars — тексты: [239](#t239)
-- **schemars_derive 0.8.22** — MIT — https://github.com/GREsau/schemars — тексты: [239](#t239)
-- **scopeguard 1.2.0** — MIT OR Apache-2.0 — https://github.com/bluss/scopeguard — тексты: [4](#t4), [240](#t240)
+- **ryu 1.0.23** — Apache-2.0 OR BSL-1.0 — https://github.com/dtolnay/ryu — тексты: [17](#t17), [234](#t234)
+- **same-file 1.0.6** — Unlicense/MIT — https://github.com/BurntSushi/same-file — тексты: [11](#t11), [235](#t235), [13](#t13)
+- **schemars 0.8.22** — MIT — https://github.com/GREsau/schemars — тексты: [236](#t236)
+- **schemars 0.9.0** — MIT — https://github.com/GREsau/schemars — тексты: [236](#t236)
+- **schemars 1.2.3** — MIT — https://github.com/GREsau/schemars — тексты: [236](#t236)
+- **schemars_derive 0.8.22** — MIT — https://github.com/GREsau/schemars — тексты: [236](#t236)
+- **scopeguard 1.2.0** — MIT OR Apache-2.0 — https://github.com/bluss/scopeguard — тексты: [4](#t4), [237](#t237)
 - **sec1 0.8.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [19](#t19)
-- **seize 0.5.1** — MIT — https://github.com/ibraheemdev/seize — тексты: [241](#t241)
+- **seize 0.5.1** — MIT — https://github.com/ibraheemdev/seize — тексты: [238](#t238)
 - **selectors 0.38.0** — MPL-2.0 — https://github.com/servo/stylo — тексты: [22](#t22)
 - **semver 1.0.28** — MIT OR Apache-2.0 — https://github.com/dtolnay/semver — тексты: [17](#t17), [3](#t3)
 - **serde 1.0.229** — MIT OR Apache-2.0 — https://github.com/serde-rs/serde — тексты: [17](#t17), [3](#t3)
@@ -350,178 +347,188 @@ ZVONochek для ПК © ZVONochek. Все права защищены.
 - **serde_derive_internals 0.29.1** — MIT OR Apache-2.0 — https://github.com/serde-rs/serde — тексты: [17](#t17), [3](#t3)
 - **serde_json 1.0.154** — MIT OR Apache-2.0 — https://github.com/serde-rs/json — тексты: [17](#t17), [3](#t3)
 - **serde_repr 0.1.21** — MIT OR Apache-2.0 — https://github.com/dtolnay/serde-repr — тексты: [17](#t17), [3](#t3)
-- **serde_spanned 1.1.2** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [242](#t242), [243](#t243)
-- **serde_with 3.24.0** — MIT OR Apache-2.0 — https://github.com/jonasbb/serde_with/ — тексты: [4](#t4), [244](#t244)
-- **serde_with_macros 3.24.0** — MIT OR Apache-2.0 — https://github.com/jonasbb/serde_with/ — тексты: [4](#t4), [244](#t244)
-- **serdect 0.4.3** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [245](#t245)
-- **serialize-to-javascript 0.1.2** — MIT OR Apache-2.0 — https://github.com/chippers/serialize-to-javascript — тексты: [4](#t4), [246](#t246)
-- **serialize-to-javascript-impl 0.1.2** — MIT OR Apache-2.0 — https://github.com/chippers/serialize-to-javascript — тексты: [4](#t4), [246](#t246)
+- **serde_spanned 1.1.2** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [239](#t239), [240](#t240)
+- **serde_with 3.24.0** — MIT OR Apache-2.0 — https://github.com/jonasbb/serde_with/ — тексты: [4](#t4), [241](#t241)
+- **serde_with_macros 3.24.0** — MIT OR Apache-2.0 — https://github.com/jonasbb/serde_with/ — тексты: [4](#t4), [241](#t241)
+- **serdect 0.4.3** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [242](#t242)
+- **serialize-to-javascript 0.1.2** — MIT OR Apache-2.0 — https://github.com/chippers/serialize-to-javascript — тексты: [4](#t4), [243](#t243)
+- **serialize-to-javascript-impl 0.1.2** — MIT OR Apache-2.0 — https://github.com/chippers/serialize-to-javascript — тексты: [4](#t4), [243](#t243)
 - **servo_arc 0.4.3** — MIT OR Apache-2.0 — https://github.com/servo/stylo — тексты: [4](#t4), [3](#t3)
-- **sha1 0.11.0** — MIT OR Apache-2.0 — https://github.com/RustCrypto/hashes — тексты: [4](#t4), [247](#t247)
-- **sha1_smol 1.0.1** — BSD-3-Clause — https://github.com/mitsuhiko/sha1-smol — тексты: [248](#t248)
-- **sha2 0.10.9** — MIT OR Apache-2.0 — https://github.com/RustCrypto/hashes — тексты: [4](#t4), [249](#t249)
-- **sha2 0.11.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/hashes — тексты: [4](#t4), [247](#t247)
-- **sharded-slab 0.1.7** — MIT — https://github.com/hawkw/sharded-slab — тексты: [172](#t172)
-- **shlex 2.0.1** — MIT OR Apache-2.0 — https://github.com/comex/rust-shlex — тексты: [250](#t250), [251](#t251)
-- **signal-hook-registry 1.4.8** — MIT OR Apache-2.0 — https://github.com/vorner/signal-hook — тексты: [4](#t4), [252](#t252)
+- **sha1 0.11.0** — MIT OR Apache-2.0 — https://github.com/RustCrypto/hashes — тексты: [4](#t4), [244](#t244)
+- **sha1_smol 1.0.1** — BSD-3-Clause — https://github.com/mitsuhiko/sha1-smol — тексты: [245](#t245)
+- **sha2 0.10.9** — MIT OR Apache-2.0 — https://github.com/RustCrypto/hashes — тексты: [4](#t4), [246](#t246)
+- **sha2 0.11.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/hashes — тексты: [4](#t4), [244](#t244)
+- **sharded-slab 0.1.7** — MIT — https://github.com/hawkw/sharded-slab — тексты: [170](#t170)
+- **shlex 2.0.1** — MIT OR Apache-2.0 — https://github.com/comex/rust-shlex — тексты: [247](#t247), [248](#t248)
+- **signal-hook-registry 1.4.8** — MIT OR Apache-2.0 — https://github.com/vorner/signal-hook — тексты: [4](#t4), [249](#t249)
 - **signature 3.0.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/traits — тексты: [4](#t4), [88](#t88)
-- **simd-adler32 0.3.10** — MIT — https://github.com/mcountryman/simd-adler32 — тексты: [253](#t253)
+- **simd-adler32 0.3.10** — MIT — https://github.com/mcountryman/simd-adler32 — тексты: [250](#t250)
 - **simd_cesu8 1.2.0** — Apache-2.0 OR MIT — https://github.com/seancroach/simd_cesu8 — тексты: [4](#t4), [3](#t3)
 - **simdutf8 0.1.5** — MIT OR Apache-2.0 — https://github.com/rusticstuff/simdutf8 — тексты: [17](#t17), [99](#t99)
-- **simple-dns 0.12.0** — MIT — https://github.com/balliegojr/simple-dns — тексты: [254](#t254)
-- **siphasher 1.0.4** — MIT OR Apache-2.0 — https://github.com/jedisct1/rust-siphash — тексты: [255](#t255), [4](#t4), [3](#t3)
-- **slab 0.4.12** — MIT — https://github.com/tokio-rs/slab — тексты: [256](#t256)
-- **slotmap 1.1.1** — Zlib — https://github.com/orlp/slotmap — тексты: [257](#t257)
-- **smallvec 1.16.4** — MIT OR Apache-2.0 — https://github.com/servo/rust-smallvec — тексты: [4](#t4), [258](#t258)
+- **simple-dns 0.12.0** — MIT — https://github.com/balliegojr/simple-dns — тексты: [251](#t251)
+- **siphasher 1.0.4** — MIT OR Apache-2.0 — https://github.com/jedisct1/rust-siphash — тексты: [252](#t252), [4](#t4), [3](#t3)
+- **slab 0.4.12** — MIT — https://github.com/tokio-rs/slab — тексты: [253](#t253)
+- **slotmap 1.1.1** — Zlib — https://github.com/orlp/slotmap — тексты: [254](#t254)
+- **smallvec 1.16.4** — MIT OR Apache-2.0 — https://github.com/servo/rust-smallvec — тексты: [4](#t4), [255](#t255)
 - **socket2 0.6.5** — MIT OR Apache-2.0 — https://github.com/rust-lang/socket2 — тексты: [4](#t4), [44](#t44)
-- **softbuffer 0.4.8** — MIT OR Apache-2.0 — https://github.com/rust-windowing/softbuffer — тексты: [259](#t259), [260](#t260)
-- **sorted-index-buffer 0.2.1** — MIT OR Apache-2.0 — https://github.com/n0-computer/iroh — тексты: [182](#t182), [183](#t183)
-- **spez 0.1.2** — BSD-2-Clause — https://github.com/m-ou-se/spez — тексты: [261](#t261)
-- **spin 0.10.1** — MIT — https://github.com/mvdnes/spin-rs.git — тексты: [262](#t262)
+- **softbuffer 0.4.8** — MIT OR Apache-2.0 — https://github.com/rust-windowing/softbuffer — тексты: [256](#t256), [257](#t257)
+- **sorted-index-buffer 0.2.1** — MIT OR Apache-2.0 — https://github.com/n0-computer/iroh — тексты: [180](#t180), [181](#t181)
+- **spez 0.1.2** — BSD-2-Clause — https://github.com/m-ou-se/spez — тексты: [258](#t258)
+- **spin 0.10.1** — MIT — https://github.com/mvdnes/spin-rs.git — тексты: [259](#t259)
 - **spki 0.8.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/formats — тексты: [4](#t4), [19](#t19)
-- **stable_deref_trait 1.2.1** — MIT OR Apache-2.0 — https://github.com/storyyeller/stable_deref_trait — тексты: [4](#t4), [263](#t263)
-- **static_vcruntime 3.0.0** — MIT OR Apache-2.0 OR Zlib — https://github.com/ChrisDenton/static_vcruntime — тексты: [264](#t264), [4](#t4), [265](#t265), [266](#t266)
-- **string_cache 0.9.0** — MIT OR Apache-2.0 — https://github.com/servo/string-cache — тексты: [4](#t4), [267](#t267)
-- **string_cache_codegen 0.6.1** — MIT OR Apache-2.0 — https://github.com/servo/string-cache — тексты: [4](#t4), [267](#t267)
-- **strsim 0.11.1** — MIT — https://github.com/rapidfuzz/strsim-rs — тексты: [268](#t268)
-- **strum 0.28.0** — MIT — https://github.com/Peternator7/strum — тексты: [269](#t269)
-- **strum_macros 0.28.0** — MIT — https://github.com/Peternator7/strum — тексты: [269](#t269)
-- **subtle 2.6.1** — BSD-3-Clause — https://github.com/dalek-cryptography/subtle — тексты: [270](#t270)
-- **symlink 0.1.0** — MIT/Apache-2.0 — https://gitlab.com/chris-morgan/symlink — тексты: [271](#t271), [4](#t4), [272](#t272)
+- **stable_deref_trait 1.2.1** — MIT OR Apache-2.0 — https://github.com/storyyeller/stable_deref_trait — тексты: [4](#t4), [260](#t260)
+- **static_vcruntime 3.0.0** — MIT OR Apache-2.0 OR Zlib — https://github.com/ChrisDenton/static_vcruntime — тексты: [261](#t261), [4](#t4), [262](#t262), [263](#t263)
+- **string_cache 0.9.0** — MIT OR Apache-2.0 — https://github.com/servo/string-cache — тексты: [4](#t4), [264](#t264)
+- **string_cache_codegen 0.6.1** — MIT OR Apache-2.0 — https://github.com/servo/string-cache — тексты: [4](#t4), [264](#t264)
+- **strsim 0.11.1** — MIT — https://github.com/rapidfuzz/strsim-rs — тексты: [265](#t265)
+- **strum 0.28.0** — MIT — https://github.com/Peternator7/strum — тексты: [266](#t266)
+- **strum_macros 0.28.0** — MIT — https://github.com/Peternator7/strum — тексты: [266](#t266)
+- **subtle 2.6.1** — BSD-3-Clause — https://github.com/dalek-cryptography/subtle — тексты: [267](#t267)
+- **symlink 0.1.0** — MIT/Apache-2.0 — https://gitlab.com/chris-morgan/symlink — тексты: [268](#t268), [4](#t4), [269](#t269)
 - **syn 2.0.119** — MIT OR Apache-2.0 — https://github.com/dtolnay/syn — тексты: [17](#t17), [3](#t3)
 - **syn 3.0.9** — MIT OR Apache-2.0 — https://github.com/dtolnay/syn — тексты: [17](#t17), [3](#t3)
 - **sync_wrapper 1.0.2** — Apache-2.0 — https://github.com/Actyx/sync_wrapper — тексты: [17](#t17)
-- **synstructure 0.14.0** — MIT — https://github.com/mystor/synstructure — тексты: [273](#t273)
-- **tao 0.37.2** — Apache-2.0 — https://github.com/tauri-apps/tao — тексты: [53](#t53), [274](#t274)
-- **tao-macros 0.1.4** — MIT OR Apache-2.0 — https://github.com/tauri-apps/tao — тексты: [4](#t4), [275](#t275), [276](#t276)
-- **tauri 2.12.5** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-build 2.7.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-codegen 2.7.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-macros 2.7.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-plugin 2.7.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [278](#t278)
-- **tauri-plugin-autostart 2.7.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-deep-link 2.6.3** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-dialog 2.8.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-fs 2.7.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-notification 2.8.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-opener 2.7.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-single-instance 2.5.5** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [280](#t280)
-- **tauri-plugin-updater 2.14.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-plugin-window-state 2.5.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [279](#t279), [17](#t17), [277](#t277)
-- **tauri-runtime 2.12.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-runtime-wry 2.12.3** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-utils 2.10.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [277](#t277)
-- **tauri-winres 0.3.7** — MIT — https://github.com/tauri-apps/winres — тексты: [281](#t281)
-- **tauri-winrt-notification 0.8.1** — MIT OR Apache-2.0 — https://github.com/tauri-apps/winrt-notification — тексты: [282](#t282), [17](#t17), [277](#t277)
-- **tempfile 3.27.0** — MIT OR Apache-2.0 — https://github.com/Stebalien/tempfile — тексты: [4](#t4), [283](#t283)
-- **tendril 0.5.1** — MIT OR Apache-2.0 — https://github.com/servo/html5ever — тексты: [4](#t4), [284](#t284)
+- **synstructure 0.14.0** — MIT — https://github.com/mystor/synstructure — тексты: [270](#t270)
+- **tao 0.37.2** — Apache-2.0 — https://github.com/tauri-apps/tao — тексты: [53](#t53), [271](#t271)
+- **tao-macros 0.1.4** — MIT OR Apache-2.0 — https://github.com/tauri-apps/tao — тексты: [4](#t4), [272](#t272), [273](#t273)
+- **tauri 2.12.5** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-build 2.7.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-codegen 2.7.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-macros 2.7.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-plugin 2.7.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [275](#t275)
+- **tauri-plugin-autostart 2.7.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-deep-link 2.6.3** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-dialog 2.8.4** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-fs 2.7.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-notification 2.8.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-opener 2.7.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-single-instance 2.5.5** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [277](#t277)
+- **tauri-plugin-updater 2.14.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-plugin-window-state 2.5.0** — Apache-2.0 OR MIT — https://github.com/tauri-apps/plugins-workspace — тексты: [276](#t276), [17](#t17), [274](#t274)
+- **tauri-runtime 2.12.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-runtime-wry 2.12.3** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-utils 2.10.2** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri — тексты: [17](#t17), [274](#t274)
+- **tauri-winres 0.3.7** — MIT — https://github.com/tauri-apps/winres — тексты: [278](#t278)
+- **tauri-winrt-notification 0.8.1** — MIT OR Apache-2.0 — https://github.com/tauri-apps/winrt-notification — тексты: [279](#t279), [17](#t17), [274](#t274)
+- **tempfile 3.27.0** — MIT OR Apache-2.0 — https://github.com/Stebalien/tempfile — тексты: [4](#t4), [280](#t280)
+- **tendril 0.5.1** — MIT OR Apache-2.0 — https://github.com/servo/html5ever — тексты: [4](#t4), [281](#t281)
 - **thiserror 1.0.69** — MIT OR Apache-2.0 — https://github.com/dtolnay/thiserror — тексты: [17](#t17), [3](#t3)
 - **thiserror 2.0.21** — MIT OR Apache-2.0 — https://github.com/dtolnay/thiserror — тексты: [17](#t17), [3](#t3)
 - **thiserror-impl 1.0.69** — MIT OR Apache-2.0 — https://github.com/dtolnay/thiserror — тексты: [17](#t17), [3](#t3)
 - **thiserror-impl 2.0.21** — MIT OR Apache-2.0 — https://github.com/dtolnay/thiserror — тексты: [17](#t17), [3](#t3)
-- **thread_local 1.1.10** — MIT OR Apache-2.0 — https://github.com/Amanieu/thread_local-rs — тексты: [4](#t4), [167](#t167)
-- **time 0.3.55** — MIT OR Apache-2.0 — https://github.com/time-rs/time — тексты: [17](#t17), [285](#t285)
-- **time-core 0.1.9** — MIT OR Apache-2.0 — https://github.com/time-rs/time — тексты: [17](#t17), [285](#t285)
-- **time-macros 0.2.32** — MIT OR Apache-2.0 — https://github.com/time-rs/time — тексты: [17](#t17), [285](#t285)
+- **thread_local 1.1.10** — MIT OR Apache-2.0 — https://github.com/Amanieu/thread_local-rs — тексты: [4](#t4), [165](#t165)
+- **time 0.3.55** — MIT OR Apache-2.0 — https://github.com/time-rs/time — тексты: [17](#t17), [282](#t282)
+- **time-core 0.1.9** — MIT OR Apache-2.0 — https://github.com/time-rs/time — тексты: [17](#t17), [282](#t282)
+- **time-macros 0.2.32** — MIT OR Apache-2.0 — https://github.com/time-rs/time — тексты: [17](#t17), [282](#t282)
 - **tinystr 0.8.5** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
 - **tinyvec 1.13.3** — Zlib OR Apache-2.0 OR MIT — https://github.com/Lokathor/tinyvec — тексты: [4](#t4), [3](#t3), [41](#t41)
-- **tokio 1.54.1** — MIT — https://github.com/tokio-rs/tokio — тексты: [286](#t286)
-- **tokio-macros 2.7.2** — MIT — https://github.com/tokio-rs/tokio — тексты: [287](#t287)
-- **tokio-rustls 0.26.6** — MIT OR Apache-2.0 — https://github.com/rustls/tokio-rustls — тексты: [288](#t288), [289](#t289)
-- **tokio-stream 0.1.19** — MIT — https://github.com/tokio-rs/tokio — тексты: [286](#t286)
-- **tokio-tungstenite 0.30.0** — MIT — https://github.com/snapview/tokio-tungstenite — тексты: [290](#t290)
-- **tokio-util 0.7.20** — MIT — https://github.com/tokio-rs/tokio — тексты: [286](#t286)
-- **tokio-websockets 0.13.3** — MIT — https://github.com/Gelbpunkt/tokio-websockets/ — тексты: [291](#t291)
-- **toml 1.1.8+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [242](#t242), [243](#t243)
-- **toml_datetime 1.1.2+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [242](#t242), [243](#t243)
-- **toml_edit 0.25.17+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [242](#t242), [243](#t243)
-- **toml_parser 1.1.5+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [242](#t242), [243](#t243)
-- **toml_writer 1.1.3+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [242](#t242), [243](#t243)
-- **tower 0.5.3** — MIT — https://github.com/tower-rs/tower — тексты: [292](#t292)
-- **tower-http 0.6.11** — MIT — https://github.com/tower-rs/tower-http — тексты: [293](#t293)
-- **tower-layer 0.3.3** — MIT — https://github.com/tower-rs/tower — тексты: [292](#t292)
-- **tower-service 0.3.3** — MIT — https://github.com/tower-rs/tower — тексты: [292](#t292)
-- **tracing 0.1.44** — MIT — https://github.com/tokio-rs/tracing — тексты: [294](#t294)
-- **tracing-appender 0.2.5** — MIT — https://github.com/tokio-rs/tracing — тексты: [294](#t294)
-- **tracing-attributes 0.1.31** — MIT — https://github.com/tokio-rs/tracing — тексты: [294](#t294)
-- **tracing-core 0.1.36** — MIT — https://github.com/tokio-rs/tracing — тексты: [294](#t294)
-- **tracing-log 0.2.0** — MIT — https://github.com/tokio-rs/tracing — тексты: [294](#t294)
-- **tracing-subscriber 0.3.23** — MIT — https://github.com/tokio-rs/tracing — тексты: [294](#t294)
-- **tray-icon 0.25.1** — MIT OR Apache-2.0 — https://github.com/tauri-apps/tray-icon — тексты: [4](#t4), [180](#t180), [295](#t295)
-- **try-lock 0.2.5** — MIT — https://github.com/seanmonstar/try-lock — тексты: [296](#t296)
-- **tungstenite 0.30.0** — MIT OR Apache-2.0 — https://github.com/snapview/tungstenite-rs — тексты: [4](#t4), [297](#t297)
+- **tokio 1.54.1** — MIT — https://github.com/tokio-rs/tokio — тексты: [283](#t283)
+- **tokio-macros 2.7.2** — MIT — https://github.com/tokio-rs/tokio — тексты: [284](#t284)
+- **tokio-rustls 0.26.6** — MIT OR Apache-2.0 — https://github.com/rustls/tokio-rustls — тексты: [285](#t285), [286](#t286)
+- **tokio-stream 0.1.19** — MIT — https://github.com/tokio-rs/tokio — тексты: [283](#t283)
+- **tokio-tungstenite 0.30.0** — MIT — https://github.com/snapview/tokio-tungstenite — тексты: [287](#t287)
+- **tokio-util 0.7.20** — MIT — https://github.com/tokio-rs/tokio — тексты: [283](#t283)
+- **tokio-websockets 0.13.3** — MIT — https://github.com/Gelbpunkt/tokio-websockets/ — тексты: [288](#t288)
+- **toml 1.1.8+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [239](#t239), [240](#t240)
+- **toml_datetime 1.1.2+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [239](#t239), [240](#t240)
+- **toml_edit 0.25.17+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [239](#t239), [240](#t240)
+- **toml_parser 1.1.5+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [239](#t239), [240](#t240)
+- **toml_writer 1.1.3+spec-1.1.0** — MIT OR Apache-2.0 — https://github.com/toml-rs/toml — тексты: [239](#t239), [240](#t240)
+- **tower 0.5.3** — MIT — https://github.com/tower-rs/tower — тексты: [289](#t289)
+- **tower-http 0.6.11** — MIT — https://github.com/tower-rs/tower-http — тексты: [290](#t290)
+- **tower-layer 0.3.3** — MIT — https://github.com/tower-rs/tower — тексты: [289](#t289)
+- **tower-service 0.3.3** — MIT — https://github.com/tower-rs/tower — тексты: [289](#t289)
+- **tracing 0.1.44** — MIT — https://github.com/tokio-rs/tracing — тексты: [291](#t291)
+- **tracing-appender 0.2.5** — MIT — https://github.com/tokio-rs/tracing — тексты: [291](#t291)
+- **tracing-attributes 0.1.31** — MIT — https://github.com/tokio-rs/tracing — тексты: [291](#t291)
+- **tracing-core 0.1.36** — MIT — https://github.com/tokio-rs/tracing — тексты: [291](#t291)
+- **tracing-log 0.2.0** — MIT — https://github.com/tokio-rs/tracing — тексты: [291](#t291)
+- **tracing-subscriber 0.3.23** — MIT — https://github.com/tokio-rs/tracing — тексты: [291](#t291)
+- **tray-icon 0.25.1** — MIT OR Apache-2.0 — https://github.com/tauri-apps/tray-icon — тексты: [4](#t4), [178](#t178), [292](#t292)
+- **try-lock 0.2.5** — MIT — https://github.com/seanmonstar/try-lock — тексты: [293](#t293)
+- **tungstenite 0.30.0** — MIT OR Apache-2.0 — https://github.com/snapview/tungstenite-rs — тексты: [4](#t4), [294](#t294)
 - **typed-path 0.13.0** — MIT OR Apache-2.0 — https://github.com/chipsenkbeil/typed-path — тексты: [17](#t17), [3](#t3)
 - **typeid 1.0.3** — MIT OR Apache-2.0 — https://github.com/dtolnay/typeid — тексты: [17](#t17), [3](#t3)
-- **typenum 1.20.1** — MIT OR Apache-2.0 — https://github.com/paholg/typenum — тексты: [298](#t298), [299](#t299), [300](#t300)
-- **unicode-ident 1.0.27** — (MIT OR Apache-2.0) AND Unicode-3.0 — https://github.com/dtolnay/unicode-ident — тексты: [17](#t17), [3](#t3), [301](#t301)
-- **unicode-segmentation 1.13.3** — MIT OR Apache-2.0 — https://github.com/unicode-rs/unicode-segmentation — тексты: [302](#t302), [4](#t4), [118](#t118)
-- **unicode-xid 0.2.6** — MIT OR Apache-2.0 — https://github.com/unicode-rs/unicode-xid — тексты: [302](#t302), [4](#t4), [118](#t118)
-- **universal-hash 0.5.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [303](#t303)
-- **universal-hash 0.6.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [304](#t304)
-- **untrusted 0.9.0** — ISC — https://github.com/briansmith/untrusted — тексты: [305](#t305)
+- **typenum 1.20.1** — MIT OR Apache-2.0 — https://github.com/paholg/typenum — тексты: [295](#t295), [296](#t296), [297](#t297)
+- **unicode-ident 1.0.27** — (MIT OR Apache-2.0) AND Unicode-3.0 — https://github.com/dtolnay/unicode-ident — тексты: [17](#t17), [3](#t3), [298](#t298)
+- **unicode-segmentation 1.13.3** — MIT OR Apache-2.0 — https://github.com/unicode-rs/unicode-segmentation — тексты: [299](#t299), [4](#t4), [118](#t118)
+- **unicode-xid 0.2.6** — MIT OR Apache-2.0 — https://github.com/unicode-rs/unicode-xid — тексты: [299](#t299), [4](#t4), [118](#t118)
+- **universal-hash 0.5.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [300](#t300)
+- **universal-hash 0.6.1** — MIT OR Apache-2.0 — https://github.com/RustCrypto/traits — тексты: [4](#t4), [301](#t301)
+- **untrusted 0.9.0** — ISC — https://github.com/briansmith/untrusted — тексты: [302](#t302)
 - **url 2.5.8** — MIT OR Apache-2.0 — https://github.com/servo/rust-url — тексты: [4](#t4), [136](#t136)
-- **urlpattern 0.6.0** — MIT — https://github.com/denoland/rust-urlpattern — тексты: [306](#t306)
-- **utf8_iter 1.1.0** — Apache-2.0 OR MIT — https://github.com/hsivonen/utf8_iter — тексты: [307](#t307), [4](#t4), [308](#t308)
-- **utf_types 1.0.0** — Apache-2.0 OR MIT — https://github.com/hsivonen/utf_types — тексты: [309](#t309), [4](#t4), [308](#t308)
-- **uuid 1.29.0** — Apache-2.0 OR MIT — https://github.com/uuid-rs/uuid — тексты: [4](#t4), [310](#t310)
-- **vcpkg 0.2.15** — MIT/Apache-2.0 — https://github.com/mcgoo/vcpkg-rs — тексты: [4](#t4), [311](#t311)
-- **version_check 0.9.5** — MIT/Apache-2.0 — https://github.com/SergioBenitez/version_check — тексты: [4](#t4), [312](#t312)
-- **vswhom 0.1.0** — MIT — https://github.com/nabijaczleweli/vswhom.rs — тексты: [313](#t313)
-- **vswhom-sys 0.1.3** — MIT — https://github.com/nabijaczleweli/vswhom-sys.rs — тексты: [313](#t313)
+- **urlpattern 0.6.0** — MIT — https://github.com/denoland/rust-urlpattern — тексты: [303](#t303)
+- **utf8_iter 1.1.0** — Apache-2.0 OR MIT — https://github.com/hsivonen/utf8_iter — тексты: [304](#t304), [4](#t4), [305](#t305)
+- **utf_types 1.0.0** — Apache-2.0 OR MIT — https://github.com/hsivonen/utf_types — тексты: [306](#t306), [4](#t4), [305](#t305)
+- **uuid 1.29.0** — Apache-2.0 OR MIT — https://github.com/uuid-rs/uuid — тексты: [4](#t4), [307](#t307)
+- **vcpkg 0.2.15** — MIT/Apache-2.0 — https://github.com/mcgoo/vcpkg-rs — тексты: [4](#t4), [308](#t308)
+- **version_check 0.9.5** — MIT/Apache-2.0 — https://github.com/SergioBenitez/version_check — тексты: [4](#t4), [309](#t309)
+- **vswhom 0.1.0** — MIT — https://github.com/nabijaczleweli/vswhom.rs — тексты: [310](#t310)
+- **vswhom-sys 0.1.3** — MIT — https://github.com/nabijaczleweli/vswhom-sys.rs — тексты: [310](#t310)
 - **walkdir 2.5.0** — Unlicense/MIT — https://github.com/BurntSushi/walkdir — тексты: [11](#t11), [12](#t12), [13](#t13)
-- **want 0.3.2** — MIT — https://github.com/seanmonstar/want — тексты: [314](#t314)
-- **web-time 1.1.0** — MIT OR Apache-2.0 — https://github.com/daxpedda/web-time — тексты: [315](#t315), [316](#t316)
+- **want 0.3.2** — MIT — https://github.com/seanmonstar/want — тексты: [311](#t311)
+- **web-time 1.1.0** — MIT OR Apache-2.0 — https://github.com/daxpedda/web-time — тексты: [312](#t312), [313](#t313)
 - **web_atoms 0.2.6** — MIT OR Apache-2.0 — https://github.com/servo/html5ever — тексты: [4](#t4), [121](#t121)
-- **webpki-roots 0.26.11** — CDLA-Permissive-2.0 — https://github.com/rustls/webpki-roots — тексты: [317](#t317)
-- **webpki-roots 1.0.11** — CDLA-Permissive-2.0 — https://github.com/rustls/webpki-roots — тексты: [317](#t317)
-- **webview2-com 0.39.1** — MIT — https://github.com/wravery/webview2-rs — тексты: [318](#t318)
-- **webview2-com-macros 0.8.1** — MIT — https://github.com/wravery/webview2-rs — тексты: [319](#t319)
-- **webview2-com-sys 0.39.1** — MIT — https://github.com/wravery/webview2-rs — тексты: [320](#t320)
+- **webpki-roots 0.26.11** — CDLA-Permissive-2.0 — https://github.com/rustls/webpki-roots — тексты: [314](#t314)
+- **webpki-roots 1.0.11** — CDLA-Permissive-2.0 — https://github.com/rustls/webpki-roots — тексты: [314](#t314)
+- **webview2-com 0.39.1** — MIT — https://github.com/wravery/webview2-rs — тексты: [315](#t315)
+- **webview2-com-macros 0.8.1** — MIT — https://github.com/wravery/webview2-rs — тексты: [316](#t316)
+- **webview2-com-sys 0.39.1** — MIT — https://github.com/wravery/webview2-rs — тексты: [317](#t317)
 - **widestring 1.2.1** — MIT OR Apache-2.0 — https://github.com/VoidStarKat/widestring-rs — тексты: [17](#t17), [99](#t99)
-- **winapi-util 0.1.11** — Unlicense OR MIT — https://github.com/BurntSushi/winapi-util — тексты: [11](#t11), [238](#t238), [13](#t13)
-- **window-vibrancy 0.8.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri-plugin-vibrancy — тексты: [4](#t4), [321](#t321), [322](#t322)
-- **windows 0.62.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-collections 0.3.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-core 0.62.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-future 0.3.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-implement 0.60.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-interface 0.59.3** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-link 0.2.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-numerics 0.3.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-registry 0.6.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-result 0.4.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-strings 0.5.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-sys 0.52.0** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-sys 0.61.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-targets 0.52.6** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-threading 0.2.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows-version 0.1.7** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
-- **windows_aarch64_msvc 0.52.6** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [323](#t323), [324](#t324)
+- **winapi-util 0.1.11** — Unlicense OR MIT — https://github.com/BurntSushi/winapi-util — тексты: [11](#t11), [235](#t235), [13](#t13)
+- **window-vibrancy 0.8.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/tauri-plugin-vibrancy — тексты: [4](#t4), [318](#t318), [319](#t319)
+- **windows 0.62.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-collections 0.3.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-core 0.62.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-future 0.3.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-implement 0.60.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-interface 0.59.3** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-link 0.2.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-numerics 0.3.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-registry 0.6.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-result 0.4.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-strings 0.5.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-sys 0.52.0** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-sys 0.61.2** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-targets 0.52.6** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-threading 0.2.1** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows-version 0.1.7** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
+- **windows_aarch64_msvc 0.52.6** — MIT OR Apache-2.0 — https://github.com/microsoft/windows-rs — тексты: [320](#t320), [321](#t321)
 - **winnow 1.0.4** — MIT — https://github.com/winnow-rs/winnow — тексты: [3](#t3)
-- **winreg 0.56.0** — MIT — https://github.com/gentoo90/winreg-rs — тексты: [325](#t325)
+- **winreg 0.56.0** — MIT — https://github.com/gentoo90/winreg-rs — тексты: [322](#t322)
 - **wmi 0.18.4** — MIT OR Apache-2.0 — https://github.com/ohadravid/wmi-rs — тексты: [4](#t4), [3](#t3)
-- **wnaf 0.14.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/elliptic-curves — тексты: [4](#t4), [326](#t326)
+- **wnaf 0.14.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/elliptic-curves — тексты: [4](#t4), [323](#t323)
 - **writeable 0.6.4** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
-- **wry 0.57.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/wry — тексты: [4](#t4), [327](#t327), [328](#t328)
-- **xml-rs 0.8.29** — MIT — https://github.com/kornelski/xml-rs — тексты: [329](#t329)
-- **xmltree 0.10.3** — MIT — https://github.com/eminence/xmltree-rs — тексты: [330](#t330)
+- **wry 0.57.1** — Apache-2.0 OR MIT — https://github.com/tauri-apps/wry — тексты: [4](#t4), [324](#t324), [325](#t325)
+- **xml-rs 0.8.29** — MIT — https://github.com/kornelski/xml-rs — тексты: [326](#t326)
+- **xmltree 0.10.3** — MIT — https://github.com/eminence/xmltree-rs — тексты: [327](#t327)
 - **yoke 0.8.4** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
 - **yoke-derive 0.8.4** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
-- **zerocopy 0.8.63** — BSD-2-Clause OR Apache-2.0 OR MIT — https://github.com/google/zerocopy — тексты: [331](#t331), [332](#t332), [333](#t333)
-- **zerocopy-derive 0.8.63** — BSD-2-Clause OR Apache-2.0 OR MIT — https://github.com/google/zerocopy — тексты: [331](#t331), [332](#t332), [333](#t333)
+- **zerocopy 0.8.63** — BSD-2-Clause OR Apache-2.0 OR MIT — https://github.com/google/zerocopy — тексты: [328](#t328), [329](#t329), [330](#t330)
+- **zerocopy-derive 0.8.63** — BSD-2-Clause OR Apache-2.0 OR MIT — https://github.com/google/zerocopy — тексты: [328](#t328), [329](#t329), [330](#t330)
 - **zerofrom 0.1.8** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
 - **zerofrom-derive 0.1.8** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
-- **zeroize 1.9.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/utils — тексты: [4](#t4), [334](#t334)
+- **zeroize 1.9.1** — Apache-2.0 OR MIT — https://github.com/RustCrypto/utils — тексты: [4](#t4), [331](#t331)
 - **zeroize_derive 1.5.0** — Apache-2.0 OR MIT — https://github.com/RustCrypto/utils — тексты: [4](#t4), [10](#t10)
 - **zerotrie 0.2.5** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
 - **zerovec 0.11.9** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
 - **zerovec-derive 0.11.7** — Unicode-3.0 — https://github.com/unicode-org/icu4x — тексты: [134](#t134)
-- **zip 9.2.2** — MIT — https://github.com/zip-rs/zip2 — тексты: [262](#t262)
-- **zlib-rs 0.6.8** — Zlib — https://github.com/trifectatechfoundation/zlib-rs — тексты: [335](#t335)
+- **zip 9.2.2** — MIT — https://github.com/zip-rs/zip2 — тексты: [259](#t259)
+- **zlib-rs 0.6.8** — Zlib — https://github.com/trifectatechfoundation/zlib-rs — тексты: [332](#t332)
 - **zmij 1.0.23** — MIT — https://github.com/dtolnay/zmij — тексты: [3](#t3)
-- **QR Code Generator for JavaScript (qrcode.js)** — MIT — https://github.com/kazuhikoarase/qrcode-generator — тексты: [336](#t336)
-- **noble-secp256k1** — MIT — https://github.com/paulmillr/noble-secp256k1 — тексты: [337](#t337)
-- **SQLite 3 (внутри libsqlite3-sys, сборка bundled)** — Public Domain — https://sqlite.org/copyright.html — тексты: [338](#t338)
+- **QR Code Generator for JavaScript (qrcode.js)** — MIT — https://github.com/kazuhikoarase/qrcode-generator — тексты: [333](#t333)
+- **noble-secp256k1** — MIT — https://github.com/paulmillr/noble-secp256k1 — тексты: [334](#t334)
+- **SQLite 3 (внутри libsqlite3-sys, сборка bundled)** — Public Domain — https://sqlite.org/copyright.html — тексты: [335](#t335)
+- **AndroidX (Jetpack): activity 1.10.1, annotation 1.9.1, appcompat 1.7.1, arch-core 2.2.0, browser 1.8.0, cardview 1.0.0, collection 1.4.2, concurrent-futures 1.1.0, constraintlayout 2.1.0, coordinatorlayout 1.1.0, core 1.13.1, cursoradapter 1.0.0, customview 1.1.0, drawerlayout 1.1.1, dynamicanimation 1.1.0, emoji2 1.3.0, fragment 1.5.4, graphics-shapes 1.0.1, interpolator 1.0.0, lifecycle 2.10.0, loader 1.0.0, profileinstaller 1.4.0, recyclerview 1.2.1, resourceinspection 1.0.1, savedstate 1.4.0, startup 1.1.1, tracing 1.0.0, transition 1.5.0, vectordrawable 1.1.0, versionedparcelable 1.1.1, viewpager 1.0.0, viewpager2 1.0.0, webkit 1.14.0 — только Android** — Apache-2.0 — https://developer.android.com/jetpack/androidx — тексты: [2](#t2)
+- **Material Components for Android 1.13.0 — только Android** — Apache-2.0 — https://github.com/material-components/material-components-android — тексты: [2](#t2)
+- **Kotlin Standard Library 2.2.10 — только Android** — Apache-2.0 — https://github.com/JetBrains/kotlin — тексты: [2](#t2)
+- **kotlinx.coroutines 1.9.0 — только Android** — Apache-2.0 — https://github.com/Kotlin/kotlinx.coroutines — тексты: [2](#t2)
+- **kotlinx.serialization 1.7.3 — только Android** — Apache-2.0 — https://github.com/Kotlin/kotlinx.serialization — тексты: [2](#t2)
+- **JetBrains Java Annotations 23.0.0 — только Android** — Apache-2.0 — https://github.com/JetBrains/java-annotations — тексты: [2](#t2)
+- **Jackson (core, annotations, databind, datatype-json-org) 2.15.3 — только Android** — Apache-2.0 — https://github.com/FasterXML/jackson — тексты: [2](#t2)
+- **Guava ListenableFuture 1.0 — только Android** — Apache-2.0 — https://github.com/google/guava — тексты: [2](#t2)
+- **Error Prone annotations 2.15.0 — только Android** — Apache-2.0 — https://github.com/google/error-prone — тексты: [2](#t2)
+- **JSpecify 1.0.0 — только Android** — Apache-2.0 — https://github.com/jspecify/jspecify — тексты: [2](#t2)
 
 ## Тексты лицензий
 
@@ -544,7 +551,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
 <a id="t2"></a>
-### [2] LICENSE-APACHE — adler2 2.0.1, cargo-platform 0.1.9, proc-macro-crate 3.5.0
+### [2] LICENSE-APACHE — adler2 2.0.1, cargo-platform 0.1.9, proc-macro-crate 3.5.0, AndroidX (Jetpack): activity 1.10.1, annotation 1.9.1, appcompat 1.7.1, arch-core 2.2.0, browser 1.8.0, cardview 1.0.0, collection 1.4.2, concurrent-futures 1.1.0, constraintlayout 2.1.0, coordinatorlayout 1.1.0, core 1.13.1, cursoradapter 1.0.0, customview 1.1.0, drawerlayout 1.1.1, dynamicanimation 1.1.0, emoji2 1.3.0, fragment 1.5.4, graphics-shapes 1.0.1, interpolator 1.0.0, lifecycle 2.10.0, loader 1.0.0, profileinstaller 1.4.0, recyclerview 1.2.1, resourceinspection 1.0.1, savedstate 1.4.0, startup 1.1.1, tracing 1.0.0, transition 1.5.0, vectordrawable 1.1.0, versionedparcelable 1.1.1, viewpager 1.0.0, viewpager2 1.0.0, webkit 1.14.0 — только Android, Material Components for Android 1.13.0 — только Android, Kotlin Standard Library 2.2.10 — только Android, kotlinx.coroutines 1.9.0 — только Android, kotlinx.serialization 1.7.3 — только Android …
 
 ```
 Apache License
@@ -6221,7 +6228,7 @@ DEALINGS IN THE SOFTWARE.
 ```
 
 <a id="t81"></a>
-### [81] LICENSE-APACHE — dirs 6.0.0, dirs 7.0.0, dirs-sys 0.5.0
+### [81] LICENSE-APACHE — dirs 7.0.0, dirs-sys 0.5.0
 
 ```
 Apache License
@@ -6401,7 +6408,7 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 ```
 
 <a id="t82"></a>
-### [82] LICENSE-MIT — dirs 6.0.0, dirs 7.0.0, dirs-sys 0.5.0
+### [82] LICENSE-MIT — dirs 7.0.0, dirs-sys 0.5.0
 
 ```
 Copyright (c) 2018-2019 dirs-rs contributors
@@ -10152,266 +10159,7 @@ THE SOFTWARE.
 ```
 
 <a id="t165"></a>
-### [165] COPYRIGHT — linux-raw-sys 0.12.1
-
-```
-Short version for non-lawyers:
-
-`linux-raw-sys` is triple-licensed under Apache 2.0 with the LLVM Exception,
-Apache 2.0, and MIT terms.
-
-
-Longer version:
-
-Copyrights in the `linux-raw-sys` project are retained by their contributors.
-No copyright assignment is required to contribute to the `linux-raw-sys`
-project.
-
-Some files include code derived from Rust's `libstd`; see the comments in
-the code for details.
-
-Except as otherwise noted (below and/or in individual files), `linux-raw-sys`
-is licensed under:
-
- - the Apache License, Version 2.0, with the LLVM Exception
-   <LICENSE-Apache-2.0_WITH_LLVM-exception> or
-   <http://llvm.org/foundation/relicensing/LICENSE.txt>
- - the Apache License, Version 2.0
-   <LICENSE-APACHE> or
-   <http://www.apache.org/licenses/LICENSE-2.0>,
- - or the MIT license
-   <LICENSE-MIT> or
-   <http://opensource.org/licenses/MIT>,
-
-at your option.
-```
-
-<a id="t166"></a>
-### [166] LICENSE-Apache-2.0_WITH_LLVM-exception — linux-raw-sys 0.12.1, rustix 1.1.6
-
-```
-Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS
-
-   APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
-
---- LLVM Exceptions to the Apache 2.0 License ----
-
-As an exception, if, as a result of your compiling your source code, portions
-of this Software are embedded into an Object form of such source code, you
-may redistribute such embedded portions in such Object form without complying
-with the conditions of Sections 4(a), 4(b) and 4(d) of the License.
-
-In addition, if you combine or link compiled forms of this Software with
-software that is licensed under the GPLv2 ("Combined Software") and if a
-court of competent jurisdiction determines that the patent provision (Section
-3), the indemnity provision (Section 9) or other Section of the License
-conflicts with the conditions of the GPLv2, you may retroactively and
-prospectively choose to deem waived or otherwise exclude such Section(s) of
-the License, but only in their entirety and only with respect to the Combined
-Software.
-```
-
-<a id="t167"></a>
-### [167] LICENSE-MIT — lock_api 0.4.14, parking_lot 0.12.5, parking_lot_core 0.9.12, rustc_version 0.4.1, thread_local 1.1.10
+### [165] LICENSE-MIT — lock_api 0.4.14, parking_lot 0.12.5, parking_lot_core 0.9.12, rustc_version 0.4.1, thread_local 1.1.10
 
 ```
 Copyright (c) 2016 The Rust Project Developers
@@ -10441,8 +10189,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t168"></a>
-### [168] LICENSE — lru 0.18.5
+<a id="t166"></a>
+### [166] LICENSE — lru 0.18.5
 
 ```
 MIT License
@@ -10468,8 +10216,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t169"></a>
-### [169] LICENSE-MIT — lru-slab 0.1.3
+<a id="t167"></a>
+### [167] LICENSE-MIT — lru-slab 0.1.3
 
 ```
 Copyright (c) 2024 The lru-slab Developers
@@ -10481,8 +10229,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t170"></a>
-### [170] LICENSE-ZLIB — lru-slab 0.1.3
+<a id="t168"></a>
+### [168] LICENSE-ZLIB — lru-slab 0.1.3
 
 ```
 Copyright (c) 2024 The lru-slab Developers
@@ -10506,8 +10254,8 @@ the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-<a id="t171"></a>
-### [171] LICENSE — mac-addr 0.3.0
+<a id="t169"></a>
+### [169] LICENSE — mac-addr 0.3.0
 
 ```
 MIT License
@@ -10533,8 +10281,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t172"></a>
-### [172] LICENSE — matchers 0.2.0, sharded-slab 0.1.7
+<a id="t170"></a>
+### [170] LICENSE — matchers 0.2.0, sharded-slab 0.1.7
 
 ```
 Copyright (c) 2019 Eliza Weisman
@@ -10558,8 +10306,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t173"></a>
-### [173] LICENSE-MIT — mime 0.3.17
+<a id="t171"></a>
+### [171] LICENSE-MIT — mime 0.3.17
 
 ```
 Copyright (c) 2014 Sean McArthur
@@ -10583,8 +10331,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t174"></a>
-### [174] LICENSE — minisign-verify 0.3.0
+<a id="t172"></a>
+### [172] LICENSE — minisign-verify 0.3.0
 
 ```
 Copyright (c) 2019-2025 Frank Denis
@@ -10648,8 +10396,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t175"></a>
-### [175] LICENSE — miniz_oxide 0.8.9, miniz_oxide 0.8.9, miniz_oxide 0.9.1, miniz_oxide 0.9.1
+<a id="t173"></a>
+### [173] LICENSE — miniz_oxide 0.8.9, miniz_oxide 0.8.9, miniz_oxide 0.9.1, miniz_oxide 0.9.1
 
 ```
 MIT License
@@ -10679,8 +10427,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t176"></a>
-### [176] LICENSE-ZLIB.md — miniz_oxide 0.8.9, miniz_oxide 0.9.1
+<a id="t174"></a>
+### [174] LICENSE-ZLIB.md — miniz_oxide 0.8.9, miniz_oxide 0.9.1
 
 ```
 Copyright 2013-2014 RAD Game Tools and Valve Software
@@ -10699,8 +10447,8 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-<a id="t177"></a>
-### [177] LICENSE — mio 1.2.4
+<a id="t175"></a>
+### [175] LICENSE — mio 1.2.4
 
 ```
 Copyright (c) 2014 Carl Lerche and other MIO contributors
@@ -10724,8 +10472,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t178"></a>
-### [178] LICENSE-APACHE.md — moxcms 0.8.1, pxfm 0.1.30
+<a id="t176"></a>
+### [176] LICENSE-APACHE.md — moxcms 0.8.1, pxfm 0.1.30
 
 ```
 Apache License
@@ -10931,8 +10679,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t179"></a>
-### [179] LICENSE.md — moxcms 0.8.1, pxfm 0.1.30
+<a id="t177"></a>
+### [177] LICENSE.md — moxcms 0.8.1, pxfm 0.1.30
 
 ```
 Copyright (c) Radzivon Bartoshyk. All rights reserved.
@@ -10963,8 +10711,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-<a id="t180"></a>
-### [180] LICENSE-MIT — muda 0.20.0, tray-icon 0.25.1
+<a id="t178"></a>
+### [178] LICENSE-MIT — muda 0.20.0, tray-icon 0.25.1
 
 ```
 MIT License
@@ -10990,8 +10738,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t181"></a>
-### [181] LICENSE.spdx — muda 0.20.0
+<a id="t179"></a>
+### [179] LICENSE.spdx — muda 0.20.0
 
 ```
 SPDXVersion: SPDX-2.1
@@ -11015,8 +10763,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/muda.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t182"></a>
-### [182] LICENSE-APACHE — n0-dns-resolver 0.1.0, sorted-index-buffer 0.2.1
+<a id="t180"></a>
+### [180] LICENSE-APACHE — n0-dns-resolver 0.1.0, sorted-index-buffer 0.2.1
 
 ```
 Apache License
@@ -11222,8 +10970,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t183"></a>
-### [183] LICENSE-MIT — n0-dns-resolver 0.1.0, sorted-index-buffer 0.2.1
+<a id="t181"></a>
+### [181] LICENSE-MIT — n0-dns-resolver 0.1.0, sorted-index-buffer 0.2.1
 
 ```
 Copyright 2025 N0, INC.
@@ -11253,8 +11001,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t184"></a>
-### [184] LICENSE-APACHE — n0-future 0.3.2
+<a id="t182"></a>
+### [182] LICENSE-APACHE — n0-future 0.3.2
 
 ```
 Apache License
@@ -11460,8 +11208,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t185"></a>
-### [185] LICENSE-MIT — n0-future 0.3.2
+<a id="t183"></a>
+### [183] LICENSE-MIT — n0-future 0.3.2
 
 ```
 Copyright 2023 N0, INC.
@@ -11491,8 +11239,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t186"></a>
-### [186] MIT (текст по лицензии пакета) — ndk 0.9.0
+<a id="t184"></a>
+### [184] MIT (текст по лицензии пакета) — ndk 0.9.0
 
 ```
 Copyright (c) The Rust Mobile contributors
@@ -11504,8 +11252,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t187"></a>
-### [187] MIT (текст по лицензии пакета) — ndk-context 0.1.1, ndk-sys 0.6.0+11769913
+<a id="t185"></a>
+### [185] MIT (текст по лицензии пакета) — ndk-context 0.1.1, ndk-sys 0.6.0+11769913
 
 ```
 Copyright (c) The Rust Windowing contributors
@@ -11517,8 +11265,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t188"></a>
-### [188] LICENSE — netdev 0.45.1, netdev 0.46.3
+<a id="t186"></a>
+### [186] LICENSE — netdev 0.45.1, netdev 0.46.3
 
 ```
 MIT License
@@ -11544,8 +11292,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t189"></a>
-### [189] LICENSE-MIT — netlink-packet-core 0.8.2, netlink-packet-core 0.9.0, netlink-proto 0.12.2, netlink-sys 0.8.8, netlink-sys 0.9.0
+<a id="t187"></a>
+### [187] LICENSE-MIT — netlink-packet-core 0.8.2, netlink-packet-core 0.9.0, netlink-proto 0.12.2, netlink-sys 0.8.8, netlink-sys 0.9.0
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -11575,8 +11323,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t190"></a>
-### [190] LICENSE-MIT — netlink-packet-route 0.31.0, netlink-packet-route 0.33.0
+<a id="t188"></a>
+### [188] LICENSE-MIT — netlink-packet-route 0.31.0, netlink-packet-route 0.33.0
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -11598,8 +11346,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t191"></a>
-### [191] LICENSE-MIT — new_debug_unreachable 1.0.6
+<a id="t189"></a>
+### [189] LICENSE-MIT — new_debug_unreachable 1.0.6
 
 ```
 Copyright (c) 2015 Jonathan Reem
@@ -11629,8 +11377,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t192"></a>
-### [192] LICENSE-APACHE — noq 1.4.0, noq-proto 1.4.0, noq-udp 1.4.0
+<a id="t190"></a>
+### [190] LICENSE-APACHE — noq 1.4.0, noq-proto 1.4.0, noq-udp 1.4.0
 
 ```
 Apache License
@@ -11837,8 +11585,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t193"></a>
-### [193] LICENSE-MIT — noq 1.4.0, noq-proto 1.4.0, noq-udp 1.4.0
+<a id="t191"></a>
+### [191] LICENSE-MIT — noq 1.4.0, noq-proto 1.4.0, noq-udp 1.4.0
 
 ```
 Copyright (c) 2018-2025 The quinn Developers
@@ -11851,8 +11599,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t194"></a>
-### [194] LICENSE-MIT — notify-rust 4.18.2
+<a id="t192"></a>
+### [192] LICENSE-MIT — notify-rust 4.18.2
 
 ```
 MIT License
@@ -11878,8 +11626,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t195"></a>
-### [195] LICENSE — nu-ansi-term 0.50.3
+<a id="t193"></a>
+### [193] LICENSE — nu-ansi-term 0.50.3
 
 ```
 The MIT License (MIT)
@@ -11906,8 +11654,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t196"></a>
-### [196] LICENSE-MIT — num-conv 0.2.2
+<a id="t194"></a>
+### [194] LICENSE-MIT — num-conv 0.2.2
 
 ```
 Copyright (c) Jacob Pratt
@@ -11931,8 +11679,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t197"></a>
-### [197] LICENSE-BSD — num_enum 0.7.6, num_enum_derive 0.7.6
+<a id="t195"></a>
+### [195] LICENSE-BSD — num_enum 0.7.6, num_enum_derive 0.7.6
 
 ```
 Copyright (c) 2018, Daniel Wagner-Hall
@@ -11964,8 +11712,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-<a id="t198"></a>
-### [198] LICENSE-MIT — opaque-debug 0.3.1
+<a id="t196"></a>
+### [196] LICENSE-MIT — opaque-debug 0.3.1
 
 ```
 Copyright (c) 2018-2024 The RustCrypto Project Developers
@@ -11995,8 +11743,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t199"></a>
-### [199] LICENSE.md — open 5.4.5
+<a id="t197"></a>
+### [197] LICENSE.md — open 5.4.5
 
 ```
 The MIT License (MIT)
@@ -12026,8 +11774,8 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t200"></a>
-### [200] LICENSE.txt — option-ext 0.2.0
+<a id="t198"></a>
+### [198] LICENSE.txt — option-ext 0.2.0
 
 ```
 Mozilla Public License Version 2.0
@@ -12405,8 +12153,8 @@ Exhibit B - "Incompatible With Secondary Licenses" Notice
   defined by the Mozilla Public License, v. 2.0.
 ```
 
-<a id="t201"></a>
-### [201] LICENSE — os_info 3.15.0
+<a id="t199"></a>
+### [199] LICENSE — os_info 3.15.0
 
 ```
 The MIT License (MIT)
@@ -12432,8 +12180,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t202"></a>
-### [202] LICENSE-THIRD-PARTY — parking 2.2.1
+<a id="t200"></a>
+### [200] LICENSE-THIRD-PARTY — parking 2.2.1
 
 ```
 ===============================================================================
@@ -12447,8 +12195,8 @@ option. All files in the project carrying such notice may not be
 copied, modified, or distributed except according to those terms.
 ```
 
-<a id="t203"></a>
-### [203] LICENSE-MIT — pem-rfc7468 1.0.0
+<a id="t201"></a>
+### [201] LICENSE-MIT — pem-rfc7468 1.0.0
 
 ```
 Copyright (c) 2021-2025 The RustCrypto Project Developers
@@ -12478,8 +12226,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t204"></a>
-### [204] LICENSE — phf 0.13.1, phf_codegen 0.13.1, phf_generator 0.13.1, phf_macros 0.13.1, phf_shared 0.13.1
+<a id="t202"></a>
+### [202] LICENSE — phf 0.13.1, phf_codegen 0.13.1, phf_generator 0.13.1, phf_macros 0.13.1, phf_shared 0.13.1
 
 ```
 The MIT License (MIT)
@@ -12504,8 +12252,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t205"></a>
-### [205] LICENCE — plist 1.10.3
+<a id="t203"></a>
+### [203] LICENCE — plist 1.10.3
 
 ```
 Copyright (c) 2015 Edward Barnard
@@ -12529,8 +12277,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t206"></a>
-### [206] LICENSE-MIT — png 0.18.1
+<a id="t204"></a>
+### [204] LICENSE-MIT — png 0.18.1
 
 ```
 Copyright (c) 2015 nwin
@@ -12560,8 +12308,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t207"></a>
-### [207] LICENSE-MIT — poly1305 0.9.1
+<a id="t205"></a>
+### [205] LICENSE-MIT — poly1305 0.9.1
 
 ```
 Copyright (c) 2015-2026 The RustCrypto Project Developers
@@ -12591,8 +12339,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t208"></a>
-### [208] LICENSE-MIT — polyval 0.6.2
+<a id="t206"></a>
+### [206] LICENSE-MIT — polyval 0.6.2
 
 ```
 Copyright (c) 2019-2023 RustCrypto Developers
@@ -12622,8 +12370,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t209"></a>
-### [209] LICENSE-MIT — postcard 1.1.3, postcard-derive 0.2.2
+<a id="t207"></a>
+### [207] LICENSE-MIT — postcard 1.1.3, postcard-derive 0.2.2
 
 ```
 Copyright (c) 2019 Anthony James Munns
@@ -12653,8 +12401,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t210"></a>
-### [210] LICENSE-Apache — powerfmt 0.2.1
+<a id="t208"></a>
+### [208] LICENSE-Apache — powerfmt 0.2.1
 
 ```
 Apache License
@@ -12860,8 +12608,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t211"></a>
-### [211] LICENSE-MIT — powerfmt 0.2.1
+<a id="t209"></a>
+### [209] LICENSE-MIT — powerfmt 0.2.1
 
 ```
 Copyright (c) 2023 Jacob Pratt et al.
@@ -12885,8 +12633,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t212"></a>
-### [212] LICENSE — precomputed-hash 0.1.1
+<a id="t210"></a>
+### [210] LICENSE — precomputed-hash 0.1.1
 
 ```
 MIT License
@@ -12912,8 +12660,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t213"></a>
-### [213] LICENSE-MIT — primefield 0.14.0
+<a id="t211"></a>
+### [211] LICENSE-MIT — primefield 0.14.0
 
 ```
 Copyright (c) 2024-2026 RustCrypto Developers
@@ -12943,8 +12691,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t214"></a>
-### [214] LICENSE-MIT — primeorder 0.14.0
+<a id="t212"></a>
+### [212] LICENSE-MIT — primeorder 0.14.0
 
 ```
 Copyright (c) 2020-2023 RustCrypto Developers
@@ -12974,8 +12722,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t215"></a>
-### [215] LICENSE-MIT.md — quick-xml 0.42.0
+<a id="t213"></a>
+### [213] LICENSE-MIT.md — quick-xml 0.42.0
 
 ```
 The MIT License (MIT)
@@ -13003,8 +12751,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t216"></a>
-### [216] COPYRIGHT — rand 0.10.3, rand_pcg 0.10.2
+<a id="t214"></a>
+### [214] COPYRIGHT — rand 0.10.3, rand_pcg 0.10.2
 
 ```
 Copyrights in the Rand project are retained by their contributors. No
@@ -13021,8 +12769,8 @@ The Rand project includes code from the Rust project
 published under these same licenses.
 ```
 
-<a id="t217"></a>
-### [217] LICENSE-APACHE — rand 0.10.3
+<a id="t215"></a>
+### [215] LICENSE-APACHE — rand 0.10.3
 
 ```
 Apache License
@@ -13203,8 +12951,8 @@ TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
 END OF TERMS AND CONDITIONS
 ```
 
-<a id="t218"></a>
-### [218] LICENSE-MIT — rand 0.10.3
+<a id="t216"></a>
+### [216] LICENSE-MIT — rand 0.10.3
 
 ```
 Copyright 2018 Developers of the Rand project
@@ -13235,8 +12983,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t219"></a>
-### [219] COPYRIGHT — rand_core 0.10.1
+<a id="t217"></a>
+### [217] COPYRIGHT — rand_core 0.10.1
 
 ```
 Copyrights in the Rand project are retained by their contributors. No
@@ -13250,8 +12998,8 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
 ```
 
-<a id="t220"></a>
-### [220] LICENSE-APACHE — rand_core 0.10.1, rand_pcg 0.10.2
+<a id="t218"></a>
+### [218] LICENSE-APACHE — rand_core 0.10.1, rand_pcg 0.10.2
 
 ```
 Apache License
@@ -13443,8 +13191,8 @@ APPENDIX: How to apply the Apache License to your work.
    identification within third-party archives.
 ```
 
-<a id="t221"></a>
-### [221] LICENSE-MIT — rand_core 0.10.1
+<a id="t219"></a>
+### [219] LICENSE-MIT — rand_core 0.10.1
 
 ```
 Copyright (c) 2018-2026 The Rand Project Developers
@@ -13474,8 +13222,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t222"></a>
-### [222] LICENSE-MIT — rand_pcg 0.10.2
+<a id="t220"></a>
+### [220] LICENSE-MIT — rand_pcg 0.10.2
 
 ```
 Copyright (c) 2014-2017 Melissa O'Neill and PCG Project contributors
@@ -13506,8 +13254,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t223"></a>
-### [223] LICENSE-MIT.md — raw-window-handle 0.6.2
+<a id="t221"></a>
+### [221] LICENSE-MIT.md — raw-window-handle 0.6.2
 
 ```
 MIT License
@@ -13533,8 +13281,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t224"></a>
-### [224] LICENSE-ZLIB.md — raw-window-handle 0.6.2
+<a id="t222"></a>
+### [222] LICENSE-ZLIB.md — raw-window-handle 0.6.2
 
 ```
 Copyright (c) 2020 Osspial
@@ -13550,8 +13298,8 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-<a id="t225"></a>
-### [225] LICENSE-APACHE — reqwest 0.13.5
+<a id="t223"></a>
+### [223] LICENSE-APACHE — reqwest 0.13.5
 
 ```
 Apache License
@@ -13757,8 +13505,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t226"></a>
-### [226] LICENSE-MIT — reqwest 0.13.5
+<a id="t224"></a>
+### [224] LICENSE-MIT — reqwest 0.13.5
 
 ```
 Copyright (c) 2016-2026 Sean McArthur
@@ -13782,8 +13530,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t227"></a>
-### [227] LICENSE — rfd 0.17.2
+<a id="t225"></a>
+### [225] LICENSE — rfd 0.17.2
 
 ```
 MIT License
@@ -13809,8 +13557,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t228"></a>
-### [228] LICENSE — ring 0.17.14
+<a id="t226"></a>
+### [226] LICENSE — ring 0.17.14
 
 ```
 *ring* uses an "ISC" license, like BoringSSL used to use, for new code
@@ -13824,8 +13572,8 @@ See src/polyfill/once_cell/LICENSE-APACHE and src/polyfill/once_cell/LICENSE-MIT
 for the license to code that was sourced from the once_cell project.
 ```
 
-<a id="t229"></a>
-### [229] LICENSE-BoringSSL — ring 0.17.14
+<a id="t227"></a>
+### [227] LICENSE-BoringSSL — ring 0.17.14
 
 ```
 Apache License
@@ -14101,8 +13849,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-<a id="t230"></a>
-### [230] LICENSE-other-bits — ring 0.17.14
+<a id="t228"></a>
+### [228] LICENSE-other-bits — ring 0.17.14
 
 ```
 Copyright 2015-2025 Brian Smith.
@@ -14120,43 +13868,8 @@ OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-<a id="t231"></a>
-### [231] COPYRIGHT — rustix 1.1.6
-
-```
-Short version for non-lawyers:
-
-`rustix` is triple-licensed under Apache 2.0 with the LLVM Exception,
-Apache 2.0, and MIT terms.
-
-
-Longer version:
-
-Copyrights in the `rustix` project are retained by their contributors.
-No copyright assignment is required to contribute to the `rustix`
-project.
-
-Some files include code derived from Rust's `libstd`; see the comments in
-the code for details.
-
-Except as otherwise noted (below and/or in individual files), `rustix`
-is licensed under:
-
- - the Apache License, Version 2.0, with the LLVM Exception
-   <LICENSE-Apache-2.0_WITH_LLVM-exception> or
-   <http://llvm.org/foundation/relicensing/LICENSE.txt>
- - the Apache License, Version 2.0
-   <LICENSE-APACHE> or
-   <http://www.apache.org/licenses/LICENSE-2.0>,
- - or the MIT license
-   <LICENSE-MIT> or
-   <http://opensource.org/licenses/MIT>,
-
-at your option.
-```
-
-<a id="t232"></a>
-### [232] LICENSE-APACHE — rustls-pki-types 1.15.1
+<a id="t229"></a>
+### [229] LICENSE-APACHE — rustls-pki-types 1.15.1
 
 ```
 Apache License
@@ -14362,8 +14075,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t233"></a>
-### [233] LICENSE-MIT — rustls-pki-types 1.15.1
+<a id="t230"></a>
+### [230] LICENSE-MIT — rustls-pki-types 1.15.1
 
 ```
 Copyright (c) 2023 Dirkjan Ochtman <dirkjan@ochtman.nl>
@@ -14393,8 +14106,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t234"></a>
-### [234] LICENSE-MIT — rustls-platform-verifier 0.7.1
+<a id="t231"></a>
+### [231] LICENSE-MIT — rustls-platform-verifier 0.7.1
 
 ```
 MIT License
@@ -14420,8 +14133,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t235"></a>
-### [235] MIT (текст по лицензии пакета) — rustls-platform-verifier-android 0.2.0
+<a id="t232"></a>
+### [232] MIT (текст по лицензии пакета) — rustls-platform-verifier-android 0.2.0
 
 ```
 Copyright (c) rustls-platform-verifier-android developers
@@ -14433,8 +14146,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t236"></a>
-### [236] LICENSE — rustls-webpki 0.103.16
+<a id="t233"></a>
+### [233] LICENSE — rustls-webpki 0.103.16
 
 ```
 Except as otherwise noted, this project is licensed under the following
@@ -14458,8 +14171,8 @@ The files under third-party/chromium are licensed as described in
 third-party/chromium/LICENSE.
 ```
 
-<a id="t237"></a>
-### [237] LICENSE-BOOST — ryu 1.0.23
+<a id="t234"></a>
+### [234] LICENSE-BOOST — ryu 1.0.23
 
 ```
 Boost Software License - Version 1.0 - August 17th, 2003
@@ -14487,8 +14200,8 @@ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t238"></a>
-### [238] LICENSE-MIT — same-file 1.0.6, winapi-util 0.1.11
+<a id="t235"></a>
+### [235] LICENSE-MIT — same-file 1.0.6, winapi-util 0.1.11
 
 ```
 The MIT License (MIT)
@@ -14514,8 +14227,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t239"></a>
-### [239] LICENSE — schemars 0.8.22, schemars 0.9.0, schemars 1.2.3, schemars_derive 0.8.22
+<a id="t236"></a>
+### [236] LICENSE — schemars 0.8.22, schemars 0.9.0, schemars 1.2.3, schemars_derive 0.8.22
 
 ```
 MIT License
@@ -14541,8 +14254,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t240"></a>
-### [240] LICENSE-MIT — scopeguard 1.2.0
+<a id="t237"></a>
+### [237] LICENSE-MIT — scopeguard 1.2.0
 
 ```
 Copyright (c) 2016-2019 Ulrik Sverdrup "bluss" and scopeguard developers
@@ -14572,8 +14285,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t241"></a>
-### [241] LICENSE — seize 0.5.1
+<a id="t238"></a>
+### [238] LICENSE — seize 0.5.1
 
 ```
 MIT License
@@ -14599,8 +14312,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t242"></a>
-### [242] LICENSE-APACHE — serde_spanned 1.1.2, toml 1.1.8+spec-1.1.0, toml_datetime 1.1.2+spec-1.1.0, toml_edit 0.25.17+spec-1.1.0, toml_parser 1.1.5+spec-1.1.0, toml_writer 1.1.3+spec-1.1.0
+<a id="t239"></a>
+### [239] LICENSE-APACHE — serde_spanned 1.1.2, toml 1.1.8+spec-1.1.0, toml_datetime 1.1.2+spec-1.1.0, toml_edit 0.25.17+spec-1.1.0, toml_parser 1.1.5+spec-1.1.0, toml_writer 1.1.3+spec-1.1.0
 
 ```
 Apache License
@@ -14806,8 +14519,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t243"></a>
-### [243] LICENSE-MIT — serde_spanned 1.1.2, toml 1.1.8+spec-1.1.0, toml_datetime 1.1.2+spec-1.1.0, toml_edit 0.25.17+spec-1.1.0, toml_parser 1.1.5+spec-1.1.0, toml_writer 1.1.3+spec-1.1.0
+<a id="t240"></a>
+### [240] LICENSE-MIT — serde_spanned 1.1.2, toml 1.1.8+spec-1.1.0, toml_datetime 1.1.2+spec-1.1.0, toml_edit 0.25.17+spec-1.1.0, toml_parser 1.1.5+spec-1.1.0, toml_writer 1.1.3+spec-1.1.0
 
 ```
 Copyright (c) Individual contributors
@@ -14831,8 +14544,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t244"></a>
-### [244] LICENSE-MIT — serde_with 3.24.0, serde_with_macros 3.24.0
+<a id="t241"></a>
+### [241] LICENSE-MIT — serde_with 3.24.0, serde_with_macros 3.24.0
 
 ```
 Copyright (c) 2015
@@ -14862,8 +14575,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t245"></a>
-### [245] LICENSE-MIT — serdect 0.4.3
+<a id="t242"></a>
+### [242] LICENSE-MIT — serdect 0.4.3
 
 ```
 MIT License
@@ -14889,8 +14602,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t246"></a>
-### [246] LICENSE-MIT — serialize-to-javascript 0.1.2, serialize-to-javascript-impl 0.1.2
+<a id="t243"></a>
+### [243] LICENSE-MIT — serialize-to-javascript 0.1.2, serialize-to-javascript-impl 0.1.2
 
 ```
 MIT License
@@ -14916,8 +14629,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t247"></a>
-### [247] LICENSE-MIT — sha1 0.11.0, sha2 0.11.1
+<a id="t244"></a>
+### [244] LICENSE-MIT — sha1 0.11.0, sha2 0.11.1
 
 ```
 Copyright (c) 2016-2026 The RustCrypto Project Developers
@@ -14950,8 +14663,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t248"></a>
-### [248] LICENSE — sha1_smol 1.0.1
+<a id="t245"></a>
+### [245] LICENSE — sha1_smol 1.0.1
 
 ```
 BSD 3-Clause License
@@ -15016,8 +14729,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t249"></a>
-### [249] LICENSE-MIT — sha2 0.10.9
+<a id="t246"></a>
+### [246] LICENSE-MIT — sha2 0.10.9
 
 ```
 Copyright (c) 2006-2009 Graydon Hoare
@@ -15049,8 +14762,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t250"></a>
-### [250] LICENSE-APACHE — shlex 2.0.1
+<a id="t247"></a>
+### [247] LICENSE-APACHE — shlex 2.0.1
 
 ```
 Copyright 2015 Nicholas Allegra (comex).
@@ -15068,8 +14781,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t251"></a>
-### [251] LICENSE-MIT — shlex 2.0.1
+<a id="t248"></a>
+### [248] LICENSE-MIT — shlex 2.0.1
 
 ```
 The MIT License (MIT)
@@ -15095,8 +14808,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t252"></a>
-### [252] LICENSE-MIT — signal-hook-registry 1.4.8
+<a id="t249"></a>
+### [249] LICENSE-MIT — signal-hook-registry 1.4.8
 
 ```
 Copyright (c) 2017 tokio-jsonrpc developers
@@ -15126,8 +14839,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t253"></a>
-### [253] LICENSE.md — simd-adler32 0.3.10
+<a id="t250"></a>
+### [250] LICENSE.md — simd-adler32 0.3.10
 
 ```
 MIT License
@@ -15153,8 +14866,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t254"></a>
-### [254] LICENSE — simple-dns 0.12.0
+<a id="t251"></a>
+### [251] LICENSE — simple-dns 0.12.0
 
 ```
 MIT License
@@ -15180,8 +14893,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t255"></a>
-### [255] COPYING — siphasher 1.0.4
+<a id="t252"></a>
+### [252] COPYING — siphasher 1.0.4
 
 ```
 Copyright 2012-2016 The Rust Project Developers.
@@ -15193,8 +14906,8 @@ http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 option.
 ```
 
-<a id="t256"></a>
-### [256] LICENSE — slab 0.4.12
+<a id="t253"></a>
+### [253] LICENSE — slab 0.4.12
 
 ```
 Copyright (c) 2019 Carl Lerche
@@ -15224,8 +14937,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t257"></a>
-### [257] LICENSE — slotmap 1.1.1
+<a id="t254"></a>
+### [254] LICENSE — slotmap 1.1.1
 
 ```
 Copyright (c) 2021 Orson Peters <orsonpeters@gmail.com>
@@ -15249,8 +14962,8 @@ the following restrictions:
  3. This notice may not be removed or altered from any source distribution.
 ```
 
-<a id="t258"></a>
-### [258] LICENSE-MIT — smallvec 1.16.4
+<a id="t255"></a>
+### [255] LICENSE-MIT — smallvec 1.16.4
 
 ```
 Copyright (c) 2018 The Servo Project Developers
@@ -15280,8 +14993,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t259"></a>
-### [259] LICENSE-APACHE — softbuffer 0.4.8
+<a id="t256"></a>
+### [256] LICENSE-APACHE — softbuffer 0.4.8
 
 ```
 Apache License
@@ -15487,8 +15200,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t260"></a>
-### [260] LICENSE-MIT — softbuffer 0.4.8
+<a id="t257"></a>
+### [257] LICENSE-MIT — softbuffer 0.4.8
 
 ```
 Copyright 2022 Kirill Chibisov
@@ -15512,8 +15225,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t261"></a>
-### [261] LICENSE — spez 0.1.2
+<a id="t258"></a>
+### [258] LICENSE — spez 0.1.2
 
 ```
 BSD 2-Clause License
@@ -15542,8 +15255,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-<a id="t262"></a>
-### [262] LICENSE — spin 0.10.1, zip 9.2.2
+<a id="t259"></a>
+### [259] LICENSE — spin 0.10.1, zip 9.2.2
 
 ```
 The MIT License (MIT)
@@ -15569,8 +15282,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t263"></a>
-### [263] LICENSE-MIT — stable_deref_trait 1.2.1
+<a id="t260"></a>
+### [260] LICENSE-MIT — stable_deref_trait 1.2.1
 
 ```
 Copyright (c) 2017 Robert Grosse
@@ -15600,15 +15313,15 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t264"></a>
-### [264] LICENSE — static_vcruntime 3.0.0
+<a id="t261"></a>
+### [261] LICENSE — static_vcruntime 3.0.0
 
 ```
 MIT OR Apache-2.0 OR Zlib
 ```
 
-<a id="t265"></a>
-### [265] LICENSE-MIT — static_vcruntime 3.0.0
+<a id="t262"></a>
+### [262] LICENSE-MIT — static_vcruntime 3.0.0
 
 ```
 MIT License
@@ -15622,8 +15335,8 @@ The above copyright notice and this permission notice (including the next paragr
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t266"></a>
-### [266] LICENSE-ZLIB — static_vcruntime 3.0.0
+<a id="t263"></a>
+### [263] LICENSE-ZLIB — static_vcruntime 3.0.0
 
 ```
 Copyright (c) 2021 Chris Denton.
@@ -15639,8 +15352,8 @@ Permission is granted to anyone to use this software for any purpose, including 
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-<a id="t267"></a>
-### [267] LICENSE-MIT — string_cache 0.9.0, string_cache_codegen 0.6.1
+<a id="t264"></a>
+### [264] LICENSE-MIT — string_cache 0.9.0, string_cache_codegen 0.6.1
 
 ```
 Copyright (c) 2012-2013 Mozilla Foundation
@@ -15670,8 +15383,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t268"></a>
-### [268] LICENSE — strsim 0.11.1
+<a id="t265"></a>
+### [265] LICENSE — strsim 0.11.1
 
 ```
 The MIT License (MIT)
@@ -15699,8 +15412,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t269"></a>
-### [269] LICENSE — strum 0.28.0, strum_macros 0.28.0
+<a id="t266"></a>
+### [266] LICENSE — strum 0.28.0, strum_macros 0.28.0
 
 ```
 MIT License
@@ -15726,8 +15439,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t270"></a>
-### [270] LICENSE — subtle 2.6.1
+<a id="t267"></a>
+### [267] LICENSE — subtle 2.6.1
 
 ```
 Copyright (c) 2016-2017 Isis Agora Lovecruft, Henry de Valence. All rights reserved.
@@ -15761,8 +15474,8 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-<a id="t271"></a>
-### [271] COPYRIGHT — symlink 0.1.0
+<a id="t268"></a>
+### [268] COPYRIGHT — symlink 0.1.0
 
 ```
 This project is dual-licensed under the terms of the MIT and Apache (version 2.0) licenses.
@@ -15770,8 +15483,8 @@ This project is dual-licensed under the terms of the MIT and Apache (version 2.0
 Copyright (c) 2014 Chris Morgan and the Teepee project developers
 ```
 
-<a id="t272"></a>
-### [272] LICENSE-MIT — symlink 0.1.0
+<a id="t269"></a>
+### [269] LICENSE-MIT — symlink 0.1.0
 
 ```
 Copyright (c) 2014 Chris Morgan and the Teepee project developers
@@ -15801,8 +15514,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t273"></a>
-### [273] LICENSE — synstructure 0.14.0
+<a id="t270"></a>
+### [270] LICENSE — synstructure 0.14.0
 
 ```
 Copyright 2016 Nika Layzell
@@ -15814,8 +15527,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t274"></a>
-### [274] LICENSE.spdx — tao 0.37.2
+<a id="t271"></a>
+### [271] LICENSE.spdx — tao 0.37.2
 
 ```
 SPDXVersion: SPDX-2.1
@@ -15838,8 +15551,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tao.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t275"></a>
-### [275] LICENSE-MIT — tao-macros 0.1.4
+<a id="t272"></a>
+### [272] LICENSE-MIT — tao-macros 0.1.4
 
 ```
 MIT License
@@ -15865,8 +15578,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t276"></a>
-### [276] LICENSE.spdx — tao-macros 0.1.4
+<a id="t273"></a>
+### [273] LICENSE.spdx — tao-macros 0.1.4
 
 ```
 SPDXVersion: SPDX-2.1
@@ -15890,8 +15603,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tao.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t277"></a>
-### [277] LICENSE-MIT — tauri 2.12.5, tauri-build 2.7.4, tauri-codegen 2.7.4, tauri-macros 2.7.4, tauri-plugin-autostart 2.7.0, tauri-plugin-deep-link 2.6.3, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1 …
+<a id="t274"></a>
+### [274] LICENSE-MIT — tauri 2.12.5, tauri-build 2.7.4, tauri-codegen 2.7.4, tauri-macros 2.7.4, tauri-plugin-autostart 2.7.0, tauri-plugin-deep-link 2.6.3, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1 …
 
 ```
 MIT License
@@ -15917,8 +15630,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t278"></a>
-### [278] MIT (текст по лицензии пакета) — tauri-plugin 2.7.2
+<a id="t275"></a>
+### [275] MIT (текст по лицензии пакета) — tauri-plugin 2.7.2
 
 ```
 Copyright (c) Tauri Programme within The Commons Conservancy
@@ -15930,8 +15643,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t279"></a>
-### [279] LICENSE.spdx — tauri-plugin-autostart 2.7.0, tauri-plugin-deep-link 2.6.3, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1, tauri-plugin-notification 2.8.0, tauri-plugin-opener 2.7.2, tauri-plugin-single-instance 2.5.5, tauri-plugin-updater 2.14.1 …
+<a id="t276"></a>
+### [276] LICENSE.spdx — tauri-plugin-autostart 2.7.0, tauri-plugin-deep-link 2.6.3, tauri-plugin-dialog 2.8.4, tauri-plugin-fs 2.7.1, tauri-plugin-notification 2.8.0, tauri-plugin-opener 2.7.2, tauri-plugin-single-instance 2.5.5, tauri-plugin-updater 2.14.1 …
 
 ```
 SPDXVersion: SPDX-2.1
@@ -15956,8 +15669,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t280"></a>
-### [280] LICENSE_MIT — tauri-plugin-single-instance 2.5.5
+<a id="t277"></a>
+### [277] LICENSE_MIT — tauri-plugin-single-instance 2.5.5
 
 ```
 MIT License
@@ -15983,8 +15696,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t281"></a>
-### [281] LICENSE — tauri-winres 0.3.7
+<a id="t278"></a>
+### [278] LICENSE — tauri-winres 0.3.7
 
 ```
 The MIT License (MIT)
@@ -16017,8 +15730,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t282"></a>
-### [282] LICENSE.spdx — tauri-winrt-notification 0.8.1
+<a id="t279"></a>
+### [279] LICENSE.spdx — tauri-winrt-notification 0.8.1
 
 ```
 SPDXVersion: SPDX-2.1
@@ -16042,8 +15755,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/winrt-notification.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t283"></a>
-### [283] LICENSE-MIT — tempfile 3.27.0
+<a id="t280"></a>
+### [280] LICENSE-MIT — tempfile 3.27.0
 
 ```
 Copyright (c) 2015 Steven Allen
@@ -16073,8 +15786,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t284"></a>
-### [284] LICENSE-MIT — tendril 0.5.1
+<a id="t281"></a>
+### [281] LICENSE-MIT — tendril 0.5.1
 
 ```
 Copyright (c) 2015 Keegan McAllister
@@ -16104,8 +15817,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t285"></a>
-### [285] LICENSE-MIT — time 0.3.55, time-core 0.1.9, time-macros 0.2.32
+<a id="t282"></a>
+### [282] LICENSE-MIT — time 0.3.55, time-core 0.1.9, time-macros 0.2.32
 
 ```
 Copyright (c) Jacob Pratt et al.
@@ -16129,8 +15842,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t286"></a>
-### [286] LICENSE — tokio 1.54.1, tokio-stream 0.1.19, tokio-util 0.7.20
+<a id="t283"></a>
+### [283] LICENSE — tokio 1.54.1, tokio-stream 0.1.19, tokio-util 0.7.20
 
 ```
 MIT License
@@ -16156,8 +15869,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t287"></a>
-### [287] LICENSE — tokio-macros 2.7.2
+<a id="t284"></a>
+### [284] LICENSE — tokio-macros 2.7.2
 
 ```
 MIT License
@@ -16184,8 +15897,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t288"></a>
-### [288] LICENSE-APACHE — tokio-rustls 0.26.6
+<a id="t285"></a>
+### [285] LICENSE-APACHE — tokio-rustls 0.26.6
 
 ```
 Apache License
@@ -16391,8 +16104,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t289"></a>
-### [289] LICENSE-MIT — tokio-rustls 0.26.6
+<a id="t286"></a>
+### [286] LICENSE-MIT — tokio-rustls 0.26.6
 
 ```
 Copyright (c) 2017 quininer kel
@@ -16422,8 +16135,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t290"></a>
-### [290] LICENSE — tokio-tungstenite 0.30.0
+<a id="t287"></a>
+### [287] LICENSE — tokio-tungstenite 0.30.0
 
 ```
 Copyright (c) 2017 Daniel Abramov
@@ -16448,8 +16161,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t291"></a>
-### [291] LICENSE — tokio-websockets 0.13.3
+<a id="t288"></a>
+### [288] LICENSE — tokio-websockets 0.13.3
 
 ```
 Copyright (c) 2021 Jens Reidel
@@ -16473,8 +16186,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t292"></a>
-### [292] LICENSE — tower 0.5.3, tower-layer 0.3.3, tower-service 0.3.3
+<a id="t289"></a>
+### [289] LICENSE — tower 0.5.3, tower-layer 0.3.3, tower-service 0.3.3
 
 ```
 Copyright (c) 2019 Tower Contributors
@@ -16504,8 +16217,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t293"></a>
-### [293] LICENSE — tower-http 0.6.11
+<a id="t290"></a>
+### [290] LICENSE — tower-http 0.6.11
 
 ```
 Copyright (c) 2019-2021 Tower Contributors
@@ -16535,8 +16248,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t294"></a>
-### [294] LICENSE — tracing 0.1.44, tracing-appender 0.2.5, tracing-attributes 0.1.31, tracing-core 0.1.36, tracing-log 0.2.0, tracing-subscriber 0.3.23
+<a id="t291"></a>
+### [291] LICENSE — tracing 0.1.44, tracing-appender 0.2.5, tracing-attributes 0.1.31, tracing-core 0.1.36, tracing-log 0.2.0, tracing-subscriber 0.3.23
 
 ```
 Copyright (c) 2019 Tokio Contributors
@@ -16566,8 +16279,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t295"></a>
-### [295] LICENSE.spdx — tray-icon 0.25.1
+<a id="t292"></a>
+### [292] LICENSE.spdx — tray-icon 0.25.1
 
 ```
 SPDXVersion: SPDX-2.1
@@ -16591,8 +16304,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/tray-icon.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t296"></a>
-### [296] LICENSE — try-lock 0.2.5
+<a id="t293"></a>
+### [293] LICENSE — try-lock 0.2.5
 
 ```
 Copyright (c) 2018-2023 Sean McArthur
@@ -16617,8 +16330,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t297"></a>
-### [297] LICENSE-MIT — tungstenite 0.30.0
+<a id="t294"></a>
+### [294] LICENSE-MIT — tungstenite 0.30.0
 
 ```
 Copyright (c) 2017 Alexey Galakhov
@@ -16643,15 +16356,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t298"></a>
-### [298] LICENSE — typenum 1.20.1
+<a id="t295"></a>
+### [295] LICENSE — typenum 1.20.1
 
 ```
 MIT OR Apache-2.0
 ```
 
-<a id="t299"></a>
-### [299] LICENSE-APACHE — typenum 1.20.1
+<a id="t296"></a>
+### [296] LICENSE-APACHE — typenum 1.20.1
 
 ```
 Apache License
@@ -16857,8 +16570,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ```
 
-<a id="t300"></a>
-### [300] LICENSE-MIT — typenum 1.20.1
+<a id="t297"></a>
+### [297] LICENSE-MIT — typenum 1.20.1
 
 ```
 The MIT License (MIT)
@@ -16884,8 +16597,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t301"></a>
-### [301] LICENSE-UNICODE — unicode-ident 1.0.27
+<a id="t298"></a>
+### [298] LICENSE-UNICODE — unicode-ident 1.0.27
 
 ```
 UNICODE LICENSE V3
@@ -16929,8 +16642,8 @@ dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
 ```
 
-<a id="t302"></a>
-### [302] COPYRIGHT — unicode-segmentation 1.13.3, unicode-xid 0.2.6
+<a id="t299"></a>
+### [299] COPYRIGHT — unicode-segmentation 1.13.3, unicode-xid 0.2.6
 
 ```
 Licensed under the Apache License, Version 2.0
@@ -16942,8 +16655,8 @@ notice may not be copied, modified, or distributed except
 according to those terms.
 ```
 
-<a id="t303"></a>
-### [303] LICENSE-MIT — universal-hash 0.5.1
+<a id="t300"></a>
+### [300] LICENSE-MIT — universal-hash 0.5.1
 
 ```
 Copyright (c) 2019-2020 RustCrypto Developers
@@ -16973,8 +16686,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t304"></a>
-### [304] LICENSE-MIT — universal-hash 0.6.1
+<a id="t301"></a>
+### [301] LICENSE-MIT — universal-hash 0.6.1
 
 ```
 Copyright (c) 2019-2025 RustCrypto Developers
@@ -17004,8 +16717,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t305"></a>
-### [305] LICENSE.txt — untrusted 0.9.0
+<a id="t302"></a>
+### [302] LICENSE.txt — untrusted 0.9.0
 
 ```
 // Copyright 2015-2016 Brian Smith.
@@ -17023,8 +16736,8 @@ DEALINGS IN THE SOFTWARE.
 // OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
 
-<a id="t306"></a>
-### [306] LICENSE — urlpattern 0.6.0
+<a id="t303"></a>
+### [303] LICENSE — urlpattern 0.6.0
 
 ```
 MIT License
@@ -17050,8 +16763,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t307"></a>
-### [307] COPYRIGHT — utf8_iter 1.1.0
+<a id="t304"></a>
+### [304] COPYRIGHT — utf8_iter 1.1.0
 
 ```
 Copyright Mozilla Foundation
@@ -17098,8 +16811,8 @@ licensed under the Apache License, Version 2.0 <LICENSE-APACHE> or
 <LICENSE-MIT> or <http://opensource.org/licenses/MIT>, at your option.
 ```
 
-<a id="t308"></a>
-### [308] LICENSE-MIT — utf8_iter 1.1.0, utf_types 1.0.0
+<a id="t305"></a>
+### [305] LICENSE-MIT — utf8_iter 1.1.0, utf_types 1.0.0
 
 ```
 Copyright Mozilla Foundation
@@ -17129,8 +16842,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t309"></a>
-### [309] COPYRIGHT — utf_types 1.0.0
+<a id="t306"></a>
+### [306] COPYRIGHT — utf_types 1.0.0
 
 ```
 Copyright Mozilla Foundation
@@ -17155,8 +16868,8 @@ Test code is dedicated to the Public Domain when so designated (see
 the individual files for PD/CC0-dedicated sections).
 ```
 
-<a id="t310"></a>
-### [310] LICENSE-MIT — uuid 1.29.0
+<a id="t307"></a>
+### [307] LICENSE-MIT — uuid 1.29.0
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -17187,8 +16900,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t311"></a>
-### [311] LICENSE-MIT — vcpkg 0.2.15
+<a id="t308"></a>
+### [308] LICENSE-MIT — vcpkg 0.2.15
 
 ```
 Copyright (c) 2017 Jim McGrath
@@ -17218,8 +16931,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t312"></a>
-### [312] LICENSE-MIT — version_check 0.9.5
+<a id="t309"></a>
+### [309] LICENSE-MIT — version_check 0.9.5
 
 ```
 The MIT License (MIT)
@@ -17243,8 +16956,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t313"></a>
-### [313] LICENSE — vswhom 0.1.0, vswhom-sys 0.1.3
+<a id="t310"></a>
+### [310] LICENSE — vswhom 0.1.0, vswhom-sys 0.1.3
 
 ```
 The MIT License (MIT)
@@ -17270,8 +16983,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t314"></a>
-### [314] LICENSE — want 0.3.2
+<a id="t311"></a>
+### [311] LICENSE — want 0.3.2
 
 ```
 Copyright (c) 2018-2019 Sean McArthur
@@ -17295,8 +17008,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t315"></a>
-### [315] LICENSE-APACHE — web-time 1.1.0
+<a id="t312"></a>
+### [312] LICENSE-APACHE — web-time 1.1.0
 
 ```
 Apache License
@@ -17502,8 +17215,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t316"></a>
-### [316] LICENSE-MIT — web-time 1.1.0
+<a id="t313"></a>
+### [313] LICENSE-MIT — web-time 1.1.0
 
 ```
 MIT License
@@ -17529,8 +17242,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t317"></a>
-### [317] LICENSE — webpki-roots 0.26.11, webpki-roots 1.0.11
+<a id="t314"></a>
+### [314] LICENSE — webpki-roots 0.26.11, webpki-roots 1.0.11
 
 ```
 # Community Data License Agreement - Permissive - Version 2.0
@@ -17596,8 +17309,8 @@ of Data, including for example machine learning models and models'
 insights.
 ```
 
-<a id="t318"></a>
-### [318] MIT (текст по лицензии пакета) — webview2-com 0.39.1
+<a id="t315"></a>
+### [315] MIT (текст по лицензии пакета) — webview2-com 0.39.1
 
 ```
 Copyright (c) webview2-com developers
@@ -17609,8 +17322,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t319"></a>
-### [319] MIT (текст по лицензии пакета) — webview2-com-macros 0.8.1
+<a id="t316"></a>
+### [316] MIT (текст по лицензии пакета) — webview2-com-macros 0.8.1
 
 ```
 Copyright (c) webview2-com-macros developers
@@ -17622,8 +17335,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t320"></a>
-### [320] MIT (текст по лицензии пакета) — webview2-com-sys 0.39.1
+<a id="t317"></a>
+### [317] MIT (текст по лицензии пакета) — webview2-com-sys 0.39.1
 
 ```
 Copyright (c) webview2-com-sys developers
@@ -17635,8 +17348,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t321"></a>
-### [321] LICENSE-MIT — window-vibrancy 0.8.1
+<a id="t318"></a>
+### [318] LICENSE-MIT — window-vibrancy 0.8.1
 
 ```
 MIT License
@@ -17662,8 +17375,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t322"></a>
-### [322] LICENSE.spdx — window-vibrancy 0.8.1
+<a id="t319"></a>
+### [319] LICENSE.spdx — window-vibrancy 0.8.1
 
 ```
 SPDXVersion: SPDX-2.1
@@ -17687,8 +17400,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/window-vibrancy.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t323"></a>
-### [323] license-apache-2.0 — windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-implement 0.60.2, windows-interface 0.59.3, windows-link 0.2.1, windows-numerics 0.3.1 …
+<a id="t320"></a>
+### [320] license-apache-2.0 — windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-implement 0.60.2, windows-interface 0.59.3, windows-link 0.2.1, windows-numerics 0.3.1 …
 
 ```
 Apache License
@@ -17894,8 +17607,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t324"></a>
-### [324] license-mit — windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-implement 0.60.2, windows-interface 0.59.3, windows-link 0.2.1, windows-numerics 0.3.1 …
+<a id="t321"></a>
+### [321] license-mit — windows 0.62.2, windows-collections 0.3.2, windows-core 0.62.2, windows-future 0.3.2, windows-implement 0.60.2, windows-interface 0.59.3, windows-link 0.2.1, windows-numerics 0.3.1 …
 
 ```
 MIT License
@@ -17921,8 +17634,8 @@ MIT License
     SOFTWARE
 ```
 
-<a id="t325"></a>
-### [325] LICENSE — winreg 0.56.0
+<a id="t322"></a>
+### [322] LICENSE — winreg 0.56.0
 
 ```
 Copyright (c) 2015 Igor Shaula
@@ -17946,8 +17659,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-<a id="t326"></a>
-### [326] LICENSE-MIT — wnaf 0.14.1
+<a id="t323"></a>
+### [323] LICENSE-MIT — wnaf 0.14.1
 
 ```
 Copyright (c) 2026 RustCrypto Developers
@@ -17978,8 +17691,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t327"></a>
-### [327] LICENSE-MIT — wry 0.57.1
+<a id="t324"></a>
+### [324] LICENSE-MIT — wry 0.57.1
 
 ```
 MIT License
@@ -18005,8 +17718,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t328"></a>
-### [328] LICENSE.spdx — wry 0.57.1
+<a id="t325"></a>
+### [325] LICENSE.spdx — wry 0.57.1
 
 ```
 SPDXVersion: SPDX-2.1
@@ -18031,8 +17744,8 @@ PackageDownloadLocation: git+ssh://github.com/tauri-apps/wry.git
 Creator: Person: Daniel Thompson-Yvetot
 ```
 
-<a id="t329"></a>
-### [329] LICENSE — xml-rs 0.8.29
+<a id="t326"></a>
+### [326] LICENSE — xml-rs 0.8.29
 
 ```
 The MIT License (MIT)
@@ -18058,8 +17771,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<a id="t330"></a>
-### [330] LICENSE — xmltree 0.10.3
+<a id="t327"></a>
+### [327] LICENSE — xmltree 0.10.3
 
 ```
 MIT License
@@ -18072,8 +17785,8 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t331"></a>
-### [331] LICENSE-APACHE — zerocopy 0.8.63, zerocopy-derive 0.8.63
+<a id="t328"></a>
+### [328] LICENSE-APACHE — zerocopy 0.8.63, zerocopy-derive 0.8.63
 
 ```
 Apache License
@@ -18279,8 +17992,8 @@ Apache License
    limitations under the License.
 ```
 
-<a id="t332"></a>
-### [332] LICENSE-BSD — zerocopy 0.8.63, zerocopy-derive 0.8.63
+<a id="t329"></a>
+### [329] LICENSE-BSD — zerocopy 0.8.63, zerocopy-derive 0.8.63
 
 ```
 Copyright 2019 The Fuchsia Authors.
@@ -18309,8 +18022,8 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-<a id="t333"></a>
-### [333] LICENSE-MIT — zerocopy 0.8.63, zerocopy-derive 0.8.63
+<a id="t330"></a>
+### [330] LICENSE-MIT — zerocopy 0.8.63, zerocopy-derive 0.8.63
 
 ```
 Copyright 2023 The Fuchsia Authors
@@ -18340,8 +18053,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t334"></a>
-### [334] LICENSE-MIT — zeroize 1.9.1
+<a id="t331"></a>
+### [331] LICENSE-MIT — zeroize 1.9.1
 
 ```
 Copyright (c) 2018-2026 The RustCrypto Project Developers
@@ -18371,8 +18084,8 @@ IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-<a id="t335"></a>
-### [335] LICENSE — zlib-rs 0.6.8
+<a id="t332"></a>
+### [332] LICENSE — zlib-rs 0.6.8
 
 ```
 (C) 2024 Trifecta Tech Foundation 
@@ -18396,8 +18109,8 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-<a id="t336"></a>
-### [336] LICENSE — QR Code Generator for JavaScript (qrcode.js)
+<a id="t333"></a>
+### [333] LICENSE — QR Code Generator for JavaScript (qrcode.js)
 
 ```
 Copyright (c) 2009 Kazuhiko Arase
@@ -18427,8 +18140,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 //---------------------------------------------------------------------
 ```
 
-<a id="t337"></a>
-### [337] LICENSE — noble-secp256k1
+<a id="t334"></a>
+### [334] LICENSE — noble-secp256k1
 
 ```
 Copyright (c) 2019 Paul Miller (https://paulmillr.com)
@@ -18459,8 +18172,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
  */
 ```
 
-<a id="t338"></a>
-### [338] SQLite — Public Domain — SQLite 3 (внутри libsqlite3-sys, сборка bundled)
+<a id="t335"></a>
+### [335] SQLite — Public Domain — SQLite 3 (внутри libsqlite3-sys, сборка bundled)
 
 ```
 The author disclaims copyright to this source code. In place of a legal notice, here is a blessing:
