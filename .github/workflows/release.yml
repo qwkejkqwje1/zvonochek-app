@@ -1,9 +1,12 @@
 name: Release
 
-# Тег vX.Y.Z → черновик релиза: Windows x64/ARM64 — установщик NSIS и переносной exe, latest.json для автообновления
-# (установленной версии), APK для Android.
-# Секреты репозитория: TAURI_SIGNING_PRIVATE_KEY (ключ подписи обновлений), TAURI_SIGNING_PRIVATE_KEY_PASSWORD (пусто);
-# для APK — ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS (см. android.yml).
+# Тег vX.Y.Z → черновик релиза: Windows x64/ARM64 — переносной exe (ZVONochek_<версия>_x64.exe / _arm64.exe) и
+# latest.json для самообновления (подпись Ed25519 каждого exe, .github/scripts/sign-release.mjs), APK для Android.
+# Опубликуйте черновик вручную — с этого момента приложения увидят новую версию (releases/latest/download/latest.json).
+# Секреты: ZV_UPDATE_KEY — закрытый ключ подписи обновлений (PEM, Ed25519; открытый — KEYS_HEX в
+# crates/zv-core/src/update.rs); для APK — ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS.
+# Файлы для скачивания можно класть в отдельный открытый репозиторий (если этот закрыт): переменная
+# ZV_RELEASE_REPO (владелец/имя) и секрет ZV_RELEASE_TOKEN с правом записи в него.
 on:
   push:
     tags: ['v*']
@@ -14,12 +17,16 @@ permissions:
 
 jobs:
   build:
-    name: Windows ${{ matrix.target }}
+    name: Windows ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+        include:
+          - target: x86_64-pc-windows-msvc
+            arch: x64
+          - target: aarch64-pc-windows-msvc
+            arch: arm64
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -31,38 +38,62 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-      - run: npm install -g @tauri-apps/cli@2
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          projectPath: app
-          tauriScript: tauri
-          args: --target ${{ matrix.target }}
-          tagName: ${{ github.ref_name }}
-          releaseName: ZVONochek ${{ github.ref_name }}
-          releaseBody: 'Что нового — в CHANGELOG.md. Windows: …_portable.exe — переносная версия без установки (данные в папке ZVONochek-data рядом с exe), …-setup.exe — установщик с автообновлением; x64 — для обычных ПК, arm64 — для ПК на ARM (Snapdragon). Android 7.0+: файл …_android.apk.'
-          releaseDraft: true
-          prerelease: false
-          includeUpdaterJson: true
-          updaterJsonPreferNsis: true
-      # переносная версия (без установки): тот же exe, данные — в папке ZVONochek-data рядом с ним
-      - name: Переносной exe в релиз
+      - run: npm install -g @tauri-apps/cli@2.12.4
+      - name: Сборка exe
+        working-directory: app
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: tauri build --target ${{ matrix.target }} --no-bundle
+      - name: exe
+        shell: bash
         run: |
-          arch=x64; [ "${{ matrix.target }}" = aarch64-pc-windows-msvc ] && arch=arm64
-          f="ZVONochek_${GITHUB_REF_NAME#v}_${arch}_portable.exe"
-          cp "target/${{ matrix.target }}/release/zvonochek.exe" "$f"
-          gh release upload "$GITHUB_REF_NAME" "$f" --clobber
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/zvonochek.exe" "dist/ZVONochek_${{ matrix.arch }}.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-exe-${{ matrix.arch }}
+          path: dist/ZVONochek_${{ matrix.arch }}.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Черновик релиза
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      ZV_RELEASE_REPO: ${{ vars.ZV_RELEASE_REPO || github.repository }}
+    outputs:
+      tag: ${{ steps.rel.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-exe-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Подпись и latest.json
+        env:
+          ZV_UPDATE_KEY: ${{ secrets.ZV_UPDATE_KEY }}
+        run: node .github/scripts/sign-release.mjs dist "$GITHUB_REF_NAME"
+      - name: Черновик релиза
+        id: rel
+        env:
+          GH_TOKEN: ${{ vars.ZV_RELEASE_REPO && secrets.ZV_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v$(node -p "require('./app/tauri.conf.json').version")"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if ! gh release view "$TAG" -R "$ZV_RELEASE_REPO" > /dev/null 2>&1; then
+            gh release create "$TAG" -R "$ZV_RELEASE_REPO" --draft --title "ZVONochek $TAG" --notes-file dist/notes.md
+          fi
+          gh release upload "$TAG" -R "$ZV_RELEASE_REPO" dist/out/* --clobber
+          echo "Черновик $TAG в $ZV_RELEASE_REPO: $(ls dist/out | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
 
   android:
     name: Android
-    needs: build
+    needs: publish
     uses: ./.github/workflows/android.yml
     with:
-      release_tag: ${{ github.ref_name }}
+      release_tag: ${{ needs.publish.outputs.tag }}
     secrets: inherit
