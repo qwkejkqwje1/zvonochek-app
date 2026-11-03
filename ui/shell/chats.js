@@ -25,7 +25,6 @@ import {
   C as CT,
   callContact,
   contactById,
-  contactByPeer,
   safetyDialog,
   inviteDialog,
   addDialog,
@@ -46,6 +45,7 @@ export const CH = {
   newBelow: 0, // новых сообщений ниже видимой части
 };
 let onUnread = () => {};
+let onList = () => {};
 const drafts = new Map(); // чат → {text, reply}
 const nodes = new Map(); // id сообщения → {sig, node}
 const previews = new Map(); // fid → Promise<blob: URL | null>
@@ -73,11 +73,12 @@ const plural = (n, one, few, many) => {
   const b = n % 100;
   return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
 };
-const NAME_COLORS = ['#c2185b', '#7b1fa2', '#1565c0', '#00838f', '#2e7d32', '#ef6c00', '#6d4c41', '#ad1457'];
-const nameColor = (id = '') => {
+// цвет имени автора в группе — оттенок по его id (светлота — в CSS под тему)
+const NAME_HUES = [340, 290, 215, 185, 130, 32, 12, 260];
+const nameHue = (id = '') => {
   let x = 0;
   for (const ch of id) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
-  return NAME_COLORS[x % NAME_COLORS.length];
+  return NAME_HUES[x % NAME_HUES.length];
 };
 const avatar = (c) => (isGroup(c) ? h('div.av.grp', icon('users')) : h('div.av', initials(c.name)));
 const typingText = (c) => {
@@ -97,6 +98,7 @@ export async function loadChats() {
   CH.unread = list.reduce((n, c) => n + (c.unread || 0), 0);
   onUnread(CH.unread);
   renderList();
+  onList();
   const now = chatInfo(CH.cur);
   if (CH.cur && !now) closeChat(); // контакт или группа удалены
   else if (CH.cur && isGroup(now) && !!now.left !== wasLeft) {
@@ -179,6 +181,7 @@ function wire() {
 
 export function initChats(opts = {}) {
   onUnread = opts.onUnread || onUnread;
+  onList = opts.onList || onList;
   wire();
   return loadChats();
 }
@@ -338,13 +341,18 @@ function previewText(m, you = false) {
   if (you && m.out) return `Вы: ${t}`;
   return you && m.senderName ? `${m.senderName}: ${t}` : t;
 }
-function tick(st) {
+// в группе отметок о прочтении нет: ✓✓ — получили все, ✓ — получили не все (остальным — из ящика группы)
+function tick(st, grp = false) {
   if (st >= 3) return h('span.tk.read', { title: 'Прочитано' }, icon('tick2'));
-  if (st === 2) return h('span.tk', { title: 'Доставлено' }, icon('tick2'));
+  if (st === 2) return h('span.tk', { title: grp ? 'Доставлено всем' : 'Доставлено' }, icon('tick2'));
   if (st === 1)
     return h(
       'span.tk',
-      { title: 'В почтовом ящике — собеседник получит, когда появится в сети' },
+      {
+        title: grp
+          ? 'Доставлено не всем — остальные получат, когда появятся в сети'
+          : 'В почтовом ящике — собеседник получит, когда появится в сети',
+      },
       icon('tick1'),
     );
   return h('span.tk.wait', { title: 'Отправляется…' }, icon('clock'));
@@ -400,7 +408,7 @@ function listRow(c) {
         isGroup(c) && c.left ? h('span.muted.sm', 'вы вышли') : null,
         c.verified ? h('span.vbadge', { title: 'Код безопасности сверен' }, icon('shield', 'sm')) : null,
         h('span.grow'),
-        last && last.out && !last.deleted ? tick(last.st) : null,
+        last && last.out && !last.deleted ? tick(last.st, isGroup(c)) : null,
         last ? h('span.time', listTime(last.ts)) : null,
       ),
       h(
@@ -641,7 +649,12 @@ function chatMenu(anchor, c) {
 }
 
 // ---------- группы ----------
-async function callGroup(c, video) {
+/** Группа из списка чатов (или null). */
+export const groupById = (id) => {
+  const c = chatInfo(id);
+  return isGroup(c) ? c : null;
+};
+export async function callGroup(c, video) {
   try {
     const r = await call('group_call', { chat: c.chat, video: !!video });
     // без boot.contact: окно звонка не завершается, когда уходит один из участников
@@ -1003,7 +1016,7 @@ function msgNode(m, grp) {
     b.classList.add('del');
     b.append(h('div.txt', icon('trash', 'sm'), m.out ? 'Вы удалили сообщение' : 'Сообщение удалено', spacer(44)));
   } else {
-    if (!m.out && m.senderName && !grp) b.append(h('div.who', { style: { color: nameColor(m.sender) } }, m.senderName));
+    if (!m.out && m.senderName && !grp) b.append(h('div.who', { style: `--h:${nameHue(m.sender)}` }, m.senderName));
     if (m.reply) b.append(quoteNode(m.reply));
     const img = m.kind === 'file' && isImage(m.file) && (m.out || f.st === 'done') && f.size <= IMG_PREVIEW_MAX;
     if (m.kind === 'file' && m.file) b.append(img ? imageNode(m) : fileCard(m));
@@ -1021,7 +1034,7 @@ function msgNode(m, grp) {
       'span.meta',
       m.edited && !m.deleted ? h('span', { title: 'Изменено ' + new Date(m.edited).toLocaleString('ru-RU') }, 'изменено') : null,
       h('span', { title: new Date(m.ts).toLocaleString('ru-RU') }, fmtTime(m.ts)),
-      m.out && !m.deleted ? tick(m.st) : null,
+      m.out && !m.deleted ? tick(m.st, isGroup(chatInfo(m.chat))) : null,
     ),
   );
   b.addEventListener('contextmenu', (e) => {

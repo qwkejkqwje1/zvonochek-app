@@ -36,7 +36,7 @@ import {
   offerContact,
   addDialog,
 } from './contacts.js';
-import { initChats, chatsVisible, openChat } from './chats.js';
+import { initChats, chatsVisible, openChat, groupById, callGroup } from './chats.js';
 import { initProfile } from './profile.js';
 
 const S = {
@@ -489,9 +489,11 @@ function renderHistory() {
     }
     const [cls, ic, label] = (e.dir === 'out' && RESULT_OUT[e.result]) || RESULT[e.result] || ['', e.dir === 'in' ? 'in' : 'out', e.result];
     const link = e.linkId && S.links.find((l) => l.id === e.linkId);
-    const ct = (e.contactId && contactById(e.contactId)) || (e.peerId && contactByPeer(e.peerId)) || null;
-    const title = (ct && ct.name) || e.peer || (e.dir === 'in' ? 'Неизвестный' : e.linkName || 'Звонок');
-    const offer = !ct && e.peerId && CT.p2p.running;
+    const grp = e.groupId ? groupById(e.groupId) : null;
+    const ct = e.groupId ? null : (e.contactId && contactById(e.contactId)) || (e.peerId && contactByPeer(e.peerId)) || null;
+    const title = (grp && grp.name) || (ct && ct.name) || e.peer || (e.dir === 'in' ? 'Неизвестный' : e.linkName || 'Звонок');
+    const offer = !e.groupId && !ct && e.peerId && CT.p2p.running;
+    const grpCall = grp && !grp.left && (grp.members || []).length > 1;
     rows.push(
       h(
         'div.item',
@@ -503,14 +505,22 @@ function renderHistory() {
             'div.sub',
             h('span', label),
             e.video ? h('span', '· видео') : null,
-            ct && e.contactId ? h('span', '· контакт') : e.linkName ? h('span', `· ${e.linkName}`) : null,
+            e.groupId
+              ? h('span', '· группа')
+              : ct && e.contactId
+                ? h('span', '· контакт')
+                : e.linkName
+                  ? h('span', `· ${e.linkName}`)
+                  : null,
             h('span', `· ${fmtTime(e.started)}`),
             e.duration && (e.result === 'answered' || e.result === 'outgoing') ? h('span', `· ${fmtDur(e.duration)}`) : null
           )
         ),
         h(
           'div.acts',
-          ct
+          grpCall
+            ? h('button.btn.ghost.icon', { title: 'Позвонить в группу', onclick: () => callGroup(grp, !!e.video) }, icon('phone'))
+            : ct
             ? h('button.btn.ghost.icon', { title: 'Позвонить контакту', onclick: () => callContact(ct, !!e.video) }, icon('phone'))
             : link
               ? h('button.btn.ghost.icon', { title: 'Позвонить', onclick: () => callLink(link) }, icon('phone'))
@@ -874,6 +884,8 @@ async function start() {
     },
   }).catch(console.error);
   await initChats({
+    // в истории звонков — актуальные названия групп и кнопка «Позвонить в группу»
+    onList: () => S.history.some((e) => e.groupId) && renderHistory(),
     onUnread: (n) => {
       $('#chatCount').textContent = n > 99 ? '99+' : String(n);
       $('#chatCount').classList.toggle('hidden', !n);

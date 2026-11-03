@@ -1813,6 +1813,176 @@ textarea.field.code {
 .diag-chats .muted {
   line-height: 1.6;
 }
+/* ---------- группы ---------- */
+.ch-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -6px 0 8px 6px;
+}
+.ch-head .ch-title h1 {
+  margin: 0;
+}
+.av.grp .ic {
+  width: 22px;
+  height: 22px;
+}
+.ch-top .av.grp .ic {
+  width: 20px;
+  height: 20px;
+}
+.av.sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: 650;
+  font-size: 12.5px;
+}
+.ch-top .who.click {
+  cursor: pointer;
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  outline: none;
+}
+.ch-top .who.click:hover,
+.ch-top .who.click:focus-visible {
+  background: var(--bg-3);
+}
+.bubble .who {
+  margin-bottom: 1px;
+  font-size: 13px;
+  font-weight: 650;
+  color: hsl(var(--h, 215) 70% 72%);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-theme='light'] .bubble .who {
+  color: hsl(var(--h, 215) 62% 38%);
+}
+.ch-sys {
+  align-self: center;
+  max-width: 90%;
+  margin: 10px 0 2px;
+  text-align: center;
+}
+.ch-sys span {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-3) 88%, transparent);
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+.ch-call {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(360px, 92%);
+  margin: 10px 0 2px;
+  padding: 10px 12px 10px 10px;
+  border-radius: var(--r);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+}
+.ch-call .ci {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  background: var(--bg-3);
+  color: var(--text-2);
+}
+.ch-call.live {
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.ch-call.live .ci {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+.ch-call .cb {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.ch-call small {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.ch-compose.ch-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 13.5px;
+  text-align: center;
+}
+.ch-compose.ch-left > * {
+  margin: 0;
+}
+.gm-list {
+  display: grid;
+  gap: 2px;
+  margin: 6px -8px 0;
+  max-height: min(380px, 52vh);
+  overflow-y: auto;
+}
+.gm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+}
+.gm-row .grow {
+  display: grid;
+}
+.gm-row b {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gm-row small {
+  color: var(--text-3);
+  font-size: 12.5px;
+}
+.gm-row.pick {
+  cursor: pointer;
+}
+.gm-row.pick:hover {
+  background: var(--bg-3);
+}
+.gm-row input[type='checkbox'] {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.gm-row .av-wrap .pres {
+  border-color: var(--bg-2);
+}
+.dialog > .field {
+  margin: 6px 0 4px;
+}
+
 @media (max-width: 820px) {
   .page.chats {
     grid-template-columns: 1fr;
