@@ -25,6 +25,8 @@ pub struct Settings {
     pub skip_prejoin: bool,
     /// Подсказка «работаю в трее» уже показана.
     pub tray_hint_shown: bool,
+    /// Прямое соединение между приложениями (iroh): контакты, звонки контактам, P2P-канал в звонке.
+    pub p2p: bool,
 }
 
 impl Default for Settings {
@@ -40,6 +42,7 @@ impl Default for Settings {
             worker_url: String::new(),
             skip_prejoin: true,
             tray_hint_shown: false,
+            p2p: true,
         }
     }
 }
@@ -86,6 +89,15 @@ pub struct HistoryEntry {
     /// Был ли собеседник (пришли его сообщения).
     #[serde(default)]
     pub peer_seen: bool,
+    /// Звонок контакту / от контакта.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contact_id: Option<String>,
+    /// ID устройства собеседника-приложения (для «Сохранить в контакты»).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub peer_id: Option<String>,
+    /// Видеозвонок контакту.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub video: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -94,3 +106,55 @@ pub struct History {
 }
 
 pub const HISTORY_MAX: usize = 500;
+
+/// Личность устройства: мастер-сид (32 байта, hex). Из него выводится ключ iroh (EndpointId).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Identity {
+    pub seed: String,
+    pub created: u64,
+}
+
+/// Контакт — устройство собеседника-приложения.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Contact {
+    pub id: String,
+    /// Как назвал пользователь.
+    pub name: String,
+    /// EndpointId устройства (hex).
+    pub peer: String,
+    /// Как собеседник назвался сам.
+    #[serde(default)]
+    pub their_name: String,
+    /// Секрет его «ящика» — комнаты, куда пишем, если P2P не нашёлся.
+    pub inbox: String,
+    #[serde(default)]
+    pub verified: bool,
+    pub created: u64,
+    #[serde(default)]
+    pub last_seen: u64,
+    /// Последние известные адреса `{r, a}`.
+    #[serde(default)]
+    pub hint: Option<serde_json::Value>,
+}
+
+/// Код приглашения: действует до `expires`, «Новый код» отзывает старый.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Invite {
+    pub secret: String,
+    pub created: u64,
+    pub expires: u64,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Contacts {
+    pub items: Vec<Contact>,
+    /// Секрет моего ящика.
+    pub inbox: String,
+    pub invite: Option<Invite>,
+}
+
+pub const INVITE_TTL_MS: u64 = 7 * 24 * 3600 * 1000;

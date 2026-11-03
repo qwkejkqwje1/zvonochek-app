@@ -86,11 +86,15 @@ pub fn handle_url(app: &AppHandle, url: &str) {
         *last = (url.to_string(), std::time::Instant::now());
     }
     let parsed = st.core.dispatch_sync("link_parse", &json!({"text": url})).and_then(|r| r.ok()).unwrap_or(Value::Null);
-    if parsed.get("kind").and_then(|v| v.as_str()) != Some("call") {
-        tracing::info!("ссылка не на звонок — пропускаю");
-        return;
-    }
-    let web_url = parsed.get("url").and_then(|v| v.as_str()).unwrap_or(url).to_string();
+    let web_url = match parsed.get("kind").and_then(|v| v.as_str()) {
+        Some("call") => parsed.get("url").and_then(|v| v.as_str()).unwrap_or(url).to_string(),
+        // код приглашения в контакты — оболочка откроет «Добавить по коду»
+        Some("contact") => url.to_string(),
+        _ => {
+            tracing::info!("ссылка не на звонок и не код контакта — пропускаю");
+            return;
+        }
+    };
     wins::show_main(app);
     if st.main_ready.load(Ordering::SeqCst) {
         let _ = app.emit("zv", CoreEvent { event: "host:deeplink".into(), payload: json!({"url": web_url}) });
@@ -139,7 +143,8 @@ async fn forward_events(app: AppHandle) {
                 if reason == "missed" {
                     let (name, link) = info.unwrap_or_default();
                     let who = if name.is_empty() { "Собеседник".to_string() } else { name };
-                    host::notify(&app, "Пропущенный звонок", &format!("{who} — по ссылке «{link}»"));
+                    let text = if link.is_empty() { format!("{who} — контакт") } else { format!("{who} — по ссылке «{link}»") };
+                    host::notify(&app, "Пропущенный звонок", &text);
                 }
                 let empty = st
                     .core
@@ -159,6 +164,14 @@ async fn forward_events(app: AppHandle) {
                 wins::update_tray(&app);
             }
             "room:status" | "links:changed" => wins::update_tray(&app),
+            "contact:offer" => {
+                let name = ev.payload.get("name").and_then(|v| v.as_str()).unwrap_or("Собеседник");
+                host::notify(&app, "Предложение контакта", &format!("{name} предлагает обменяться контактами"));
+            }
+            "contact:added" if ev.payload.get("via").and_then(|v| v.as_str()) == Some("invite") => {
+                let name = ev.payload.get("name").and_then(|v| v.as_str()).unwrap_or("Собеседник");
+                host::notify(&app, "Новый контакт", &format!("{name} добавил(а) вас в контакты по коду приглашения"));
+            }
             _ => {}
         }
     }
@@ -231,6 +244,7 @@ fn main() {
                 platform: platform(),
                 dev: cfg!(debug_assertions),
                 signal: None,
+                p2p_n0: true,
             };
             let core = tauri::async_runtime::block_on(async { Core::start(opts) })?;
             app.manage(AppState {

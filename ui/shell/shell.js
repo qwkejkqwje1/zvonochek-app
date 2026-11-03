@@ -26,6 +26,16 @@ import {
   Ringer,
 } from './lib.js';
 import { mountIncoming } from './incoming.js';
+import {
+  C as CT,
+  initContacts,
+  contactsVisible,
+  contactById,
+  contactByPeer,
+  callContact,
+  offerContact,
+  addDialog,
+} from './contacts.js';
 
 const S = {
   page: 'call',
@@ -46,6 +56,7 @@ function go(page) {
   for (const p of $$('.page')) p.classList.toggle('hidden', p.id !== 'page-' + page);
   $('.main').scrollTop = 0;
   clearInterval(S.diagTimer);
+  contactsVisible(page === 'contacts');
   if (page === 'diag') {
     renderDiag();
     S.diagTimer = setInterval(renderDiag, 2000);
@@ -102,6 +113,7 @@ function chanSummary(st) {
   if (st.worker && st.worker !== 'off') parts.push(`Worker ${st.worker === 'up' ? '✓' : '…'}`);
   if (st.nostrTotal) parts.push(`Nostr ${st.nostrUp}/${st.nostrTotal}`);
   if (st.ntfyTotal) parts.push(`ntfy ${st.ntfyUp}/${st.ntfyTotal}`);
+  if (st.p2pUp) parts.push(`P2P ${st.p2pUp}`);
   return parts.join(' · ');
 }
 function renderSide() {
@@ -162,7 +174,8 @@ async function onDialInput() {
   const r = await call('link_parse', { text });
   if (seq !== parseSeq) return;
   S.parsed = r;
-  dialBtn.disabled = r.kind !== 'call';
+  dialBtn.disabled = r.kind !== 'call' && r.kind !== 'contact';
+  dialBtn.lastChild.textContent = r.kind === 'contact' ? 'Добавить' : 'Позвонить';
   let msg = '';
   let cls = 'hint';
   if (r.kind === 'call') {
@@ -173,6 +186,13 @@ async function onDialInput() {
         ? `Это ваша ссылка «${known.name}» — войдёте и будете ждать собеседника`
         : `Сохранённая ссылка «${known.name}»`
       : 'Ссылка на звонок ✓';
+  } else if (r.kind === 'contact') {
+    const expired = r.expires && r.expires < Date.now();
+    cls = expired ? 'hint bad' : 'hint ok';
+    msg = expired
+      ? 'Код приглашения устарел — попросите новый'
+      : `Приглашение в контакты от «${r.name || 'без имени'}» — нажмите «Добавить»`;
+    if (expired) dialBtn.disabled = true;
   } else if (r.kind === 'chat') {
     cls = 'hint bad';
     msg = 'Это ссылка на чат — пока откройте её в браузере (чаты появятся в приложении позже)';
@@ -193,6 +213,13 @@ dialInput.addEventListener('keydown', (e) => {
 dialBtn.addEventListener('click', dial);
 async function dial() {
   const r = S.parsed;
+  if (r && r.kind === 'contact') {
+    const code = dialInput.value.trim();
+    dialInput.value = '';
+    onDialInput();
+    addDialog(code);
+    return;
+  }
   if (!r || r.kind !== 'call') return;
   let known = S.links.find((l) => l.secret === r.secret);
   try {
@@ -210,6 +237,11 @@ async function dial() {
   }
 }
 function handleDeepLink(url) {
+  if (/^zvonochek:\/\/contact/i.test(url) || /^zv4c:/.test(url)) {
+    go('contacts');
+    addDialog(url);
+    return;
+  }
   dialInput.value = url;
   go('call');
   onDialInput().then(() => {
@@ -413,6 +445,11 @@ const RESULT = {
   outgoing: ['', 'out', 'Исходящий'],
   cancelled: ['mute', 'out', 'Без ответа'],
 };
+// исходящий звонок контакту: итог вызова
+const RESULT_OUT = {
+  declined: ['mute', 'out', 'Отклонён'],
+  noanswer: ['mute', 'out', 'Не ответил(а)'],
+};
 function renderHistory() {
   const list = $('#histList');
   $('#histClear').classList.toggle('hidden', !S.history.length);
@@ -428,9 +465,11 @@ function renderHistory() {
       day = d;
       rows.push(h('div.day', d));
     }
-    const [cls, ic, label] = RESULT[e.result] || ['', e.dir === 'in' ? 'in' : 'out', e.result];
+    const [cls, ic, label] = (e.dir === 'out' && RESULT_OUT[e.result]) || RESULT[e.result] || ['', e.dir === 'in' ? 'in' : 'out', e.result];
     const link = e.linkId && S.links.find((l) => l.id === e.linkId);
-    const title = e.peer || (e.dir === 'in' ? 'Неизвестный' : e.linkName || 'Звонок');
+    const ct = (e.contactId && contactById(e.contactId)) || (e.peerId && contactByPeer(e.peerId)) || null;
+    const title = (ct && ct.name) || e.peer || (e.dir === 'in' ? 'Неизвестный' : e.linkName || 'Звонок');
+    const offer = !ct && e.peerId && CT.p2p.running;
     rows.push(
       h(
         'div.item',
@@ -441,15 +480,25 @@ function renderHistory() {
           h(
             'div.sub',
             h('span', label),
-            e.linkName ? h('span', `· ${e.linkName}`) : null,
+            e.video ? h('span', '· видео') : null,
+            ct && e.contactId ? h('span', '· контакт') : e.linkName ? h('span', `· ${e.linkName}`) : null,
             h('span', `· ${fmtTime(e.started)}`),
             e.duration && (e.result === 'answered' || e.result === 'outgoing') ? h('span', `· ${fmtDur(e.duration)}`) : null
           )
         ),
         h(
           'div.acts',
-          link
-            ? h('button.btn.ghost.icon', { title: 'Позвонить', onclick: () => callLink(link) }, icon('phone'))
+          ct
+            ? h('button.btn.ghost.icon', { title: 'Позвонить контакту', onclick: () => callContact(ct, !!e.video) }, icon('phone'))
+            : link
+              ? h('button.btn.ghost.icon', { title: 'Позвонить', onclick: () => callLink(link) }, icon('phone'))
+              : null,
+          offer
+            ? h(
+                'button.btn.ghost.icon',
+                { title: 'Добавить в контакты', 'data-act': 'offer', onclick: () => offerContact(e.peerId, e.peer) },
+                icon('userplus')
+              )
             : null,
           h(
             'button.btn.ghost.icon',
@@ -486,6 +535,7 @@ function renderSettings() {
   $('#setVolText').textContent = `${s.ringVolume ?? 80}%`;
   $('#setTray').checked = s.closeToTray !== false;
   $('#setTcp').checked = s.mqttTcp !== false;
+  $('#setP2p').checked = s.p2p !== false;
   if (document.activeElement !== $('#setWorker')) $('#setWorker').value = s.workerUrl || '';
   for (const b of $$('#setTheme button')) b.classList.toggle('on', b.dataset.v === (s.theme || 'auto'));
 }
@@ -501,6 +551,21 @@ const testRinger = new Ringer();
 $('#setVolTest').addEventListener('click', () => testRinger.once(Number($('#setVol').value) / 100));
 $('#setTray').addEventListener('change', (e) => setPatch({ closeToTray: e.target.checked }));
 $('#setTcp').addEventListener('change', (e) => setPatch({ mqttTcp: e.target.checked }));
+$('#setP2p').addEventListener('change', async (e) => {
+  if (
+    !e.target.checked &&
+    !(await confirmDialog(
+      'Выключить прямые соединения?',
+      'Контакты перестанут работать: им нельзя будет позвонить, и они не дозвонятся до вас.',
+      'Выключить',
+      true
+    ))
+  ) {
+    e.target.checked = true;
+    return;
+  }
+  setPatch({ p2p: e.target.checked });
+});
 $('#setWorker').addEventListener('change', (e) => {
   const v = e.target.value.trim();
   if (v && !/^https:\/\/[^/\s]+/.test(v)) {
@@ -563,14 +628,12 @@ async function renderDiag() {
   lastDiag = d;
   if (S.page !== 'diag') return;
   const rooms = d.rooms || [];
-  if (!rooms.length) {
-    $('#diagBody').replaceChildren(
-      h('div.empty', icon('pulse'), h('div', 'Нет активных комнат. Создайте свою ссылку или начните звонок.'))
-    );
-    return;
-  }
   rooms.sort((a, b) => (b.joined ? 1 : 0) - (a.joined ? 1 : 0));
   $('#diagBody').replaceChildren(
+    diagP2p(d.p2p || {}),
+    ...(rooms.length
+      ? []
+      : [h('div.empty', icon('pulse'), h('div', 'Нет активных комнат. Создайте свою ссылку или начните звонок.'))]),
     ...rooms.map((r) =>
       h(
         'div.card.diag-room',
@@ -604,6 +667,49 @@ async function renderDiag() {
         )
       )
     )
+  );
+}
+function diagP2p(p) {
+  const relay = (p.relays || [])[0];
+  const state = !p.enabled ? ['off', 'выключен'] : p.running ? ['ok', 'работает'] : ['warn', 'запускается'];
+  const names = new Map(CT.list.map((c) => [c.peer.slice(0, 12), c.name]));
+  return h(
+    'div.card.diag-p2p',
+    h(
+      'div.row',
+      h('h3.grow', { style: { margin: 0 } }, 'Прямые соединения (P2P)'),
+      h('span.chip', { class: state[0] === 'ok' ? 'ok' : '' }, state[1]),
+      p.id ? h('span.chip.mono', { title: 'ID устройства (открытый ключ)' }, p.id.slice(0, 12)) : null
+    ),
+    p.running
+      ? h(
+          'div.muted',
+          { style: { marginTop: '4px' } },
+          [
+            relay ? `ретранслятор ${relay.url.replace(/^https?:\/\//, '').replace(/\/$/, '')} ${relay.connected ? '✓' : '…'}` : 'без ретранслятора',
+            `адресов ${((p.addr && p.addr.a) || []).length}`,
+            `соединений ${(p.links || []).length}`,
+          ].join(' · ')
+        )
+      : null,
+    (p.links || []).length
+      ? h(
+          'div.links',
+          ...p.links.map((l) => {
+            const bound = (p.bound || []).find((b) => b.link === l.link);
+            return h(
+              'div.lk',
+              h('span.dot', { class: l.path === 'direct' ? 'ok' : l.path === 'relay' ? 'warn' : 'bad' }),
+              h('b', names.get(l.peer) || l.name || l.peer),
+              h('span.muted', l.path === 'direct' ? 'напрямую' : l.path === 'relay' ? 'через ретранслятор' : 'нет пути'),
+              l.rttMs != null ? h('span.muted', `${l.rttMs} мс`) : null,
+              h('span.muted', l.outbound ? 'исходящее' : 'входящее'),
+              bound && bound.rooms.length ? h('span.chip.accent', `комнат ${bound.rooms.length}`) : null,
+              h('span.muted', `↑${l.tx} ↓${l.rx}`)
+            );
+          })
+        )
+      : null
   );
 }
 $('#diagCopy').addEventListener('click', async () => {
@@ -685,6 +791,14 @@ async function start() {
   $('#aboutVer').textContent = `Версия ${S.info.version} · ${S.info.platform}${S.info.protected ? ' · данные защищены DPAPI' : ''}`;
   $('#aboutWeb').textContent = `Веб-клиент v${S.info.webVersion}`;
   await Promise.all([loadSettings(), loadLinks(), loadHistory()]);
+  await initContacts({
+    onChange: () => {
+      const n = CT.offers.length;
+      $('#offerCount').textContent = String(n);
+      $('#offerCount').classList.toggle('hidden', !n);
+      renderHistory();
+    },
+  }).catch(console.error);
   // автозапуск — только там, где хост умеет
   try {
     const a = await call('host_autostart_get');

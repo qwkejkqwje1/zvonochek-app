@@ -15,6 +15,7 @@
   <aside class="side">
     <div class="brand"><img src="icon.svg" alt=""><div><b>ZVONochek</b><small id="brandVer">для Windows</small></div></div>
     <button class="nav on" data-page="call"><i data-ic="phone"></i><span class="label">Звонок</span></button>
+    <button class="nav" data-page="contacts"><i data-ic="users"></i><span class="label">Контакты</span><span class="count hidden" id="offerCount"></span></button>
     <button class="nav" data-page="links"><i data-ic="link"></i><span class="label">Мои ссылки</span></button>
     <button class="nav" data-page="history"><i data-ic="clock"></i><span class="label">История</span><span class="count hidden" id="missedCount"></span></button>
     <button class="nav" data-page="settings"><i data-ic="sliders"></i><span class="label">Настройки</span></button>
@@ -58,6 +59,23 @@
 
       <h2 id="quickTitle">Быстрый набор</h2>
       <div class="tiles" id="quick"></div>
+    </section>
+
+    <!-- КОНТАКТЫ -->
+    <section class="page hidden" id="page-contacts">
+      <div class="head-row">
+        <div>
+          <h1>Контакты</h1>
+          <p class="lead">Звонок контакту идёт напрямую между устройствами — ссылка не нужна.</p>
+        </div>
+        <div class="row" style="flex-wrap:wrap">
+          <button class="btn" id="ctAddBtn"><i data-ic="userplus"></i>Добавить по коду</button>
+          <button class="btn primary" id="ctInviteBtn"><i data-ic="plus"></i>Пригласить</button>
+        </div>
+      </div>
+      <div class="card warn hidden" id="ctP2p"></div>
+      <div id="ctOffers"></div>
+      <div class="list" id="ctList"></div>
     </section>
 
     <!-- ССЫЛКИ -->
@@ -113,6 +131,7 @@
 
       <h2>Сеть</h2>
       <div class="card">
+        <div class="set"><div class="t"><b>Прямые соединения (P2P)</b><small>Звонки контактам и звонки между приложениями — напрямую, без посредников. Выключите, только если сеть их запрещает</small></div><label class="switch"><input type="checkbox" id="setP2p"><span></span></label></div>
         <div class="set"><div class="t"><b>MQTT по TCP</b><small>Дополнительный канал на порту 1883 — быстрее, но его режут некоторые сети</small></div><label class="switch"><input type="checkbox" id="setTcp"><span></span></label></div>
         <div class="set"><div class="t"><b>Свой Worker</b><small>Адрес собственного Cloudflare Worker (пусто — общий)</small></div><input class="field mono" id="setWorker" placeholder="https://….workers.dev" spellcheck="false"></div>
       </div>

@@ -4,16 +4,21 @@
 //! Хосты (Tauri-приложение и тестовый стенд zv-devhost) вызывают `Core::dispatch(cmd, args)`
 //! и подписываются на события `Core::subscribe()` — `{event, payload}`.
 
+mod contacts;
 pub mod fetch;
 pub mod model;
+mod p2p;
 pub mod protect;
 pub mod store;
 
-use model::{HISTORY_MAX, History, HistoryEntry, LinkEntry, Links, Settings};
+pub use contacts::{decode_code as decode_contact_code, encode_code as encode_contact_code};
+
+use model::{Contacts, HISTORY_MAX, History, HistoryEntry, LinkEntry, Links, Settings};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 use store::JsonFile;
@@ -39,6 +44,8 @@ pub struct CoreOptions {
     pub dev: bool,
     /// Переопределение каналов (тесты, локальная инфраструктура).
     pub signal: Option<SignalConfig>,
+    /// P2P через инфраструктуру n0 (релеи, поиск по ID). `false` — только прямые адреса (тесты).
+    pub p2p_n0: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,6 +69,13 @@ struct Inner {
     settings_file: JsonFile,
     links_file: JsonFile,
     history_file: JsonFile,
+    contacts_file: JsonFile,
+    identity_file: JsonFile,
+    /// Узел iroh (появляется через долю секунды после старта, если P2P включён; выключение — `None`).
+    p2p: std::sync::RwLock<Option<zv_p2p::Node>>,
+    p2p_starting: std::sync::atomic::AtomicBool,
+    /// Поколение узла: события старого (выключенного) узла не трогают состояние нового.
+    p2p_gen: AtomicU64,
 }
 
 struct State {
@@ -72,10 +86,25 @@ struct State {
     incoming: HashMap<String, Incoming>,
     /// inst звонящего → когда слышали последний раз
     suppressed: HashMap<String, u64>,
+    contacts: Contacts,
+    p2p: p2p::P2pState,
+}
+
+/// Зачем ядру комната.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RoomRole {
+    /// Комната звонка (своя ссылка в ожидании или идущий звонок).
+    Call,
+    /// Мой ящик: сюда пишут контакты, если P2P не нашёлся.
+    Inbox,
+    /// Комната кода приглашения.
+    Invite,
 }
 
 struct RoomEntry {
     hub: RoomHub,
+    room: zv_proto::Room,
+    role: RoomRole,
     /// Своя ссылка, по которой ждём звонка.
     link_id: Option<String>,
     joined: bool,
@@ -94,6 +123,9 @@ struct Session {
     peer_seen: bool,
     link_id: Option<String>,
     link_name: Option<String>,
+    contact_id: Option<String>,
+    peer_id: Option<String>,
+    video: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -112,6 +144,13 @@ pub struct Incoming {
     pub app: bool,
     /// Уже идёт другой звонок.
     pub busy: bool,
+    /// Звонит контакт.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contact_id: Option<String>,
+    pub video: bool,
+    /// Секрет комнаты звонка контакта (у ссылок он берётся из ссылки).
+    #[serde(skip)]
+    pub secret: Option<String>,
 }
 
 fn s<'a>(args: &'a Value, k: &str) -> Result<&'a str, String> {
@@ -129,6 +168,8 @@ impl Core {
         let settings_file = JsonFile::new(&opts.data_dir, "settings.json", false);
         let links_file = JsonFile::new(&opts.data_dir, "links.dat", true);
         let history_file = JsonFile::new(&opts.data_dir, "history.json", false);
+        let contacts_file = JsonFile::new(&opts.data_dir, "contacts.dat", true);
+        let identity_file = JsonFile::new(&opts.data_dir, "identity.dat", true);
         let state = State {
             settings: settings_file.load(),
             links: links_file.load(),
@@ -136,13 +177,28 @@ impl Core {
             rooms: HashMap::new(),
             incoming: HashMap::new(),
             suppressed: HashMap::new(),
+            contacts: contacts_file.load(),
+            p2p: p2p::P2pState::default(),
         };
         let (events, _) = broadcast::channel(4096);
         let rt = tokio::runtime::Handle::current();
-        let inner =
-            Arc::new(Inner { opts, rt, events, state: Mutex::new(state), settings_file, links_file, history_file });
+        let inner = Arc::new(Inner {
+            opts,
+            rt,
+            events,
+            state: Mutex::new(state),
+            settings_file,
+            links_file,
+            history_file,
+            contacts_file,
+            identity_file,
+            p2p: std::sync::RwLock::new(None),
+            p2p_starting: std::sync::atomic::AtomicBool::new(false),
+            p2p_gen: AtomicU64::new(0),
+        });
         let core = Core { inner };
         core.inner.sync_listeners();
+        core.inner.p2p_start();
         tokio::spawn(ticker(Arc::downgrade(&core.inner)));
         Ok(core)
     }
@@ -170,6 +226,14 @@ impl Core {
         for (h, _) in hubs {
             h.close();
         }
+        if let Some(n) = self.inner.node() {
+            n.shutdown().await;
+        }
+    }
+
+    /// ID устройства (EndpointId), если P2P запущен.
+    pub fn device_id(&self) -> Option<String> {
+        self.inner.node().map(|n| n.id().to_string())
     }
 
     /// Асинхронные команды (сеть, опрос каналов); остальные — через `dispatch_sync`.
@@ -218,7 +282,11 @@ impl Core {
             })),
             "settings_get" => ok(i.lock().settings.clone()),
             "settings_set" => i.settings_set(&args),
-            "link_parse" => Ok(link_parse(s(&args, "text")?)),
+            "link_parse" => {
+                let t = s(&args, "text")?;
+                let c = i.contact_parse(t);
+                Ok(if c["kind"] == "contact" { c } else { link_parse(t) })
+            }
             "links_list" => Ok(i.links_list()),
             "link_create" => i.link_create(&args),
             "link_save" => i.link_save(&args),
@@ -267,6 +335,25 @@ impl Core {
                 i.emit("history:changed", Value::Null);
                 Ok(Value::Null)
             }
+            "contacts_list" => Ok(i.contacts_list()),
+            "contacts_presence" => i.contacts_presence(),
+            "contact_invite" => i.contact_invite(&args),
+            "contact_add" => i.contact_add(&args),
+            "contact_offer" => i.contact_offer(&args),
+            "contact_offers" => Ok(i.contact_offers()),
+            "contact_offer_answer" => i.contact_offer_answer(&args),
+            "contact_update" => i.contact_update(&args),
+            "contact_delete" => i.contact_delete(&args),
+            "contact_call" => i.contact_call(&args),
+            "contact_call_state" => i.contact_call_state(&args),
+            // только для тестов (dev): сообщение комнаты «как будто пришло из канала»
+            "room_inject" if i.opts.dev => {
+                let rid = s(&args, "roomId")?.to_string();
+                let msg = args.get("msg").cloned().ok_or("нет msg")?;
+                i.clone().on_msg(&rid, msg);
+                Ok(Value::Null)
+            }
+            "p2p_status" => Ok(i.p2p_status()),
             "history_clear" => {
                 let mut st = i.lock();
                 st.history.items.clear();
@@ -338,17 +425,14 @@ impl Inner {
         let (tx, rx) = mpsc::unbounded_channel();
         let room_id = room.topic.clone();
         let hub = RoomHub::spawn(room, cfg, profile, tx);
-        let mut extras = serde_json::Map::new();
-        extras.insert("app".into(), json!("zvd"));
-        extras.insert("av".into(), json!(self.opts.app_version));
-        hub.set_extras(extras);
+        hub.set_extras(self.hub_extras());
         self.rt.spawn(pump(Arc::downgrade(self), room_id, rx));
         hub
     }
 
     // ---------- настройки ----------
 
-    fn settings_set(&self, args: &Value) -> Result<Value, String> {
+    fn settings_set(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let patch = args.get("patch").unwrap_or(args);
         let mut st = self.lock();
         let mut cur = serde_json::to_value(&st.settings).map_err(|e| e.to_string())?;
@@ -359,9 +443,21 @@ impl Inner {
         }
         let mut new: Settings = serde_json::from_value(cur).map_err(|e| e.to_string())?;
         new.name = new.name.trim().chars().take(40).collect();
+        let p2p_changed = new.p2p != st.settings.p2p;
         st.settings = new.clone();
         self.settings_file.save(&st.settings).map_err(|e| e.to_string())?;
         drop(st);
+        if let Some(n) = self.node() {
+            n.set_name(&new.name);
+        }
+        if p2p_changed {
+            if new.p2p {
+                self.p2p_start();
+            } else {
+                self.p2p_stop();
+            }
+            self.sync_listeners();
+        }
         self.emit("settings:changed", serde_json::to_value(&new).unwrap_or_default());
         ok(new)
     }
@@ -480,7 +576,7 @@ impl Inner {
         Ok(Value::Null)
     }
 
-    /// Поднять ожидание для своих ссылок с `listen`, снять — для остальных.
+    /// Поднять ожидание для своих ссылок с `listen` (и комнат ящика/приглашения), снять — для остальных.
     fn sync_listeners(self: &Arc<Self>) {
         let cfg = Arc::new(self.signal_config());
         let mut st = self.lock();
@@ -491,21 +587,39 @@ impl Inner {
             .filter(|l| l.kind == "mine" && l.listen)
             .filter_map(|l| zv_proto::Room::derive(&l.secret).ok().map(|r| (r.topic, l.id.clone())))
             .collect();
+        let special: HashMap<String, (zv_proto::Room, RoomRole)> = if self.node().is_some() {
+            self.contact_listen_rooms(&st)
+                .into_iter()
+                .filter_map(|(sec, role)| zv_proto::Room::derive(&sec).ok().map(|r| (r.topic.clone(), (r, role))))
+                .collect()
+        } else {
+            HashMap::new()
+        };
         // снять лишние
         let mut remove = Vec::new();
         for (topic, r) in st.rooms.iter_mut() {
-            if r.link_id.is_some() && !want.contains_key(topic) {
-                r.link_id = None;
-                if !r.joined {
-                    r.hub.close();
-                    remove.push(topic.clone());
+            match r.role {
+                RoomRole::Call => {
+                    if r.link_id.is_some() && !want.contains_key(topic) {
+                        r.link_id = None;
+                        if !r.joined {
+                            r.hub.close();
+                            remove.push(topic.clone());
+                        }
+                    }
+                }
+                RoomRole::Inbox | RoomRole::Invite => {
+                    if !special.contains_key(topic) {
+                        r.hub.close();
+                        remove.push(topic.clone());
+                    }
                 }
             }
         }
         for t in remove {
             st.rooms.remove(&t);
         }
-        st.incoming.retain(|_, inc| want.contains_key(&inc.room_id));
+        st.incoming.retain(|_, inc| inc.contact_id.is_some() || want.contains_key(&inc.room_id));
         // поднять недостающие
         for (topic, link_id) in want {
             if let Some(r) = st.rooms.get_mut(&topic) {
@@ -514,10 +628,29 @@ impl Inner {
             }
             let secret = st.links.items.iter().find(|l| l.id == link_id).map(|l| l.secret.clone());
             let Some(room) = secret.and_then(|s| zv_proto::Room::derive(&s).ok()) else { continue };
-            let hub = self.spawn_hub(room, Profile::Listen, cfg.clone());
+            let hub = self.spawn_hub(room.clone(), Profile::Listen, cfg.clone());
             st.rooms.insert(
                 topic,
-                RoomEntry { hub, link_id: Some(link_id), joined: false, session: None, answered: None, status: None },
+                RoomEntry {
+                    hub,
+                    room,
+                    role: RoomRole::Call,
+                    link_id: Some(link_id),
+                    joined: false,
+                    session: None,
+                    answered: None,
+                    status: None,
+                },
+            );
+        }
+        for (topic, (room, role)) in special {
+            if st.rooms.contains_key(&topic) {
+                continue;
+            }
+            let hub = self.spawn_hub(room.clone(), Profile::Listen, cfg.clone());
+            st.rooms.insert(
+                topic,
+                RoomEntry { hub, room, role, link_id: None, joined: false, session: None, answered: None, status: None },
             );
         }
     }
@@ -553,6 +686,9 @@ impl Inner {
             .iter()
             .find(|l| zv_proto::Room::derive(&l.secret).map(|r| r.topic == room_id).unwrap_or(false))
             .map(|l| (l.id.clone(), l.name.clone()));
+        if st.rooms.get(&room_id).is_some_and(|r| r.role != RoomRole::Call) {
+            return Err("это служебная комната".into());
+        }
         let entry = match st.rooms.remove(&room_id) {
             Some(e) => {
                 e.hub.set_identity(&self_id, &inst);
@@ -560,17 +696,31 @@ impl Inner {
                 e
             }
             None => {
-                let hub = self.spawn_hub(room, Profile::Full, cfg);
+                let hub = self.spawn_hub(room.clone(), Profile::Full, cfg);
                 hub.set_identity(&self_id, &inst);
-                RoomEntry { hub, link_id: None, joined: false, session: None, answered: None, status: None }
+                RoomEntry {
+                    hub,
+                    room,
+                    role: RoomRole::Call,
+                    link_id: None,
+                    joined: false,
+                    session: None,
+                    answered: None,
+                    status: None,
+                }
             }
         };
         let mut entry = entry;
         entry.joined = true;
-        let answered = entry.answered.take();
-        let (dir, peer, lname) = match &answered {
-            Some(inc) => ("in", inc.name.clone(), Some(inc.link_name.clone())),
-            None => ("out", String::new(), link_name(&st, &entry.link_id).or(saved_name.as_ref().map(|x| x.1.clone()))),
+        let answered = entry.answered.take().or_else(|| st.p2p.c.pending_answer.remove(&room_id));
+        let call = st.p2p.c.calls.get(&room_id).cloned();
+        let contact_name = call
+            .as_ref()
+            .and_then(|c| st.contacts.items.iter().find(|x| x.id == c.contact_id).map(|x| x.name.clone()));
+        let (dir, peer, lname) = match (&answered, &call) {
+            (Some(inc), _) => ("in", inc.name.clone(), (!inc.link_name.is_empty()).then(|| inc.link_name.clone())),
+            (None, Some(c)) => (if c.out { "out" } else { "in" }, contact_name.clone().unwrap_or_default(), None),
+            (None, None) => ("out", String::new(), link_name(&st, &entry.link_id).or(saved_name.as_ref().map(|x| x.1.clone()))),
         };
         entry.session = Some(Session {
             started: now_ms(),
@@ -578,9 +728,13 @@ impl Inner {
             peer,
             peer_inst: answered.as_ref().map(|a| a.inst.clone()),
             peer_seen: answered.is_some(),
-            link_id: entry.link_id.clone().or(saved_name.map(|x| x.0)),
+            link_id: if call.is_some() { None } else { entry.link_id.clone().or(saved_name.map(|x| x.0)) },
             link_name: lname,
+            contact_id: call.as_ref().map(|c| c.contact_id.clone()),
+            peer_id: call.as_ref().map(|c| c.peer.clone()),
+            video: call.as_ref().map(|c| c.video).unwrap_or(false),
         });
+        let bind_now = call.as_ref().is_some_and(|c| !c.out);
         let up = entry.status.as_ref().map(|s| s.mqtt_up + s.nostr_up + s.ntfy_up > 0 || s.worker == "up").unwrap_or(false);
         let status = entry.status.clone();
         // входящие по этой комнате больше не звонят
@@ -592,6 +746,10 @@ impl Inner {
         drop(st);
         for inc in ended {
             self.emit("call:ended", json!({"callId": inc.call_id, "reason": "answered"}));
+        }
+        if bind_now {
+            // ответили контакту — комната звонка сразу идёт по P2P
+            self.bind_call(&room_id);
         }
         if up {
             // каналы уже подняты (ожидание по своей ссылке) — сразу сообщаем, чтобы веб отправил hello
@@ -642,15 +800,33 @@ impl Inner {
             });
             st.rooms.remove(&room_id);
         }
+        drop(st);
+        // P2P отвязываем чуть позже: `bye` веба ещё в очереди комнаты
+        let me = self.clone();
+        let rid = room_id.clone();
+        self.rt.spawn(async move {
+            tokio::time::sleep(Duration::from_millis(450)).await;
+            if !me.joined(&rid) {
+                me.p2p_room_closed(&rid);
+            }
+        });
+        let contact = self.contact_call_left(&room_id);
+        let mut st = self.lock();
         if let Some(sess) = session {
             if let Some(pi) = &sess.peer_inst {
                 st.suppressed.insert(pi.clone(), now_ms());
             }
-            let result = match (sess.dir, sess.peer_seen) {
+            let mut result = match (sess.dir, sess.peer_seen) {
                 ("in", _) => "answered",
                 (_, true) => "outgoing",
                 _ => "cancelled",
             };
+            if let Some((r, _, _)) = &contact
+                && !r.is_empty()
+                && !sess.peer_seen
+            {
+                result = r;
+            }
             let e = HistoryEntry {
                 id: rand_hex(6),
                 dir: sess.dir.into(),
@@ -661,6 +837,9 @@ impl Inner {
                 started: sess.started,
                 duration: now_ms().saturating_sub(sess.started) / 1000,
                 peer_seen: sess.peer_seen,
+                contact_id: sess.contact_id.or(contact.as_ref().map(|c| c.1.clone())),
+                peer_id: sess.peer_id,
+                video: sess.video,
             };
             self.push_history(&mut st, e);
         }
@@ -696,9 +875,14 @@ impl Inner {
 
     // ---------- входящие ----------
 
-    fn on_msg(&self, room_id: &str, msg: Value) {
+    fn on_msg(self: &Arc<Self>, room_id: &str, msg: Value) {
         let mut st = self.lock();
         let Some(r) = st.rooms.get_mut(room_id) else { return };
+        if r.role != RoomRole::Call {
+            drop(st);
+            self.on_zv4_room(room_id, &msg);
+            return;
+        }
         let typ = msg.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let from = msg.get("from").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let inst = msg.get("inst").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -718,7 +902,17 @@ impl Inner {
                     sess.peer = n.clone();
                 }
             }
+            let zv = msg.get("zv").filter(|_| matches!(typ.as_str(), "hello" | "hi" | "g_hi")).cloned();
+            if let Some(zv) = &zv
+                && let Some(sess) = r.session.as_mut()
+                && sess.peer_id.is_none()
+            {
+                sess.peer_id = zv.get("id").and_then(|v| v.as_str()).filter(|s| zv_p2p::valid_id(s)).map(str::to_string);
+            }
             drop(st);
+            if let Some(zv) = zv {
+                self.p2p_consider(room_id, &zv, name.as_deref());
+            }
             self.emit("room:msg", json!({"roomId": room_id, "msg": msg}));
             return;
         }
@@ -772,6 +966,9 @@ impl Inner {
             last_seen: now,
             app: msg.get("app").and_then(|v| v.as_str()) == Some("zvd"),
             busy,
+            contact_id: None,
+            video: false,
+            secret: None,
         };
         if st.settings.dnd {
             st.suppressed.insert(inst, now);
@@ -785,6 +982,9 @@ impl Inner {
                 started: now,
                 duration: 0,
                 peer_seen: true,
+                contact_id: None,
+                peer_id: None,
+                video: false,
             };
             self.push_history(&mut st, e);
             drop(st);
@@ -796,9 +996,10 @@ impl Inner {
         self.emit("call:incoming", serde_json::to_value(&inc).unwrap_or_default());
     }
 
-    fn end_incoming(&self, call_id: &str, reason: &str) {
+    fn end_incoming(self: &Arc<Self>, call_id: &str, reason: &str) {
         let mut st = self.lock();
         let Some(inc) = st.incoming.remove(call_id) else { return };
+        let contact = inc.contact_id.is_some();
         if reason != "answered" {
             st.suppressed.insert(inc.inst.clone(), now_ms());
             let e = HistoryEntry {
@@ -806,39 +1007,64 @@ impl Inner {
                 dir: "in".into(),
                 result: reason.into(),
                 peer: inc.name.clone(),
-                link_id: Some(inc.link_id.clone()),
-                link_name: Some(inc.link_name.clone()),
+                link_id: (!contact).then(|| inc.link_id.clone()),
+                link_name: (!contact).then(|| inc.link_name.clone()),
                 started: inc.started,
                 duration: 0,
                 peer_seen: true,
+                contact_id: inc.contact_id.clone(),
+                peer_id: contact.then(|| inc.from.clone()),
+                video: inc.video,
             };
             self.push_history(&mut st, e);
+            if contact && let Some(c) = st.p2p.c.calls.get_mut(&inc.room_id) {
+                c.ended = Some(if reason == "declined" { "declined" } else { "missed" });
+                c.ended_at = now_ms();
+            }
         }
         drop(st);
+        if contact && reason == "declined" {
+            self.ring_declined(&inc);
+        }
         self.emit("call:ended", json!({"callId": call_id, "reason": reason}));
         self.emit("history:changed", Value::Null);
     }
 
-    fn call_answer(&self, args: &Value) -> Result<Value, String> {
+    fn call_answer(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let id = s(args, "callId")?;
         let mut st = self.lock();
         let inc = st.incoming.remove(id).ok_or("звонок уже завершён")?;
-        let secret = st.links.items.iter().find(|l| l.id == inc.link_id).map(|l| l.secret.clone()).ok_or("ссылка удалена")?;
+        let secret = match &inc.secret {
+            Some(k) => k.clone(),
+            None => st.links.items.iter().find(|l| l.id == inc.link_id).map(|l| l.secret.clone()).ok_or("ссылка удалена")?,
+        };
         if let Some(r) = st.rooms.get_mut(&inc.room_id) {
             r.answered = Some(inc.clone());
         }
         drop(st);
+        if inc.contact_id.is_some() {
+            self.ring_answered(&inc);
+        }
         self.emit("call:ended", json!({"callId": id, "reason": "answered"}));
-        Ok(json!({"secret": secret, "roomId": inc.room_id, "name": inc.name, "linkName": inc.link_name}))
+        Ok(json!({
+            "secret": secret,
+            "roomId": inc.room_id,
+            "name": inc.name,
+            "linkName": inc.link_name,
+            "contactId": inc.contact_id,
+            "video": inc.video,
+        }))
     }
 
-    fn call_decline(&self, args: &Value) -> Result<Value, String> {
+    fn call_decline(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         self.end_incoming(s(args, "callId")?, "declined");
         Ok(Value::Null)
     }
 
-    fn tick(&self) {
+    fn tick(self: &Arc<Self>) {
         let now = now_ms();
+        self.p2p_tick(now);
+        self.contacts_tick(now);
         let expired: Vec<String> = {
             let mut st = self.lock();
             st.suppressed.retain(|_, t| now.saturating_sub(*t) < SUPPRESS_MS);
@@ -891,7 +1117,7 @@ impl Inner {
                 "channels": channels,
             }));
         }
-        json!({"rooms": out, "time": now_ms(), "version": self.opts.app_version})
+        json!({"rooms": out, "time": now_ms(), "version": self.opts.app_version, "p2p": self.p2p_status()})
     }
 }
 
@@ -932,6 +1158,7 @@ mod tests {
             platform: "test".into(),
             dev: true,
             signal: Some(sig),
+            p2p_n0: false,
         }
     }
 

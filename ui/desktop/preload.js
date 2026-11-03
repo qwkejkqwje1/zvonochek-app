@@ -203,6 +203,103 @@
     return new Response(nobody ? null : data, { status: r.status, headers: r.headers || {} });
   };
 
+  // звонок контакту без видео: первый запрос «микрофон + камера» — только микрофон
+  // (веб-клиент сам выключит кнопку камеры, если видеодорожки нет; включить её можно в звонке)
+  if (boot.video === false && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const md = navigator.mediaDevices;
+    const orig = md.getUserMedia.bind(md);
+    md.getUserMedia = function (c) {
+      if (c && c.audio && c.video) c = Object.assign({}, c, { video: false });
+      return orig(c);
+    };
+  }
+
+  // звонок контакту: «звоним…», итог вызова (ядро: ring:ringing/accepted/ended, contact_call_state)
+  // и завершение, когда собеседник положил трубку (комната контакта — только на этот звонок)
+  if (boot.contact) {
+    const who = String(boot.contact);
+    const out = boot.dir === 'out';
+    let pill = null;
+    let hideT = null;
+    let ended = false;
+    let byeT = null;
+    const show = (text, kind, ms) => {
+      if (!pill) {
+        pill = document.createElement('div');
+        pill.id = 'zvRing';
+        pill.setAttribute('role', 'status');
+        pill.style.cssText =
+          'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147483000;pointer-events:none;' +
+          'padding:9px 16px;border-radius:999px;font:600 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#fff;' +
+          'box-shadow:0 8px 24px rgba(0,0,0,.35);max-width:calc(100vw - 40px);' +
+          'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .25s';
+        (document.body || document.documentElement).appendChild(pill);
+      }
+      pill.textContent = text;
+      pill.style.background =
+        kind === 'bad' ? 'rgba(198,40,40,.94)' : kind === 'ok' ? 'rgba(46,125,50,.94)' : 'rgba(23,33,43,.92)';
+      pill.style.opacity = '1';
+      clearTimeout(hideT);
+      if (ms) hideT = setTimeout(() => pill && (pill.style.opacity = '0'), ms);
+    };
+    const hangup = (delay) =>
+      setTimeout(() => {
+        const hang = document.querySelector('#cHang');
+        if (hang && hang.offsetParent !== null) hang.click();
+        else window.__zvIpc.call('host_call_done', {}).catch(() => {});
+      }, delay);
+    const finish = (reason) => {
+      if (ended) return;
+      ended = true;
+      show(
+        reason === 'declined'
+          ? `«${who}» отклонил(а) звонок`
+          : reason === 'dnd'
+            ? `У «${who}» «Не беспокоить»`
+            : reason === 'hangup'
+              ? `«${who}» завершил(а) звонок`
+              : `«${who}» не отвечает`,
+        reason === 'hangup' ? '' : 'bad'
+      );
+      // собеседник не придёт — завершаем звонок (окно приложения закроется само)
+      hangup(reason === 'hangup' ? 1500 : 2600);
+    };
+    const apply = (state, reason) => {
+      if (ended || !out) return;
+      if (state === 'calling') show(`Звоним «${who}»…`);
+      else if (state === 'ringing') show(`У «${who}» звонит…`);
+      else if (state === 'accepted') show(`«${who}» отвечает`, 'ok', 3000);
+      else if (state === 'ended') finish(reason);
+    };
+    const start = () => {
+      if (out) apply('calling');
+      // события могли прийти, пока окно открывалось
+      const k = (location.hash.match(/(?:^#|&)k=([^&]+)/) || [])[1];
+      if (k)
+        window.__zvIpc
+          .call('contact_call_state', { secret: decodeURIComponent(k) })
+          .then((st) => st && apply(st.state, st.reason))
+          .catch(() => {});
+    };
+    if (document.readyState === 'loading') addEventListener('DOMContentLoaded', start);
+    else start();
+    window.__zvIpc.on('ring:', (ev, p) => {
+      if (ev === 'ring:ringing') apply('ringing');
+      else if (ev === 'ring:accepted') apply('accepted');
+      else if (ev === 'ring:ended') apply('ended', p && p.reason);
+    });
+    window.__zvIpc.on('room:msg', (_, p) => {
+      const m = p && p.msg;
+      if (!m || ended) return;
+      if (m.type === 'bye') {
+        clearTimeout(byeT);
+        byeT = setTimeout(() => finish('hangup'), 1200);
+      } else if (m.type === 'hello' || m.type === 'hi') {
+        clearTimeout(byeT);
+      }
+    });
+  }
+
   // автоматический вход (ответ на входящий / звонок из оболочки)
   if (boot.auto) {
     const t0 = Date.now();

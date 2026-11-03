@@ -28,8 +28,10 @@ export function mountIncoming(root, { popup = false } = {}) {
             h(
               'div.inc-body',
               h('b', c.name || 'Без имени'),
-              h('small', c.busy ? `Вторая линия · ${c.linkName}` : `Звонит по ссылке «${c.linkName}»`),
-              h('small', c.app ? 'ZVONochek для ПК' : 'из браузера')
+              c.contactId
+                ? h('small', `${c.busy ? 'Вторая линия · ' : ''}${c.video ? 'Видеозвонок' : 'Аудиозвонок'} · контакт`)
+                : h('small', c.busy ? `Вторая линия · ${c.linkName}` : `Звонит по ссылке «${c.linkName}»`),
+              c.contactId ? null : h('small', c.app ? 'ZVONochek для ПК' : 'из браузера')
             ),
             h(
               'div.inc-acts',
@@ -38,14 +40,21 @@ export function mountIncoming(root, { popup = false } = {}) {
                 { title: 'Отклонить', 'aria-label': 'Отклонить', onclick: () => decline(c.callId) },
                 icon('hangup')
               ),
+              c.contactId && c.video
+                ? h(
+                    'button.round.ok.alt',
+                    { title: 'Ответить без видео', 'aria-label': 'Ответить без видео', onclick: () => answer(c.callId, false) },
+                    icon('phone')
+                  )
+                : null,
               h(
                 'button.round.ok',
                 {
-                  title: c.busy ? 'Ответить (текущий звонок завершится)' : 'Ответить',
+                  title: c.busy ? 'Ответить (текущий звонок завершится)' : c.contactId && c.video ? 'Ответить с видео' : 'Ответить',
                   'aria-label': 'Ответить',
                   onclick: () => answer(c.callId),
                 },
-                icon('phone')
+                icon(c.contactId && c.video ? 'video' : 'phone')
               )
             )
           )
@@ -57,11 +66,14 @@ export function mountIncoming(root, { popup = false } = {}) {
     if (popup && calls.size === 0) call('host_incoming_empty').catch(() => {});
   };
 
-  async function answer(callId) {
+  async function answer(callId, withVideo) {
     ringer.stop();
     try {
       const r = await call('call_answer', { callId });
-      await openCall(r.secret, { dir: 'in', peer: r.name, replace: true });
+      const boot = { dir: 'in', peer: r.name, replace: true };
+      // контакт: камера — как у звонящего (или без видео по выбору); ссылки — как раньше
+      if (r.contactId) Object.assign(boot, { contact: r.name, video: withVideo ?? !!r.video });
+      await openCall(r.secret, boot);
     } catch (e) {
       toast('Не удалось ответить: ' + (e.message || e));
     }

@@ -92,7 +92,7 @@ pub fn verify_event(ev: &serde_json::Value) -> bool {
         return false;
     };
     let Ok(vk) = k256::schnorr::VerifyingKey::from_bytes(&pkb.into()) else { return false };
-    let Ok(sig) = k256::schnorr::Signature::from_bytes(&sigb.into()) else { return false };
+    let Ok(sig) = k256::schnorr::Signature::from_bytes(&sigb) else { return false };
     vk.verify_raw(&digest, &sig).is_ok()
 }
 

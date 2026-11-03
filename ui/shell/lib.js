@@ -59,6 +59,11 @@ const ICONS = {
   in: '<path d="M17 7L7.5 16.5M7 9.5V17h7.5"/>',
   out: '<path d="M7 17l9.5-9.5M9.5 7H17v7.5"/>',
   user: '<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>',
+  users:
+    '<circle cx="9" cy="8.5" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.6 14.2a6.5 6.5 0 0 1 3.9 5.3"/>',
+  userplus: '<circle cx="10" cy="8.5" r="3.8"/><path d="M2.8 20a7.2 7.2 0 0 1 11.6-5.7"/><path d="M18.5 14v6M15.5 17h6"/>',
+  video: '<rect x="3" y="6.5" width="12.5" height="11" rx="2.2"/><path d="M15.5 10.6l5-3.1v9l-5-3.1z"/>',
+  shield: '<path d="M12 3.5l7 2.8v5.2c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6.3z"/><path d="M8.8 12l2.3 2.3 4.2-4.4"/>',
   external:
     '<path d="M14 4.5h5.5V10M19.5 4.5l-8.5 8.5M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   lock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
@@ -251,9 +256,9 @@ export function menu(anchor, items) {
   };
   setTimeout(() => addEventListener('mousedown', off, true), 0);
 }
-export function qrSvg(text) {
+export function qrSvg(text, level = 'M') {
   if (typeof window.qrcode !== 'function') return null;
-  const q = window.qrcode(0, 'M');
+  const q = window.qrcode(0, level);
   q.addData(text);
   q.make();
   return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true });

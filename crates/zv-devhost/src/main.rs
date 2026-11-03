@@ -75,6 +75,8 @@ async fn main() -> anyhow::Result<()> {
         platform: "devhost".into(),
         dev: true,
         signal: signal_override(),
+        // --p2p-local: только прямые адреса, без релеев и поиска n0
+        p2p_n0: !std::env::args().any(|a| a == "--p2p-local"),
     })?;
     let app = Arc::new(App { core, ui });
     let router = axum::Router::new()

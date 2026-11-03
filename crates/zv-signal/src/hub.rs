@@ -58,6 +58,8 @@ enum HubCmd {
     SetExtras(Map<String, Value>),
     SetProfile(Profile),
     AddChannel(Arc<dyn Channel>),
+    RemoveChannel(String),
+    Inject { data: String, via: &'static str },
     Status(oneshot::Sender<HubStatus>),
     Channels(oneshot::Sender<Vec<ChanInfo>>),
     Stats(oneshot::Sender<Value>),
@@ -135,6 +137,16 @@ impl RoomHub {
 
     pub fn add_channel(&self, ch: Arc<dyn Channel>) {
         let _ = self.tx.send(HubCmd::AddChannel(ch));
+    }
+
+    /// Убрать внешний канал (по имени) — например, P2P-линк закрылся.
+    pub fn remove_channel(&self, name: &str) {
+        let _ = self.tx.send(HubCmd::RemoveChannel(name.to_string()));
+    }
+
+    /// Запечатанный пакет, пришедший внешним путём (P2P): те же фильтры и дедупликация, что у каналов.
+    pub fn inject(&self, data: String, via: &'static str) {
+        let _ = self.tx.send(HubCmd::Inject { data, via });
     }
 
     pub async fn status(&self) -> Option<HubStatus> {
@@ -288,9 +300,17 @@ impl Hub {
                             }
                         }
                         HubCmd::AddChannel(c) => {
+                            if let Some(old) = self.extra.iter().position(|x| x.name() == c.name()) {
+                                self.extra.remove(old);
+                            }
                             self.extra.push(c);
                             self.emit_status();
                         }
+                        HubCmd::RemoveChannel(name) => {
+                            self.extra.retain(|x| x.name() != name);
+                            self.emit_status();
+                        }
+                        HubCmd::Inject { data, via } => self.recv(&data, via),
                         HubCmd::Status(tx) => { let _ = tx.send(self.status()); }
                         HubCmd::Channels(tx) => { let _ = tx.send(self.channel_infos()); }
                         HubCmd::Stats(tx) => {
