@@ -190,3 +190,136 @@ async fn chats_p2p_files_mailbox() {
     let hb = b.dispatch("chat_history", json!({"chat": chat_b})).await.unwrap();
     assert!(hb["msgs"].as_array().unwrap().is_empty());
 }
+
+/// Большой файл: обрыв связи посреди передачи → «ждёт связи» → связь вернулась → докачка с места обрыва
+/// (из `.part`, без повторной передачи начала), проверка BLAKE3 и содержимого.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn file_resume_after_break() {
+    let mock = zv_signal::mock::MockWorker::spawn().await;
+    let da = tempfile::tempdir().unwrap();
+    let db = tempfile::tempdir().unwrap();
+    let (a, mut arx) = start(da.path(), "Аня", &mock.url).await;
+    let (b, mut brx) = start(db.path(), "Борис", &mock.url).await;
+    let inv = a.dispatch("contact_invite", json!({})).await.unwrap();
+    b.dispatch("contact_add", json!({"code": inv["code"]})).await.unwrap();
+    wait_for(&mut brx, "contact:added", 15, |_| true).await;
+    wait_for(&mut arx, "contact:added", 5, |_| true).await;
+    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
+
+    step("большой файл: предложение и приём");
+    const SIZE: usize = 160 << 20;
+    let mut data = vec![0u8; SIZE];
+    let mut x = 0x9e37_79b9_7f4a_7c15u64;
+    for ch in data.chunks_mut(8) {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        ch.copy_from_slice(&x.to_le_bytes()[..ch.len()]);
+    }
+    let src = da.path().join("big.bin");
+    std::fs::write(&src, &data).unwrap();
+    a.dispatch("chat_send_file", json!({"chat": chat_a, "path": src.display().to_string()})).await.unwrap();
+    let got = wait_for(&mut brx, "chat:msg", 30, |p| p["new"] == true && p["msg"]["kind"] == "file").await;
+    let fid = got["msg"]["file"]["fid"].as_str().unwrap().to_string();
+    b.dispatch("chat_file_accept", json!({"fid": fid})).await.unwrap();
+
+    step("обрыв посреди передачи");
+    wait_for(&mut brx, "chat:file", 30, |p| p["st"] == "loading" && p["done"].as_u64().unwrap_or(0) > 0).await;
+    b.dispatch("settings_set", json!({"patch": {"p2p": false}})).await.unwrap();
+    let w = wait_for(&mut brx, "chat:file", 30, |p| p["st"] == "waiting" || p["st"] == "done" || p["st"] == "failed").await;
+    assert_eq!(w["st"], "waiting", "передача должна прерваться: {w}");
+    let part = format!("{}.part", w["path"].as_str().unwrap());
+    let part_len = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+    assert!(part_len > 0 && part_len < SIZE as u64, "в .part {part_len} байт");
+    eprintln!("[докачка] прервано на {} из {} байт", part_len, SIZE);
+
+    step("связь вернулась → докачка с места обрыва");
+    b.dispatch("settings_set", json!({"patch": {"p2p": true}})).await.unwrap();
+    let r = wait_for(&mut brx, "chat:file", 60, |p| p["st"] == "loading").await;
+    assert!(r["done"].as_u64().unwrap() >= part_len, "докачка началась не с места обрыва: {r}");
+    let done = wait_for(&mut brx, "chat:file", 120, |p| p["st"] == "done" || p["st"] == "failed").await;
+    assert_eq!(done["st"], "done", "{done}");
+    let path = done["path"].as_str().unwrap();
+    assert!(!std::path::Path::new(&part).exists());
+    let out = std::fs::read(path).unwrap();
+    assert_eq!(out.len(), SIZE);
+    assert!(out == data, "содержимое не совпало");
+    let st = a.dispatch("chat_status", Value::Null).await.unwrap();
+    eprintln!("[докачка] готово: {path}; {st}");
+}
+
+/// Перенос профиля: экспорт под паролем → импорт на «новом компьютере» → после перезапуска тот же ID,
+/// контакты и переписка; контакт продолжает переписку с новым компьютером.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn profile_transfer() {
+    let mock = zv_signal::mock::MockWorker::spawn().await;
+    let da = tempfile::tempdir().unwrap();
+    let db = tempfile::tempdir().unwrap();
+    let dc = tempfile::tempdir().unwrap();
+    let (a, mut arx) = start(da.path(), "Аня", &mock.url).await;
+    let (b, mut brx) = start(db.path(), "Борис", &mock.url).await;
+    let inv = a.dispatch("contact_invite", json!({})).await.unwrap();
+    b.dispatch("contact_add", json!({"code": inv["code"]})).await.unwrap();
+    wait_for(&mut brx, "contact:added", 15, |_| true).await;
+    wait_for(&mut arx, "contact:added", 5, |_| true).await;
+    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
+    a.dispatch("link_create", json!({"name": "Рабочая"})).await.unwrap();
+    let m = a.dispatch("chat_send", json!({"chat": chat_a, "text": "до переноса"})).await.unwrap();
+    wait_for(&mut arx, "chat:state", 10, |p| p["st"] == 2 && p["ids"][0] == m["id"]).await;
+    let id_a = a.device_id().unwrap();
+
+    step("экспорт: короткий пароль не принимается, нормальный — файл");
+    assert!(a.dispatch("profile_export", json!({"password": "123"})).await.is_err());
+    let e = a.dispatch("profile_export", json!({"password": "секрет-пароль"})).await.unwrap();
+    let file = e["path"].as_str().unwrap().to_string();
+    assert!(file.ends_with(".zvp"), "{e}");
+    assert_eq!(e["summary"]["contacts"], 1);
+    let raw = std::fs::read(&file).unwrap();
+    assert!(!raw.windows(11).any(|w| w == "до переноса".as_bytes()[..11].as_ref()), "переписка видна в файле открытым текстом");
+    let p = a.dispatch("chat_file_path", json!({"export": true})).await.unwrap_or_default();
+    assert_eq!(p["path"], file.as_str());
+
+    step("импорт на новом компьютере: неверный пароль, верный → после перезапуска");
+    let (c, _crx) = start(dc.path(), "Новый", &mock.url).await;
+    let id_c0 = c.device_id().unwrap();
+    let bad = c.dispatch("profile_import", json!({"path": file, "password": "не тот пароль"})).await.unwrap_err();
+    assert_eq!(bad, "Неверный пароль или файл повреждён");
+    let r = c.dispatch("profile_import", json!({"path": file, "password": "секрет-пароль"})).await.unwrap();
+    assert_eq!(r["contacts"], 1, "{r}");
+    assert_eq!(r["restart"], true);
+    c.shutdown().await;
+    drop(c);
+    a.shutdown().await;
+    drop(a);
+    drop(arx);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let core = Core::start(opts(dc.path(), &mock.url)).unwrap();
+    let mut crx = core.subscribe();
+    for _ in 0..100 {
+        if core.device_id().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    let c = core;
+    assert_eq!(c.device_id().unwrap(), id_a, "ID устройства не перенёсся");
+    assert_ne!(id_c0, id_a);
+    assert!(!dc.path().join("import.pending").exists());
+    let s = c.dispatch("settings_get", Value::Null).await.unwrap();
+    assert_eq!(s["name"], "Аня");
+    let l = c.dispatch("contacts_list", Value::Null).await.unwrap();
+    assert_eq!(l.as_array().unwrap().len(), 1);
+    assert_eq!(l[0]["name"], "Борис");
+    let links = c.dispatch("links_list", Value::Null).await.unwrap();
+    assert!(links.to_string().contains("Рабочая"), "{links}");
+    let chat_c = c.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
+    assert_eq!(chat_c, chat_a);
+    let h = c.dispatch("chat_history", json!({"chat": chat_c})).await.unwrap();
+    assert!(h["msgs"].as_array().unwrap().iter().any(|m| m["body"] == "до переноса"), "{h}");
+
+    step("контакт переписывается с новым компьютером");
+    let m2 = c.dispatch("chat_send", json!({"chat": chat_c, "text": "я на новом ПК"})).await.unwrap();
+    let got = wait_for(&mut brx, "chat:msg", 30, |p| p["new"] == true && p["msg"]["body"] == "я на новом ПК").await;
+    assert_eq!(got["msg"]["out"], false);
+    wait_for(&mut crx, "chat:state", 30, |p| p["st"] == 2 && p["ids"][0] == m2["id"]).await;
+}

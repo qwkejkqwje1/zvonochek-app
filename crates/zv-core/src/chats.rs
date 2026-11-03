@@ -27,8 +27,10 @@ const FETCH_EVERY_MS: u64 = 10 * 60_000;
 const TYPING_TTL_MS: u64 = 6_000;
 const TYPING_EVERY_MS: u64 = 3_000;
 const OFFLINE_FRESH_MS: u64 = 60_000;
+/// Как часто пробовать поднять линк к тем, кому есть что доставить (очередь, ждущие файлы).
+const LINK_RETRY_MS: u64 = 30_000;
 const MAX_PARTS: usize = 16;
-const PARTS_TTL_MS: u64 = 24 * 3600_000;
+const PARTS_TTL_MS: u64 = 24 * 3_600_000;
 
 #[derive(Default)]
 pub(crate) struct ChatsState {
@@ -48,6 +50,8 @@ pub(crate) struct ChatsState {
     /// Не дозвонились по P2P: собеседник → когда.
     pub offline_at: HashMap<String, u64>,
     pub loaded: bool,
+    /// Когда снова пробовать поднять линки для недоставленного (0 — сразу; сбрасывается при запуске узла).
+    pub next_link_retry: u64,
     /// Идущие скачивания: fid → флаг отмены.
     pub transfers: HashMap<String, Arc<std::sync::atomic::AtomicBool>>,
 }
@@ -184,6 +188,8 @@ impl Inner {
         }
         let reply = args.get("reply").and_then(|v| v.as_str()).filter(|r| valid_id(r)).map(str::to_string);
         let m = self.new_out_msg(&c.id, "text", body, reply, None);
+        // у собеседника «печатает…» погаснет с приходом сообщения — следующий ввод сообщим сразу
+        self.lock().chats.my_typing.remove(&c.id);
         self.deliver(&c.peer, &m.id, "chat", frame_of(&m));
         let v = self.msg_json(&m);
         self.emit("chat:msg", json!({"msg": v, "new": true}));
@@ -332,6 +338,7 @@ impl Inner {
             "nextFetchIn": st.chats.next_fetch.saturating_sub(now_ms()) / 1000,
             "lastFetch": st.chats.last_fetch,
             "lastPut": st.chats.last_put,
+            "downloads": self.downloads_dir().display().to_string(),
         })
     }
 
@@ -357,6 +364,29 @@ impl Inner {
                 self.send_contact(peer, &frame, true);
             }
             self.ensure_link(peer);
+        }
+    }
+
+    fn retry_links(self: &Arc<Self>, now: u64) {
+        let mut peers: HashSet<String> = {
+            let mut st = self.lock();
+            if now < st.chats.next_link_retry {
+                return;
+            }
+            st.chats.next_link_retry = now + LINK_RETRY_MS;
+            st.chats.pending.keys().map(|(_, p)| p.clone()).collect()
+        };
+        let waiting = self.db.files_where_st(&["waiting"]);
+        if !waiting.is_empty() {
+            let st = self.lock();
+            for f in waiting.iter().filter(|f| !f.out) {
+                if let Some(c) = st.contacts.items.iter().find(|c| c.id == f.chat) {
+                    peers.insert(c.peer.clone());
+                }
+            }
+        }
+        for p in peers {
+            self.ensure_link(&p);
         }
     }
 
@@ -466,6 +496,8 @@ impl Inner {
                 }
             });
         }
+        // нет линка, а доставить есть что (очередь, ждущие файлы от собеседника) — поднять
+        self.retry_links(now);
         // повтор по живым линкам
         if (now / 1000).is_multiple_of(5) {
             let peers: HashSet<String> = self.lock().chats.pending.keys().map(|(_, p)| p.clone()).collect();

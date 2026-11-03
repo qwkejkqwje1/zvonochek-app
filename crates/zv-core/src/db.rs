@@ -164,6 +164,17 @@ impl Db {
         Db { c: Mutex::new(c) }
     }
 
+    /// Снимок базы в файл (для переноса профиля).
+    pub fn snapshot(&self, path: &Path) -> anyhow::Result<()> {
+        let _ = std::fs::remove_file(path);
+        self.c().execute("VACUUM INTO ?1", [path.display().to_string()])?;
+        Ok(())
+    }
+
+    pub fn msgs_count(&self) -> u64 {
+        self.c().query_row("SELECT COUNT(*) FROM msgs WHERE deleted = 0", [], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
+    }
+
     fn c(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.c.lock().unwrap_or_else(|e| e.into_inner())
     }

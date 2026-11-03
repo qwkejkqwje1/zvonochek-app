@@ -11,6 +11,7 @@ mod files;
 pub mod fetch;
 pub mod model;
 mod p2p;
+mod profile;
 pub mod protect;
 pub mod store;
 
@@ -96,6 +97,8 @@ struct State {
     contacts: Contacts,
     p2p: p2p::P2pState,
     chats: chats::ChatsState,
+    /// Последний сохранённый файл профиля.
+    last_export: Option<PathBuf>,
 }
 
 /// Зачем ядру комната.
@@ -173,6 +176,7 @@ impl Core {
     /// Запуск ядра (внутри tokio-runtime).
     pub fn start(opts: CoreOptions) -> anyhow::Result<Core> {
         std::fs::create_dir_all(&opts.data_dir)?;
+        profile::apply_pending(&opts.data_dir);
         let settings_file = JsonFile::new(&opts.data_dir, "settings.json", false);
         let links_file = JsonFile::new(&opts.data_dir, "links.dat", true);
         let history_file = JsonFile::new(&opts.data_dir, "history.json", false);
@@ -188,6 +192,7 @@ impl Core {
             contacts: contacts_file.load(),
             p2p: p2p::P2pState::default(),
             chats: chats::ChatsState::default(),
+            last_export: None,
         };
         let db = match db::Db::open(&opts.data_dir.join("chats.db")) {
             Ok(d) => d,
@@ -277,6 +282,8 @@ impl Core {
             "chat_send_file" => i.chat_send_file(&args).await,
             "chat_send_blob" => i.chat_send_blob(&args).await,
             "chat_file_data" => i.chat_file_data(&args).await,
+            "profile_export" => i.profile_export(&args).await,
+            "profile_import" => i.profile_import(&args).await,
             "chat_mail_fetch" => {
                 let busy = std::mem::replace(&mut i.lock().chats.mail_busy, true);
                 if busy {
@@ -291,7 +298,7 @@ impl Core {
     /// Быстрые команды, выполняемые сразу и по порядку (отправка сигналов звонка не должна
     /// перемешиваться). `None` — команда асинхронная, нужен `dispatch`.
     pub fn dispatch_sync(&self, cmd: &str, args: &Value) -> Option<Result<Value, String>> {
-        const ASYNC: [&str; 8] = [
+        const ASYNC: [&str; 10] = [
             "room_stats",
             "room_status",
             "http_fetch",
@@ -300,6 +307,8 @@ impl Core {
             "chat_send_blob",
             "chat_file_data",
             "chat_mail_fetch",
+            "profile_export",
+            "profile_import",
         ];
         if ASYNC.contains(&cmd) {
             return None;
@@ -403,6 +412,7 @@ impl Core {
             "chat_file_accept" => i.chat_file_accept(&args),
             "chat_file_cancel" => i.chat_file_cancel(&args),
             "chat_status" => Ok(i.chat_status()),
+            "chat_file_path" => i.chat_file_path(&args),
             "chat_unread" => {
                 i.emit_unread();
                 Ok(Value::Null)
@@ -428,7 +438,12 @@ fn link_parse(text: &str) -> Value {
             "d": d,
             "url": zv_proto::link::call_url(&secret),
         }),
-        Some(zv_proto::Link::Chat(_)) => json!({"kind": "chat"}),
+        // веб-чат по ссылке — открывается в браузере (чаты приложения — с контактами)
+        Some(zv_proto::Link::Chat(_)) => {
+            let t = text.trim();
+            let url = (t.starts_with("https://") || t.starts_with("http://")).then(|| t.to_string());
+            json!({"kind": "chat", "url": url})
+        }
         Some(zv_proto::Link::DeviceLink(_)) => json!({"kind": "link"}),
         None => json!({"kind": "none"}),
     }

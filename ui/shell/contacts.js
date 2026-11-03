@@ -238,8 +238,14 @@ export async function callContact(c, video) {
   }
 }
 
+/// Открыть чат с контактом (страница «Чаты» слушает событие).
+export function openChatOf(c) {
+  document.dispatchEvent(new CustomEvent('zv:chat', { detail: c.id }));
+}
+
 function contactMenu(anchor, c) {
   menu(anchor, [
+    { icon: 'chat', label: 'Написать', run: () => openChatOf(c) },
     { icon: 'phone', label: 'Позвонить', run: () => callContact(c, false) },
     { icon: 'video', label: 'Видеозвонок', run: () => callContact(c, true) },
     {
@@ -270,7 +276,7 @@ function contactMenu(anchor, c) {
   ]);
 }
 
-function safetyDialog(c) {
+export function safetyDialog(c) {
   if (!c.safety) {
     toast('Код появится, когда запустится P2P');
     return;

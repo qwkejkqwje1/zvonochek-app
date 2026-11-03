@@ -514,10 +514,12 @@ mod tests {
     #[tokio::test]
     async fn worker_roundtrip_with_mock() {
         let mock = crate::mock::MockWorker::spawn().await;
-        let mut cfg = SignalConfig::default();
-        cfg.worker_url = Some(mock.url.clone());
-        cfg.nostr_relays.clear();
-        cfg.ntfy_base = None;
+        let cfg = SignalConfig {
+            worker_url: Some(mock.url.clone()),
+            nostr_relays: Vec::new(),
+            ntfy_base: None,
+            ..Default::default()
+        };
         let mb = Mailbox::new(cfg);
         let a = MailAddr::derive(SECRET).unwrap();
         let mut cur = Cursor::default();

@@ -35,6 +35,8 @@ pub struct AppState {
     pub incoming_names: Mutex<HashMap<String, (String, String)>>,
     pub last_url: Mutex<(String, std::time::Instant)>,
     pub log_dir: std::path::PathBuf,
+    /// Непрочитанных сообщений во всех чатах (подсказка трея, значок на панели задач).
+    pub unread: std::sync::atomic::AtomicU64,
 }
 
 fn web_version() -> u32 {
@@ -164,6 +166,23 @@ async fn forward_events(app: AppHandle) {
                 wins::update_tray(&app);
             }
             "room:status" | "links:changed" => wins::update_tray(&app),
+            "chat:msg" => {
+                let p = &ev.payload;
+                let m = &p["msg"];
+                let incoming = p["new"].as_bool() == Some(true) && m["out"].as_bool() == Some(false);
+                if incoming && p["notify"].as_bool() == Some(true) && !st.core.settings().dnd {
+                    let name = p["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("Новое сообщение");
+                    host::notify(&app, name, &chat_preview(m));
+                    wins::flash_main(&app);
+                }
+            }
+            "chat:unread" => {
+                let n = ev.payload["total"].as_u64().unwrap_or(0);
+                if st.unread.swap(n, Ordering::SeqCst) != n {
+                    wins::update_tray(&app);
+                    wins::set_unread_badge(&app, n);
+                }
+            }
             "contact:offer" => {
                 let name = ev.payload.get("name").and_then(|v| v.as_str()).unwrap_or("Собеседник");
                 host::notify(&app, "Предложение контакта", &format!("{name} предлагает обменяться контактами"));
@@ -175,6 +194,21 @@ async fn forward_events(app: AppHandle) {
             _ => {}
         }
     }
+}
+
+/// Текст уведомления о сообщении: начало текста или имя файла.
+fn chat_preview(m: &Value) -> String {
+    let body = m["body"].as_str().unwrap_or("").trim();
+    let text = if m["kind"].as_str() == Some("file") {
+        let name = m["file"]["name"].as_str().unwrap_or("файл");
+        let mime = m["file"]["mime"].as_str().unwrap_or("");
+        let icon = if mime.starts_with("image/") { "🖼" } else { "📎" };
+        if body.is_empty() { format!("{icon} {name}") } else { format!("{icon} {body}") }
+    } else {
+        body.to_string()
+    };
+    let one: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if one.chars().count() > 140 { format!("{}…", one.chars().take(140).collect::<String>()) } else { one }
 }
 
 pub fn quit(app: &AppHandle) {
@@ -218,6 +252,7 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
@@ -259,6 +294,7 @@ fn main() {
                 incoming_names: Mutex::new(HashMap::new()),
                 last_url: Mutex::new((String::new(), std::time::Instant::now())),
                 log_dir,
+                unread: std::sync::atomic::AtomicU64::new(0),
             });
             tauri::async_runtime::spawn(forward_events(handle.clone()));
             wins::build_tray(&handle)?;

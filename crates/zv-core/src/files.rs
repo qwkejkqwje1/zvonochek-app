@@ -81,7 +81,7 @@ pub(crate) fn mime_of(name: &str) -> &'static str {
 }
 
 /// Свободное имя в папке: `имя (1).ext`, … (учитывая и недокачанные `.part`).
-fn unique_path(dir: &Path, name: &str) -> PathBuf {
+pub(crate) fn unique_path(dir: &Path, name: &str) -> PathBuf {
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 => (&name[..i], &name[i..]),
         _ => (name, ""),
@@ -504,6 +504,27 @@ impl Inner {
         let v = self.msg_json(&m);
         self.emit("chat:msg", json!({"msg": v, "new": true}));
         Ok(v)
+    }
+
+    /// Путь файла для «Открыть» / «Показать в папке» (хост открывает только файлы чатов).
+    pub(crate) fn chat_file_path(&self, args: &Value) -> Result<Value, String> {
+        if args.get("export").and_then(|v| v.as_bool()) == Some(true) {
+            let p = self.last_export().ok_or("файл профиля не найден")?;
+            return Ok(json!({"path": p.display().to_string(), "name": p.file_name().map(|n| n.to_string_lossy().to_string()), "out": true, "dir": false}));
+        }
+        if args.get("downloads").and_then(|v| v.as_bool()) == Some(true) {
+            let d = self.downloads_dir();
+            let _ = std::fs::create_dir_all(&d);
+            return Ok(json!({"path": d.display().to_string(), "dir": true}));
+        }
+        let r = self.db.file(s(args, "fid")?).ok_or("нет такого файла")?;
+        if !r.out && r.st != "done" {
+            return Err("файл ещё не скачан".into());
+        }
+        if r.path.is_empty() || !std::path::Path::new(&r.path).is_file() {
+            return Err("файл удалён или перемещён".into());
+        }
+        Ok(json!({"path": r.path, "name": r.name, "out": r.out, "dir": false}))
     }
 
     /// Картинка для предпросмотра: data:URL (до 16 МБ).

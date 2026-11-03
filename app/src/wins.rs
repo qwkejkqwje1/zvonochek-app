@@ -7,7 +7,7 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::{NewWindowResponse, PermissionKind, PermissionResponse};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window, WindowEvent};
+use tauri::{AppHandle, DragDropEvent, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window, WindowEvent};
 
 /// Одинаковые для всех окон (общее окружение WebView2): мелодия звонка без жеста пользователя.
 const BROWSER_ARGS: &str =
@@ -229,6 +229,7 @@ pub fn update_tray(app: &AppHandle) {
             n("mqttUp") + n("nostrUp") + n("ntfyUp") + n("p2pUp") > 0 || s.get("worker").and_then(|v| v.as_str()) == Some("up")
         })
         .count();
+    let unread = st.unread.load(Ordering::SeqCst);
     let text = if listen.is_empty() {
         "ZVONochek".to_string()
     } else if st.core.settings().dnd {
@@ -240,9 +241,30 @@ pub fn update_tray(app: &AppHandle) {
     } else {
         "ZVONochek — нет связи".to_string()
     };
+    let text = if unread > 0 { format!("{text}\nНепрочитанных сообщений: {unread}") } else { text };
     if let Some(t) = app.tray_by_id(TRAY_ID) {
         let _ = t.set_tooltip(Some(&text));
     }
+}
+
+/// Новое сообщение, а окно не в фокусе — мигнуть кнопкой на панели задач.
+pub fn flash_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main")
+        && !w.is_focused().unwrap_or(false)
+    {
+        let _ = w.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    }
+}
+
+/// Значок поверх кнопки на панели задач: есть непрочитанные сообщения.
+pub fn set_unread_badge(app: &AppHandle, n: u64) {
+    #[cfg(windows)]
+    if let Some(w) = app.get_webview_window("main") {
+        let icon = if n > 0 { Image::from_bytes(include_bytes!("../icons/badge.png")).ok() } else { None };
+        let _ = w.set_overlay_icon(icon);
+    }
+    #[cfg(not(windows))]
+    let _ = (app, n);
 }
 
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
@@ -262,6 +284,20 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                     crate::host::notify(app, "ZVONochek работает в трее", "Звонки по вашим ссылкам будут приходить. Выход — в меню значка в трее.");
                     let _ = st.core.dispatch_sync("settings_set", &json!({"patch": {"trayHintShown": true}}));
                 }
+            }
+        }
+        // файлы перетащили в главное окно — оболочка отправит их в открытый чат
+        WindowEvent::DragDrop(e) if label == "main" => {
+            let ev = match e {
+                DragDropEvent::Enter { .. } => Some(json!({"event": "host:drag", "payload": {"on": true}})),
+                DragDropEvent::Leave => Some(json!({"event": "host:drag", "payload": {"on": false}})),
+                DragDropEvent::Drop { paths, .. } => Some(json!({"event": "host:drop", "payload": {
+                    "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()
+                }})),
+                _ => None,
+            };
+            if let Some(ev) = ev {
+                let _ = app.emit_to("main", "zv", ev);
             }
         }
         WindowEvent::Destroyed => {

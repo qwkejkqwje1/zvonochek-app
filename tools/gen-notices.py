@@ -107,6 +107,12 @@ for title, lic, repo, path, copy in js:
     head = js_header(path)
     entries.append((title, lic, repo, [('LICENSE', f'{copy}\n\n' + STD['MIT'] + (f'\n\n— шапка файла:\n{head}' if head else ''))]))
 
+# C-библиотеки, собранные внутри крейтов
+entries.append(('SQLite 3 (внутри libsqlite3-sys, сборка bundled)', 'Public Domain', 'https://sqlite.org/copyright.html',
+                [('SQLite — Public Domain', 'The author disclaims copyright to this source code. In place of a legal '
+                  'notice, here is a blessing:\n\n    May you do good and not evil.\n    May you find forgiveness for '
+                  'yourself and forgive others.\n    May you share freely, never taking more than you give.')]))
+
 # одинаковые тексты — один раз (сравнение без учёта пробелов)
 texts_by_key = {}
 text_order = []

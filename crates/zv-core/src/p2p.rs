@@ -147,6 +147,8 @@ impl Inner {
                     let id = node.id().to_string();
                     let generation = me.p2p_gen.fetch_add(1, Ordering::SeqCst) + 1;
                     *me.p2p.write().unwrap_or_else(|e| e.into_inner()) = Some(node);
+                    // недоставленное — сразу на следующем такте чатов
+                    me.lock().chats.next_link_retry = 0;
                     me.rt.spawn(p2p_events(Arc::downgrade(&me), rx, generation));
                     me.refresh_extras();
                     me.sync_listeners();

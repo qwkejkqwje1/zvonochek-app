@@ -380,11 +380,9 @@ async fn drain(c: &mut ConnCtx, s: &mut Session) -> anyhow::Result<()> {
                     }
                 }
             }
-            6 => {
-                // PUBREL (QoS 2) → PUBCOMP
-                if body.len() >= 2 {
-                    s.io.write(vec![0x70, 2, body[0], body[1]]).await?;
-                }
+            // PUBREL (QoS 2) → PUBCOMP
+            6 if body.len() >= 2 => {
+                s.io.write(vec![0x70, 2, body[0], body[1]]).await?;
             }
             _ => {} // SUBACK, PINGRESP, PUBACK…
         }

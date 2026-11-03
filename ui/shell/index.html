@@ -15,6 +15,7 @@
   <aside class="side">
     <div class="brand"><img src="icon.svg" alt=""><div><b>ZVONochek</b><small id="brandVer">для Windows</small></div></div>
     <button class="nav on" data-page="call"><i data-ic="phone"></i><span class="label">Звонок</span></button>
+    <button class="nav" data-page="chats"><i data-ic="chat"></i><span class="label">Чаты</span><span class="count hidden" id="chatCount"></span></button>
     <button class="nav" data-page="contacts"><i data-ic="users"></i><span class="label">Контакты</span><span class="count hidden" id="offerCount"></span></button>
     <button class="nav" data-page="links"><i data-ic="link"></i><span class="label">Мои ссылки</span></button>
     <button class="nav" data-page="history"><i data-ic="clock"></i><span class="label">История</span><span class="count hidden" id="missedCount"></span></button>
@@ -59,6 +60,19 @@
 
       <h2 id="quickTitle">Быстрый набор</h2>
       <div class="tiles" id="quick"></div>
+    </section>
+
+    <!-- ЧАТЫ -->
+    <section class="page chats hidden" id="page-chats">
+      <div class="ch-side">
+        <div class="ch-head">
+          <h1>Чаты</h1>
+          <div class="ch-search"><i data-ic="search" class="sm"></i><input class="field" id="chSearch" placeholder="Поиск" spellcheck="false" autocomplete="off"></div>
+        </div>
+        <div class="ch-warn hidden" id="chP2p"></div>
+        <div class="ch-list" id="chList"></div>
+      </div>
+      <div class="ch-conv" id="chConv"></div>
     </section>
 
     <!-- КОНТАКТЫ -->
@@ -113,6 +127,7 @@
       <h2>Профиль</h2>
       <div class="card">
         <div class="set"><div class="t"><b>Имя в звонках</b><small>Его видит собеседник</small></div><input class="field" id="setName" maxlength="40" placeholder="Например, Алекс"></div>
+        <div class="set"><div class="t"><b>Перенос на другой компьютер</b><small>ID устройства, контакты, ссылки, история звонков и переписка — в один файл под паролем</small></div><div class="btns"><button class="btn sm" id="profExport"><i data-ic="download" class="sm"></i>Сохранить</button><button class="btn sm" id="profImport"><i data-ic="upload" class="sm"></i>Загрузить</button></div></div>
       </div>
 
       <h2>Звонки</h2>
@@ -120,6 +135,13 @@
         <div class="set"><div class="t"><b>Не беспокоить</b><small>Входящие не звонят — только «пропущенный» в истории</small></div><label class="switch"><input type="checkbox" id="setDnd"><span></span></label></div>
         <div class="set"><div class="t"><b>Сразу входить в звонок</b><small>Без экрана проверки микрофона и камеры</small></div><label class="switch"><input type="checkbox" id="setSkip"><span></span></label></div>
         <div class="set"><div class="t"><b>Громкость мелодии</b><small id="setVolText">80%</small></div><input type="range" id="setVol" min="0" max="100" step="5"><button class="btn sm" id="setVolTest"><i data-ic="bell" class="sm"></i>Проверить</button></div>
+      </div>
+
+      <h2>Чаты</h2>
+      <div class="card">
+        <div class="set"><div class="t"><b>Отчёты о прочтении</b><small>Собеседник видит синие ✓✓, когда вы прочитали его сообщения</small></div><label class="switch"><input type="checkbox" id="setReceipts"><span></span></label></div>
+        <div class="set"><div class="t"><b>Скачивать фото сразу</b><small>Картинки до 25 МБ загружаются сами; остальные файлы — по кнопке «Скачать»</small></div><label class="switch"><input type="checkbox" id="setAutoImg"><span></span></label></div>
+        <div class="set"><div class="t"><b>Папка для файлов</b><small class="mono selectable" id="setDlDir">—</small></div><button class="btn sm" id="setDlOpen"><i data-ic="folder" class="sm"></i>Открыть</button></div>
       </div>
 
       <h2>Приложение</h2>

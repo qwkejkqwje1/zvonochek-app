@@ -36,6 +36,8 @@ import {
   offerContact,
   addDialog,
 } from './contacts.js';
+import { initChats, chatsVisible, openChat } from './chats.js';
+import { initProfile } from './profile.js';
 
 const S = {
   page: 'call',
@@ -55,8 +57,10 @@ function go(page) {
   for (const b of $$('.nav')) b.classList.toggle('on', b.dataset.page === page);
   for (const p of $$('.page')) p.classList.toggle('hidden', p.id !== 'page-' + page);
   $('.main').scrollTop = 0;
+  $('.main').classList.toggle('full', page === 'chats');
   clearInterval(S.diagTimer);
   contactsVisible(page === 'contacts');
+  chatsVisible(page === 'chats');
   if (page === 'diag') {
     renderDiag();
     S.diagTimer = setInterval(renderDiag, 2000);
@@ -102,7 +106,14 @@ on('room:status', (_, p) => {
 on('host:', (ev, p) => {
   if (ev === 'host:deeplink' && p && p.url) handleDeepLink(p.url);
   if (ev === 'host:page' && p && p.page) go(p.page);
+  if (ev === 'host:chat' && p && p.chat) openChatPage(p.chat);
 });
+// «Написать» у контакта
+document.addEventListener('zv:chat', (e) => openChatPage(e.detail));
+function openChatPage(chat) {
+  if (S.page !== 'chats') go('chats');
+  openChat(chat);
+}
 
 // ---------- состояние ожидания (слева внизу) ----------
 const isUp = (st) => !!st && (st.mqttUp + st.nostrUp + st.ntfyUp + (st.p2pUp || 0) > 0 || st.worker === 'up');
@@ -194,8 +205,12 @@ async function onDialInput() {
       : `Приглашение в контакты от «${r.name || 'без имени'}» — нажмите «Добавить»`;
     if (expired) dialBtn.disabled = true;
   } else if (r.kind === 'chat') {
-    cls = 'hint bad';
-    msg = 'Это ссылка на чат — пока откройте её в браузере (чаты появятся в приложении позже)';
+    cls = r.url ? 'hint ok' : 'hint bad';
+    msg = r.url
+      ? 'Ссылка на веб-чат — откроется в браузере. Чаты в приложении — с контактами: страница «Чаты»'
+      : 'Ссылка на веб-чат — откройте её в браузере';
+    dialBtn.disabled = !r.url;
+    dialBtn.lastChild.textContent = 'Открыть';
   } else if (r.kind === 'link') {
     cls = 'hint bad';
     msg = 'Это ссылка привязки устройства — в приложении пока не поддерживается';
@@ -213,6 +228,13 @@ dialInput.addEventListener('keydown', (e) => {
 dialBtn.addEventListener('click', dial);
 async function dial() {
   const r = S.parsed;
+  if (r && r.kind === 'chat' && r.url) {
+    if (host === 'tauri') call('host_open_external', { url: r.url }).catch((e) => toast(e.message || e));
+    else window.open(r.url, '_blank', 'noopener');
+    dialInput.value = '';
+    onDialInput();
+    return;
+  }
   if (r && r.kind === 'contact') {
     const code = dialInput.value.trim();
     dialInput.value = '';
@@ -536,6 +558,8 @@ function renderSettings() {
   $('#setTray').checked = s.closeToTray !== false;
   $('#setTcp').checked = s.mqttTcp !== false;
   $('#setP2p').checked = s.p2p !== false;
+  $('#setReceipts').checked = s.readReceipts !== false;
+  $('#setAutoImg').checked = s.autoImages !== false;
   if (document.activeElement !== $('#setWorker')) $('#setWorker').value = s.workerUrl || '';
   for (const b of $$('#setTheme button')) b.classList.toggle('on', b.dataset.v === (s.theme || 'auto'));
 }
@@ -551,12 +575,17 @@ const testRinger = new Ringer();
 $('#setVolTest').addEventListener('click', () => testRinger.once(Number($('#setVol').value) / 100));
 $('#setTray').addEventListener('change', (e) => setPatch({ closeToTray: e.target.checked }));
 $('#setTcp').addEventListener('change', (e) => setPatch({ mqttTcp: e.target.checked }));
+$('#setReceipts').addEventListener('change', (e) => setPatch({ readReceipts: e.target.checked }));
+$('#setAutoImg').addEventListener('change', (e) => setPatch({ autoImages: e.target.checked }));
+$('#setDlOpen').addEventListener('click', () =>
+  call('host_open_path', { downloads: true }).catch((e) => toast('Не открылось: ' + (e.message || e)))
+);
 $('#setP2p').addEventListener('change', async (e) => {
   if (
     !e.target.checked &&
     !(await confirmDialog(
       'Выключить прямые соединения?',
-      'Контакты перестанут работать: им нельзя будет позвонить, и они не дозвонятся до вас.',
+      'Контакты перестанут работать: им нельзя будет позвонить, они не дозвонятся до вас, файлы в чатах не передадутся.',
       'Выключить',
       true
     ))
@@ -617,6 +646,7 @@ $('#licBtn').addEventListener('click', () => {
 
 // ---------- диагностика ----------
 let lastDiag = null;
+let lastChats = null;
 async function renderDiag() {
   let d;
   try {
@@ -629,8 +659,11 @@ async function renderDiag() {
   if (S.page !== 'diag') return;
   const rooms = d.rooms || [];
   rooms.sort((a, b) => (b.joined ? 1 : 0) - (a.joined ? 1 : 0));
+  const chats = await call('chat_status').catch(() => null);
+  lastChats = chats;
   $('#diagBody').replaceChildren(
     diagP2p(d.p2p || {}),
+    chats ? diagChats(chats) : '',
     ...(rooms.length
       ? []
       : [h('div.empty', icon('pulse'), h('div', 'Нет активных комнат. Создайте свою ссылку или начните звонок.'))]),
@@ -712,14 +745,55 @@ function diagP2p(p) {
       : null
   );
 }
+function diagChats(c) {
+  const when = (x) => (x && x.at ? fmtTime(x.at) : '—');
+  const fetchRes = c.lastFetch && c.lastFetch.at ? (c.lastFetch.ok === false ? `нет связи${c.lastFetch.error ? ': ' + c.lastFetch.error : ''}` : `сообщений ${c.lastFetch.frames ?? 0}`) : 'ещё не было';
+  const putRes = c.lastPut && c.lastPut.at ? (c.lastPut.ok ? 'принято' : 'не принято') : 'ещё не было';
+  return h(
+    'div.card.diag-chats',
+    h(
+      'div.row',
+      h('h3.grow', { style: { margin: 0 } }, 'Чаты: доставка и почтовый ящик'),
+      h(
+        'button.btn.sm',
+        {
+          onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            await call('chat_mail_fetch').catch(() => {});
+            renderDiag();
+          },
+        },
+        icon('refresh', 'sm'),
+        'Проверить ящик'
+      )
+    ),
+    h(
+      'div.muted',
+      { style: { marginTop: '4px' } },
+      [
+        `в очереди ${c.outbox}`,
+        c.mailing ? `отправляется в ящик ${c.mailing}` : null,
+        c.mailed ? `ждут в ящике собеседника ${c.mailed}` : null,
+        `проверка своего ящика: ${when(c.lastFetch)} (${fetchRes}), следующая через ${Math.ceil((c.nextFetchIn || 0) / 60)} мин`,
+        `последняя отправка в ящик: ${when(c.lastPut)} (${putRes})`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    )
+  );
+}
 $('#diagCopy').addEventListener('click', async () => {
   const d = lastDiag || (await call('diag_snapshot').catch(() => null));
+  // без лишних await до записи в буфер: иначе браузер может не дать скопировать
+  const chats = lastChats ? { ...lastChats } : null;
+  if (chats) delete chats.downloads; // путь содержит имя пользователя Windows
   const report = {
     app: S.info,
     host: S.hostInfo,
     ua: navigator.userAgent,
     time: new Date().toISOString(),
     diag: d,
+    chats,
   };
   copyText(JSON.stringify(report, null, 2), 'Отчёт скопирован');
 });
@@ -799,6 +873,16 @@ async function start() {
       renderHistory();
     },
   }).catch(console.error);
+  await initChats({
+    onUnread: (n) => {
+      $('#chatCount').textContent = n > 99 ? '99+' : String(n);
+      $('#chatCount').classList.toggle('hidden', !n);
+    },
+  }).catch(console.error);
+  call('chat_status')
+    .then((c) => c && ($('#setDlDir').textContent = c.downloads || '—'))
+    .catch(() => {});
+  initProfile();
   // автозапуск — только там, где хост умеет
   try {
     const a = await call('host_autostart_get');

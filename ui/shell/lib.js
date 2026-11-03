@@ -69,8 +69,21 @@ const ICONS = {
   lock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   moon: '<path d="M19.5 14.5A7.8 7.8 0 1 1 9.5 4.5a6.2 6.2 0 0 0 10 10z"/>',
   download: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/>',
+  upload: '<path d="M12 15.5V4.5M7.5 9L12 4.5 16.5 9M5 19.5h14"/>',
   wave: '<path d="M8.5 9a4 4 0 0 0 0 6M15.5 9a4 4 0 0 1 0 6M5.5 6.5a8 8 0 0 0 0 11M18.5 6.5a8 8 0 0 1 0 11"/><circle cx="12" cy="12" r="1.2"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/>',
+  chat: '<path d="M4.5 6.8a2.3 2.3 0 0 1 2.3-2.3h10.4a2.3 2.3 0 0 1 2.3 2.3v7.4a2.3 2.3 0 0 1-2.3 2.3H10l-4.2 3.3v-3.3a1.3 1.3 0 0 1-1.3-1.3z"/>',
+  send: '<path d="M4.2 11.4L19.8 4.6l-5.3 15-3.2-6z"/><path d="M11.3 13.6l8.5-9"/>',
+  clip: '<path d="M19.2 11.6l-7.1 7.1a4.6 4.6 0 0 1-6.5-6.5l7.4-7.4a3 3 0 0 1 4.3 4.3l-7.3 7.3a1.5 1.5 0 0 1-2.1-2.1l6.7-6.7"/>',
+  file: '<path d="M13.5 3.5H7.2a1.7 1.7 0 0 0-1.7 1.7v13.6a1.7 1.7 0 0 0 1.7 1.7h9.6a1.7 1.7 0 0 0 1.7-1.7V8.5z"/><path d="M13.5 3.5v5h5"/>',
+  image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.2"/><circle cx="9" cy="9.5" r="1.7"/><path d="M20.5 15.5l-4.8-4.8-9.2 8.8"/>',
+  folder: '<path d="M3.5 7.2a1.7 1.7 0 0 1 1.7-1.7h4.2l2 2.2h7.4a1.7 1.7 0 0 1 1.7 1.7v8.4a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7z"/>',
+  reply: '<path d="M9.5 6.5L4 12l5.5 5.5"/><path d="M4.5 12h9a6 6 0 0 1 6 6v.5"/>',
+  back: '<path d="M14.5 5.5L8 12l6.5 6.5"/>',
+  down: '<path d="M6 9.5l6 6 6-6"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>',
+  tick1: '<path d="M5 12.8l4 4 9-9.3"/>',
+  tick2: '<path d="M2.5 12.8l4 4 9-9.3"/><path d="M12.2 15.9l.9.9 9-9.3"/>',
 };
 export function icon(name, cls = '') {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -223,8 +236,10 @@ export function promptDialog(title, value = '', { label = '', okLabel = 'Сох�
     );
   });
 }
+/** Меню у кнопки (anchor — элемент) или в точке ({x, y} — правый щелчок). */
 export function menu(anchor, items) {
   $('.menu')?.remove();
+  let done = () => {};
   const m = h(
     'div.menu',
     items.filter(Boolean).map((it) =>
@@ -233,7 +248,7 @@ export function menu(anchor, items) {
         {
           class: it.danger ? 'danger' : '',
           onclick: () => {
-            m.remove();
+            done();
             it.run();
           },
         },
@@ -243,18 +258,48 @@ export function menu(anchor, items) {
     )
   );
   document.body.append(m);
-  const r = anchor.getBoundingClientRect();
+  const pt = !anchor.getBoundingClientRect;
+  const r = pt ? { left: anchor.x, right: anchor.x, top: anchor.y, bottom: anchor.y } : anchor.getBoundingClientRect();
   const mw = m.offsetWidth;
   const mh = m.offsetHeight;
-  m.style.left = Math.max(8, Math.min(innerWidth - mw - 8, r.right - mw)) + 'px';
-  m.style.top = (r.bottom + mh + 8 > innerHeight ? r.top - mh - 4 : r.bottom + 4) + 'px';
+  m.style.left = Math.max(8, Math.min(innerWidth - mw - 8, pt ? r.left : r.right - mw)) + 'px';
+  m.style.top = Math.max(8, r.bottom + mh + 8 > innerHeight ? r.top - mh - 4 : r.bottom + 4) + 'px';
+  let closed = false;
+  done = () => {
+    closed = true;
+    m.remove();
+    removeEventListener('mousedown', off, true);
+    removeEventListener('keydown', esc, true);
+    removeEventListener('blur', done);
+  };
   const off = (e) => {
-    if (!m.contains(e.target)) {
-      m.remove();
-      removeEventListener('mousedown', off, true);
+    if (!m.contains(e.target)) done();
+  };
+  const esc = (e) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      done();
     }
   };
-  setTimeout(() => addEventListener('mousedown', off, true), 0);
+  setTimeout(() => {
+    if (closed) return;
+    addEventListener('mousedown', off, true);
+    addEventListener('keydown', esc, true);
+    addEventListener('blur', done);
+  }, 0);
+  return m;
+}
+/** Размер файла по-русски. */
+export function fmtSize(n) {
+  n = Number(n) || 0;
+  if (n < 1024) return `${n} Б`;
+  const u = ['КБ', 'МБ', 'ГБ'];
+  let i = -1;
+  do {
+    n /= 1024;
+    i++;
+  } while (n >= 1024 && i < u.length - 1);
+  return `${n >= 100 ? Math.round(n) : n.toFixed(1).replace('.', ',')} ${u[i]}`;
 }
 export function qrSvg(text, level = 'M') {
   if (typeof window.qrcode !== 'function') return null;

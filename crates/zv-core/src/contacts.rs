@@ -1058,7 +1058,9 @@ impl Inner {
 
     pub(crate) fn contacts_tick(self: &Arc<Self>, now: u64) {
         // повтор звонка и таймаут
-        let (resend, timeout): (Vec<(String, bool)>, Vec<(String, String)>) = {
+        type Resend = Vec<(String, bool)>;
+        type Timeout = Vec<(String, String)>;
+        let (resend, timeout): (Resend, Timeout) = {
             let st = self.lock();
             let mut r = Vec::new();
             let mut t = Vec::new();

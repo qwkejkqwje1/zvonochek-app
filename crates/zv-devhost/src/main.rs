@@ -25,6 +25,8 @@ struct App {
     ui: PathBuf,
     /// Что вернёт следующий `host_pick_files` (тесты задают через `dev_set_pick`).
     pick: std::sync::Mutex<Vec<String>>,
+    /// Что «открыли» через `host_open_path` (тесты читают через `dev_opened`).
+    opened: std::sync::Mutex<Vec<Value>>,
 }
 
 fn arg(name: &str) -> Option<String> {
@@ -89,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
         p2p_n0: !std::env::args().any(|a| a == "--p2p-local"),
         downloads_dir: Some(data.join("Downloads")),
     })?;
-    let app = Arc::new(App { core, ui, pick: Default::default() });
+    let app = Arc::new(App { core, ui, pick: Default::default(), opened: Default::default() });
     let router = axum::Router::new()
         .route("/ipc", get(ipc))
         .route("/", get(|| async { axum::response::Redirect::temporary("/shell/index.html") }))
@@ -150,8 +152,28 @@ async fn client(app: Arc<App>, ws: WebSocket) {
         let host = match cmd.as_str() {
             "host_info" => Some(Ok(json!({"host": "devhost"}))),
             "host_open_call" => Some(Ok(host_open_call(&args))),
-            "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" | "host_open_path" => Some(Ok(Value::Null)),
+            "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" => Some(Ok(Value::Null)),
+            // как в приложении: путь берём у ядра (только файлы чатов), но не открываем — запоминаем
+            "host_open_path" => Some(app.core.dispatch_sync("chat_file_path", &args).unwrap_or_else(|| Err("нет команды".into())).map(|v| {
+                let rec = json!({"path": v["path"], "reveal": args.get("reveal").and_then(|x| x.as_bool()).unwrap_or(false)});
+                app.opened.lock().unwrap().push(rec.clone());
+                rec
+            })),
+            "dev_opened" => Some(Ok(Value::Array(app.opened.lock().unwrap().clone()))),
+            // событие хоста только этой странице (имитация перетаскивания файлов: host:drop)
+            "dev_emit" => {
+                let ev = json!({"event": args.get("event").cloned().unwrap_or(Value::Null), "payload": args.get("payload").cloned().unwrap_or(Value::Null)});
+                let _ = out_tx.send(ev.to_string());
+                Some(Ok(Value::Null))
+            }
             "host_pick_files" => Some(Ok(json!({"paths": std::mem::take(&mut *app.pick.lock().unwrap())}))),
+            // без диалога: ядро сохранит профиль в папку загрузок
+            "host_save_path" => Some(Ok(json!({"path": null}))),
+            // перезапуск делает тест (перезапускает процесс devhost); здесь только отмечаем
+            "host_restart" => {
+                app.opened.lock().unwrap().push(json!({"restart": true}));
+                Some(Ok(json!({"restart": false})))
+            }
             "dev_set_pick" => {
                 let v: Vec<String> = args
                     .get("paths")
