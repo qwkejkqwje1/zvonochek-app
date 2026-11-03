@@ -17,10 +17,12 @@ url = "2.5.8"
 zv-proto = { path = "../zv-proto" }
 zv-signal = { path = "../zv-signal" }
 zv-p2p = { path = "../zv-p2p" }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
+blake3 = "1.8.7"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Cryptography", "Win32_System_Memory"] }
 
 [dev-dependencies]
 tempfile = "3"
-zv-signal = { path = "../zv-signal" }
+zv-signal = { path = "../zv-signal", features = ["mock"] }

@@ -23,6 +23,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 pub use iroh;
+pub use iroh::endpoint::{RecvStream as StreamRecv, SendStream as StreamSend};
 
 pub const ALPN: &[u8] = b"zv/4";
 pub const PROTO: u64 = 1;
@@ -35,13 +36,26 @@ const PRE_AUTH: [&str; 5] = ["bind", "contact_req", "contact_offer", "ping", "po
 
 pub type LinkId = u64;
 
-#[derive(Debug)]
 pub enum Event {
     /// Линк поднят (рукопожатие `hello4` прошло). Исходящие допущены сразу.
     LinkUp { link: LinkId, peer: String, outbound: bool, hello: Value },
     Msg { link: LinkId, peer: String, msg: Value },
     Datagram { link: LinkId, peer: String, data: Bytes },
     LinkDown { link: LinkId, peer: String, reason: String },
+    /// Собеседник открыл дополнительный поток (файлы). Только у допущенных линков.
+    Stream { link: LinkId, peer: String, send: SendStream, recv: RecvStream },
+}
+
+impl std::fmt::Debug for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Event::LinkUp { link, outbound, .. } => write!(f, "LinkUp({link}, out={outbound})"),
+            Event::Msg { link, msg, .. } => write!(f, "Msg({link}, {})", msg.get("t").unwrap_or(&Value::Null)),
+            Event::Datagram { link, data, .. } => write!(f, "Datagram({link}, {} B)", data.len()),
+            Event::LinkDown { link, reason, .. } => write!(f, "LinkDown({link}, {reason})"),
+            Event::Stream { link, .. } => write!(f, "Stream({link})"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -96,7 +110,7 @@ pub fn encode_frame(v: &Value) -> Bytes {
     Bytes::from(b)
 }
 
-async fn read_frame(recv: &mut RecvStream) -> anyhow::Result<Option<Value>> {
+pub async fn read_frame(recv: &mut RecvStream) -> anyhow::Result<Option<Value>> {
     let mut len = [0u8; 4];
     match recv.read_exact(&mut len).await {
         Ok(()) => {}
@@ -302,6 +316,13 @@ impl Node {
         }
     }
 
+    /// Открыть дополнительный поток к собеседнику (файлы). Первый кадр пишет вызывающий.
+    pub async fn open_stream(&self, link: LinkId) -> anyhow::Result<(SendStream, RecvStream)> {
+        let l = self.inner.lock_links().get(&link).cloned().ok_or_else(|| anyhow::anyhow!("нет линка"))?;
+        anyhow::ensure!(l.alive.load(Ordering::Relaxed), "линк закрыт");
+        Ok(l.conn.open_bi().await?)
+    }
+
     pub fn close_link(&self, link: LinkId, reason: &str) {
         let l = self.inner.lock_links().get(&link).cloned();
         if let Some(l) = l {
@@ -403,8 +424,20 @@ impl Inner {
                 }
             });
         }
+        tokio::spawn(self.clone().accept_streams(link.clone()));
         tokio::spawn(self.run_link(link, send, recv, rx));
         id
+    }
+
+    /// Дополнительные потоки линка (передача файлов): только у допущенных.
+    async fn accept_streams(self: Arc<Self>, link: Arc<Link>) {
+        while let Ok((send, mut recv)) = link.conn.accept_bi().await {
+            if !link.authorized.load(Ordering::Relaxed) {
+                let _ = recv.stop(3u32.into());
+                continue;
+            }
+            let _ = self.events.send(Event::Stream { link: link.id, peer: link.peer_s.clone(), send, recv });
+        }
     }
 
     async fn run_link(self: Arc<Self>, link: Arc<Link>, mut send: SendStream, mut recv: RecvStream, mut rx: mpsc::UnboundedReceiver<Bytes>) {
@@ -575,6 +608,39 @@ mod tests {
         assert_eq!(m["t"], "ping");
         tokio::time::sleep(Duration::from_secs(3)).await;
         println!("через 3 с путь {:?}; статус {}", a.path(la), a.status());
+    }
+
+    #[tokio::test]
+    async fn extra_streams_for_files() {
+        let (a, _arx) = node(5).await;
+        let (b, mut brx) = node(6).await;
+        let la = a.connect(b.id(), Some(&b.addr_json())).await.unwrap();
+        a.send(la, &json!({"t": "bind"}));
+        let (lb, _) = next_msg(&mut brx).await;
+        b.authorize(lb);
+        // a → b: запрос и 1 МБ данных в ответ
+        let (mut s, mut r) = a.open_stream(la).await.unwrap();
+        s.write_all(&encode_frame(&json!({"t": "get", "fid": "x"}))).await.unwrap();
+        let (mut bs, mut br) = loop {
+            match tokio::time::timeout(Duration::from_secs(5), brx.recv()).await.unwrap().unwrap() {
+                Event::Stream { send, recv, link, .. } => {
+                    assert_eq!(link, lb);
+                    break (send, recv);
+                }
+                _ => continue,
+            }
+        };
+        let head = read_frame(&mut br).await.unwrap().unwrap();
+        assert_eq!(head["fid"], "x");
+        let data = vec![7u8; 1 << 20];
+        bs.write_all(&encode_frame(&json!({"ok": true, "size": data.len()}))).await.unwrap();
+        bs.write_all(&data).await.unwrap();
+        bs.finish().unwrap();
+        let ok = read_frame(&mut r).await.unwrap().unwrap();
+        assert_eq!(ok["size"], 1 << 20);
+        let got = r.read_to_end(4 << 20).await.unwrap();
+        assert_eq!(got.len(), 1 << 20);
+        assert!(got.iter().all(|&x| x == 7));
     }
 
     #[tokio::test]

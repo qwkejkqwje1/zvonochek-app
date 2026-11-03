@@ -245,6 +245,7 @@ fn main() {
                 dev: cfg!(debug_assertions),
                 signal: None,
                 p2p_n0: true,
+                downloads_dir: app.path().download_dir().ok().map(|d| d.join("ZVONochek")),
             };
             let core = tauri::async_runtime::block_on(async { Core::start(opts) })?;
             app.manage(AppState {

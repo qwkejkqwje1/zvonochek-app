@@ -46,7 +46,12 @@ impl NostrKey {
     /// Кадр `["EVENT", {...}]` с содержимым `content`.
     pub fn event(&self, content: &str, ntag: &str, created_at: u64) -> String {
         let tags = serde_json::json!([["t", ntag]]);
-        let ser = serde_json::to_string(&serde_json::json!([0, self.pubkey, created_at, KIND, tags, content]))
+        self.event_kind(KIND, tags, content, created_at).1
+    }
+
+    /// Событие любого вида: (id, кадр `["EVENT", {...}]`).
+    pub fn event_kind(&self, kind: u64, tags: serde_json::Value, content: &str, created_at: u64) -> (String, String) {
+        let ser = serde_json::to_string(&serde_json::json!([0, self.pubkey, created_at, kind, tags, content]))
             .expect("json");
         let id: [u8; 32] = Sha256::digest(ser.as_bytes()).into();
         let mut aux = [0u8; 32];
@@ -55,13 +60,13 @@ impl NostrKey {
         let ev = serde_json::json!({
             "pubkey": self.pubkey,
             "created_at": created_at,
-            "kind": KIND,
+            "kind": kind,
             "tags": tags,
             "content": content,
             "id": hex::encode(id),
             "sig": hex::encode(sig.to_bytes()),
         });
-        serde_json::to_string(&serde_json::json!(["EVENT", ev])).expect("json")
+        (hex::encode(id), serde_json::to_string(&serde_json::json!(["EVENT", ev])).expect("json"))
     }
 }
 

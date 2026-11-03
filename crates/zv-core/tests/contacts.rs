@@ -21,6 +21,7 @@ fn opts(dir: &std::path::Path) -> CoreOptions {
         dev: true,
         signal: Some(sig),
         p2p_n0: false,
+        downloads_dir: None,
     }
 }
 

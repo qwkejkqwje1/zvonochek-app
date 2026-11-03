@@ -369,6 +369,7 @@ impl Inner {
                         n.authorize(link);
                     }
                     self.presence_set(&cid, true, Some(link));
+                    self.chats_link_up(&peer);
                 }
                 self.emit("p2p:changed", Value::Null);
             }
@@ -403,6 +404,12 @@ impl Inner {
                 {
                     self.inject(link, topic, d);
                 }
+            }
+            Event::Stream { link, peer, send, recv } => {
+                if let Some(l) = self.lock().p2p.links.get_mut(&link) {
+                    l.last_used = now_ms();
+                }
+                self.on_stream(peer, send, recv);
             }
             Event::LinkDown { link, peer, reason } => {
                 tracing::debug!("p2p: линк {link} закрыт: {reason}");
@@ -484,6 +491,16 @@ impl Inner {
     }
 
     /// Комната пары с контактом (секрет — X25519 двух ID): ею запечатываются сообщения через ящики.
+    /// Идёт передача файла — линк не простаивает.
+    pub(crate) fn touch_peer(&self, peer: &str) {
+        let now = now_ms();
+        for l in self.lock().p2p.links.values_mut() {
+            if l.peer == peer {
+                l.last_used = now;
+            }
+        }
+    }
+
     pub(crate) fn pair_room(&self, peer: &str) -> Option<zv_proto::Room> {
         let node = self.node()?;
         if let Some(r) = self.lock().p2p.pair_rooms.get(peer) {

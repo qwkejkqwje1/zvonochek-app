@@ -13,4 +13,4 @@ tokio = { version = "1.54.1", features = ["full"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zv-core = { path = "../zv-core" }
-zv-signal = { path = "../zv-signal" }
+zv-signal = { path = "../zv-signal", features = ["mock"] }

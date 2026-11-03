@@ -4,7 +4,10 @@
 //! Хосты (Tauri-приложение и тестовый стенд zv-devhost) вызывают `Core::dispatch(cmd, args)`
 //! и подписываются на события `Core::subscribe()` — `{event, payload}`.
 
+mod chats;
 mod contacts;
+mod db;
+mod files;
 pub mod fetch;
 pub mod model;
 mod p2p;
@@ -46,6 +49,8 @@ pub struct CoreOptions {
     pub signal: Option<SignalConfig>,
     /// P2P через инфраструктуру n0 (релеи, поиск по ID). `false` — только прямые адреса (тесты).
     pub p2p_n0: bool,
+    /// Куда сохранять файлы из чатов (`None` — папка данных/Downloads).
+    pub downloads_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,6 +76,8 @@ struct Inner {
     history_file: JsonFile,
     contacts_file: JsonFile,
     identity_file: JsonFile,
+    /// История чатов (SQLite).
+    db: db::Db,
     /// Узел iroh (появляется через долю секунды после старта, если P2P включён; выключение — `None`).
     p2p: std::sync::RwLock<Option<zv_p2p::Node>>,
     p2p_starting: std::sync::atomic::AtomicBool,
@@ -88,6 +95,7 @@ struct State {
     suppressed: HashMap<String, u64>,
     contacts: Contacts,
     p2p: p2p::P2pState,
+    chats: chats::ChatsState,
 }
 
 /// Зачем ядру комната.
@@ -179,6 +187,14 @@ impl Core {
             suppressed: HashMap::new(),
             contacts: contacts_file.load(),
             p2p: p2p::P2pState::default(),
+            chats: chats::ChatsState::default(),
+        };
+        let db = match db::Db::open(&opts.data_dir.join("chats.db")) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!("chats.db: {e}; история чатов только в памяти");
+                db::Db::memory()
+            }
         };
         let (events, _) = broadcast::channel(4096);
         let rt = tokio::runtime::Handle::current();
@@ -192,11 +208,13 @@ impl Core {
             history_file,
             contacts_file,
             identity_file,
+            db,
             p2p: std::sync::RwLock::new(None),
             p2p_starting: std::sync::atomic::AtomicBool::new(false),
             p2p_gen: AtomicU64::new(0),
         });
         let core = Core { inner };
+        core.inner.files_after_start();
         core.inner.sync_listeners();
         core.inner.p2p_start();
         tokio::spawn(ticker(Arc::downgrade(&core.inner)));
@@ -256,6 +274,16 @@ impl Core {
                 fetch::http_fetch(&args, wh.as_deref(), i.opts.dev).await
             }
             "diag_snapshot" => Ok(i.diag().await),
+            "chat_send_file" => i.chat_send_file(&args).await,
+            "chat_send_blob" => i.chat_send_blob(&args).await,
+            "chat_file_data" => i.chat_file_data(&args).await,
+            "chat_mail_fetch" => {
+                let busy = std::mem::replace(&mut i.lock().chats.mail_busy, true);
+                if busy {
+                    return Err("ящик уже проверяется".into());
+                }
+                Ok(i.mail_fetch().await)
+            }
             _ => Err(format!("неизвестная команда {cmd}")),
         }
     }
@@ -263,7 +291,16 @@ impl Core {
     /// Быстрые команды, выполняемые сразу и по порядку (отправка сигналов звонка не должна
     /// перемешиваться). `None` — команда асинхронная, нужен `dispatch`.
     pub fn dispatch_sync(&self, cmd: &str, args: &Value) -> Option<Result<Value, String>> {
-        const ASYNC: [&str; 4] = ["room_stats", "room_status", "http_fetch", "diag_snapshot"];
+        const ASYNC: [&str; 8] = [
+            "room_stats",
+            "room_status",
+            "http_fetch",
+            "diag_snapshot",
+            "chat_send_file",
+            "chat_send_blob",
+            "chat_file_data",
+            "chat_mail_fetch",
+        ];
         if ASYNC.contains(&cmd) {
             return None;
         }
@@ -354,6 +391,22 @@ impl Core {
                 Ok(Value::Null)
             }
             "p2p_status" => Ok(i.p2p_status()),
+            "chats_list" => Ok(i.chats_list()),
+            "chat_history" => i.chat_history(&args),
+            "chat_send" => i.chat_send(&args),
+            "chat_edit" => i.chat_edit(&args),
+            "chat_delete" => i.chat_delete(&args),
+            "chat_read" => i.chat_read(&args),
+            "chat_typing" => i.chat_typing(&args),
+            "chat_focus" => i.chat_focus(&args),
+            "chat_clear" => i.chat_clear(&args),
+            "chat_file_accept" => i.chat_file_accept(&args),
+            "chat_file_cancel" => i.chat_file_cancel(&args),
+            "chat_status" => Ok(i.chat_status()),
+            "chat_unread" => {
+                i.emit_unread();
+                Ok(Value::Null)
+            }
             "history_clear" => {
                 let mut st = i.lock();
                 st.history.items.clear();
@@ -1065,6 +1118,7 @@ impl Inner {
         let now = now_ms();
         self.p2p_tick(now);
         self.contacts_tick(now);
+        self.chats_tick(now);
         let expired: Vec<String> = {
             let mut st = self.lock();
             st.suppressed.retain(|_, t| now.saturating_sub(*t) < SUPPRESS_MS);
@@ -1159,6 +1213,7 @@ mod tests {
             dev: true,
             signal: Some(sig),
             p2p_n0: false,
+            downloads_dir: None,
         }
     }
 

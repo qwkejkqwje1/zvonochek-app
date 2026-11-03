@@ -32,6 +32,8 @@ pub const CODE_PREFIX: &str = "zv4c:";
 pub(crate) enum Src {
     Link(LinkId),
     Room(String),
+    /// Из почтового ящика (собеседник, возможно, не в сети).
+    Mail,
 }
 
 #[derive(Default)]
@@ -268,6 +270,9 @@ impl Inner {
                     n.send(*l, msg);
                 }
             }
+            Src::Mail => {
+                self.send_contact(peer, msg, false);
+            }
             Src::Room(topic) => {
                 let Some(env) = self.zv4_envelope(peer, msg) else { return };
                 let hub = {
@@ -300,6 +305,11 @@ impl Inner {
     pub(crate) fn on_zv4(self: &Arc<Self>, src: Src, peer: &str, msg: Value) {
         let t = str_of(&msg, "t").to_string();
         let now = now_ms();
+        // чаты дедуплицирует база и подтверждает каждый повтор
+        if t.starts_with("chat") {
+            self.on_chat(src, peer, msg);
+            return;
+        }
         if let Some(id) = msg.get("id").and_then(|v| v.as_str()) {
             let mut st = self.lock();
             let key = format!("{peer}|{id}");
@@ -759,11 +769,16 @@ impl Inner {
 
     pub(crate) fn contact_delete(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let id = s(args, "id")?;
-        {
+        let peer = {
             let mut st = self.lock();
+            let peer = st.contacts.items.iter().find(|c| c.id == id).map(|c| c.peer.clone());
             st.contacts.items.retain(|c| c.id != id);
             st.p2p.c.presence.remove(id);
             self.save_contacts(&st);
+            peer
+        };
+        if let Some(p) = peer {
+            self.chat_forget(id, &p);
         }
         self.sync_listeners();
         self.emit("contacts:changed", Value::Null);

@@ -8,6 +8,9 @@
 mod chan;
 pub mod config;
 pub mod hub;
+pub mod mailbox;
+#[cfg(feature = "mock")]
+pub mod mock;
 pub mod mqtt;
 pub mod nostr;
 pub mod ntfy;

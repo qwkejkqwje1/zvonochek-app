@@ -1,6 +1,10 @@
 //! zv-devhost — ядро без окна + IPC по WebSocket + раздача `ui/` (разработка и автотесты в Chromium).
 //!
 //! zv-devhost [--port 8790] [--ui ui] [--data /tmp/zvdev] [--local mqtt=ws://127.0.0.1:9001,worker=http://127.0.0.1:8787]
+//!            [--p2p-local] [--mock-worker 8799]
+//!
+//! `--mock-worker PORT` — поднять заглушку Worker (ChatRoom для почтовых ящиков) на 127.0.0.1:PORT;
+//! второй devhost подключается к ней через `--local worker=http://127.0.0.1:PORT`.
 //!
 //! Протокол `/ipc`: запрос `{id, cmd, args}` → ответ `{id, ok, result | error}`; события `{event, payload}`.
 //! Окно звонка: `/web/index.html#k=…` — в страницу встраивается `desktop/preload.js` (как init-скрипт Tauri).
@@ -19,6 +23,8 @@ use zv_core::{Core, CoreOptions};
 struct App {
     core: Core,
     ui: PathBuf,
+    /// Что вернёт следующий `host_pick_files` (тесты задают через `dev_set_pick`).
+    pick: std::sync::Mutex<Vec<String>>,
 }
 
 fn arg(name: &str) -> Option<String> {
@@ -68,8 +74,12 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|s| s.lines().find_map(|l| l.strip_prefix("ver=").and_then(|v| v.trim().parse().ok())))
         .unwrap_or(0);
+    if let Some(p) = arg("--mock-worker").and_then(|p| p.parse::<u16>().ok()) {
+        let m = zv_signal::mock::MockWorker::spawn_on(p).await;
+        tracing::info!("devhost: заглушка Worker {}", m.url);
+    }
     let core = Core::start(CoreOptions {
-        data_dir: data,
+        data_dir: data.clone(),
         app_version: env!("CARGO_PKG_VERSION").into(),
         web_version,
         platform: "devhost".into(),
@@ -77,8 +87,9 @@ async fn main() -> anyhow::Result<()> {
         signal: signal_override(),
         // --p2p-local: только прямые адреса, без релеев и поиска n0
         p2p_n0: !std::env::args().any(|a| a == "--p2p-local"),
+        downloads_dir: Some(data.join("Downloads")),
     })?;
-    let app = Arc::new(App { core, ui });
+    let app = Arc::new(App { core, ui, pick: Default::default() });
     let router = axum::Router::new()
         .route("/ipc", get(ipc))
         .route("/", get(|| async { axum::response::Redirect::temporary("/shell/index.html") }))
@@ -139,7 +150,17 @@ async fn client(app: Arc<App>, ws: WebSocket) {
         let host = match cmd.as_str() {
             "host_info" => Some(Ok(json!({"host": "devhost"}))),
             "host_open_call" => Some(Ok(host_open_call(&args))),
-            "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" => Some(Ok(Value::Null)),
+            "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" | "host_open_path" => Some(Ok(Value::Null)),
+            "host_pick_files" => Some(Ok(json!({"paths": std::mem::take(&mut *app.pick.lock().unwrap())}))),
+            "dev_set_pick" => {
+                let v: Vec<String> = args
+                    .get("paths")
+                    .and_then(|p| p.as_array())
+                    .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+                    .unwrap_or_default();
+                *app.pick.lock().unwrap() = v;
+                Some(Ok(Value::Null))
+            }
             "host_autostart_get" | "host_autostart_set" | "host_update_check" | "host_update_install" => {
                 Some(Err("не поддерживается в zv-devhost".to_string()))
             }
