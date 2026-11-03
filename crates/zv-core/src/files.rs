@@ -126,6 +126,23 @@ impl Inner {
             .unwrap_or_else(|| self.opts.data_dir.join("Downloads"))
     }
 
+    /// Файл на диске: путь из базы, а для полученного — если папку с программой перенесли (переносная версия) —
+    /// то же имя в текущей папке загрузок.
+    pub(crate) fn local_file(&self, r: &FileRec) -> Option<PathBuf> {
+        if r.path.is_empty() {
+            return None;
+        }
+        let p = PathBuf::from(&r.path);
+        if p.is_file() {
+            return Some(p);
+        }
+        if r.out {
+            return None;
+        }
+        let alt = self.downloads_dir().join(p.file_name()?);
+        alt.is_file().then_some(alt)
+    }
+
     /// Описание файла из кадра (проверенное).
     pub(crate) fn file_meta(&self, frame: &Value) -> Option<Value> {
         let f = frame.get("f")?;
@@ -334,10 +351,17 @@ impl Inner {
         };
         let dir = self.downloads_dir();
         let _ = tokio::fs::create_dir_all(&dir).await;
+        let prev = Path::new(&r.path);
         let fin = if r.path.is_empty() {
             unique_path(&dir, &r.name)
+        } else if !prev.parent().is_some_and(|d| d.is_dir()) {
+            // папку с программой перенесли — докачка в текущую папку загрузок (то же имя и .part)
+            match prev.file_name() {
+                Some(n) => dir.join(n),
+                None => unique_path(&dir, &r.name),
+            }
         } else {
-            PathBuf::from(&r.path)
+            prev.to_path_buf()
         };
         let part = part_of(&fin);
         let fin_s = fin.display().to_string();
@@ -705,10 +729,10 @@ impl Inner {
         if !r.out && r.st != "done" {
             return Err("файл ещё не скачан".into());
         }
-        if r.path.is_empty() || !std::path::Path::new(&r.path).is_file() {
+        let Some(path) = self.local_file(&r) else {
             return Err("файл удалён или перемещён".into());
-        }
-        Ok(json!({"path": r.path, "name": r.name, "out": r.out, "dir": false}))
+        };
+        Ok(json!({"path": path.display().to_string(), "name": r.name, "out": r.out, "dir": false}))
     }
 
     /// Картинка для предпросмотра: data:URL (до 16 МБ).
@@ -720,9 +744,8 @@ impl Inner {
         if !r.mime.starts_with("image/") || r.size > PREVIEW_MAX {
             return Err("нет предпросмотра".into());
         }
-        let data = tokio::fs::read(&r.path)
-            .await
-            .map_err(|_| "файл недоступен")?;
+        let path = self.local_file(&r).ok_or("файл недоступен")?;
+        let data = tokio::fs::read(&path).await.map_err(|_| "файл недоступен")?;
         Ok(
             json!({"url": format!("data:{};base64,{}", r.mime, base64::engine::general_purpose::STANDARD.encode(data))}),
         )

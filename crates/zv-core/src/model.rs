@@ -33,6 +33,8 @@ pub struct Settings {
     pub auto_images: bool,
     /// Экономный режим ожидания (телефон): в комнатах ожидания по одному MQTT-брокеру и Nostr-реле вместо двух.
     pub eco: bool,
+    /// ПК: уведомления Windows о сообщениях и пропущенных звонках.
+    pub notifications: bool,
 }
 
 impl Default for Settings {
@@ -52,6 +54,7 @@ impl Default for Settings {
             read_receipts: true,
             auto_images: true,
             eco: false,
+            notifications: true,
         }
     }
 }
