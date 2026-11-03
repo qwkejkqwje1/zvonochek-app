@@ -14,7 +14,9 @@ fn main() {
     for secret in ["AbCdEfGhIjKlMnOpQrStUv", &zv_proto::link::new_secret()] {
         let room = Room::derive(secret).unwrap();
         for p in &plains {
-            out.push(json!({"secret": secret, "topic": room.topic, "plain": p, "sealed": room.seal(p)}));
+            out.push(
+                json!({"secret": secret, "topic": room.topic, "plain": p, "sealed": room.seal(p)}),
+            );
         }
     }
     println!("{}", serde_json::to_string_pretty(&out).unwrap());

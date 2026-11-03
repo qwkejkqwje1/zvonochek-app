@@ -25,10 +25,16 @@ fn opts(dir: &std::path::Path, worker: &str) -> CoreOptions {
     }
 }
 
-async fn start(dir: &std::path::Path, name: &str, worker: &str) -> (Core, broadcast::Receiver<CoreEvent>) {
+async fn start(
+    dir: &std::path::Path,
+    name: &str,
+    worker: &str,
+) -> (Core, broadcast::Receiver<CoreEvent>) {
     let core = Core::start(opts(dir, worker)).unwrap();
     let rx = core.subscribe();
-    core.dispatch("settings_set", json!({"patch": {"name": name}})).await.unwrap();
+    core.dispatch("settings_set", json!({"patch": {"name": name}}))
+        .await
+        .unwrap();
     for _ in 0..100 {
         if core.device_id().is_some() {
             break;
@@ -39,7 +45,12 @@ async fn start(dir: &std::path::Path, name: &str, worker: &str) -> (Core, broadc
     (core, rx)
 }
 
-async fn wait_for(rx: &mut broadcast::Receiver<CoreEvent>, name: &str, secs: u64, pred: impl Fn(&Value) -> bool) -> Value {
+async fn wait_for(
+    rx: &mut broadcast::Receiver<CoreEvent>,
+    name: &str,
+    secs: u64,
+    pred: impl Fn(&Value) -> bool,
+) -> Value {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(secs);
     loop {
         let left = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -66,14 +77,28 @@ async fn chats_p2p_files_mailbox() {
 
     step("контакт по коду");
     let inv = a.dispatch("contact_invite", json!({})).await.unwrap();
-    b.dispatch("contact_add", json!({"code": inv["code"]})).await.unwrap();
+    b.dispatch("contact_add", json!({"code": inv["code"]}))
+        .await
+        .unwrap();
     wait_for(&mut brx, "contact:added", 15, |_| true).await;
     wait_for(&mut arx, "contact:added", 5, |_| true).await;
-    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
-    let chat_b = b.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
+    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let chat_b = b.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     step("сообщение по P2P → доставлено");
-    let m = a.dispatch("chat_send", json!({"chat": chat_a, "text": "  Привет, Борис!  "})).await.unwrap();
+    let m = a
+        .dispatch(
+            "chat_send",
+            json!({"chat": chat_a, "text": "  Привет, Борис!  "}),
+        )
+        .await
+        .unwrap();
     let mid = m["id"].as_str().unwrap().to_string();
     assert_eq!(m["body"], "Привет, Борис!");
     let got = wait_for(&mut brx, "chat:msg", 10, |p| p["new"] == true).await;
@@ -88,46 +113,92 @@ async fn chats_p2p_files_mailbox() {
     assert_eq!(l[0]["last"]["body"], "Привет, Борис!");
 
     step("прочитано");
-    b.dispatch("chat_focus", json!({"chat": chat_b, "visible": true})).await.unwrap();
-    assert_eq!(b.dispatch("chat_read", json!({"chat": chat_b})).await.unwrap()["read"], 1);
+    b.dispatch("chat_focus", json!({"chat": chat_b, "visible": true}))
+        .await
+        .unwrap();
+    assert_eq!(
+        b.dispatch("chat_read", json!({"chat": chat_b}))
+            .await
+            .unwrap()["read"],
+        1
+    );
     wait_for(&mut arx, "chat:state", 10, |p| p["st"] == 3).await;
-    assert_eq!(b.dispatch("chats_list", Value::Null).await.unwrap()[0]["unread"], 0);
+    assert_eq!(
+        b.dispatch("chats_list", Value::Null).await.unwrap()[0]["unread"],
+        0
+    );
 
     step("ответ с цитатой, «печатает», правка");
-    b.dispatch("chat_typing", json!({"chat": chat_b})).await.unwrap();
+    b.dispatch("chat_typing", json!({"chat": chat_b}))
+        .await
+        .unwrap();
     wait_for(&mut arx, "chat:typing", 5, |p| p["on"] == true).await;
-    let r = b.dispatch("chat_send", json!({"chat": chat_b, "text": "Привет!", "reply": mid})).await.unwrap();
+    let r = b
+        .dispatch(
+            "chat_send",
+            json!({"chat": chat_b, "text": "Привет!", "reply": mid}),
+        )
+        .await
+        .unwrap();
     // пришло сообщение — «печатает» гаснет сразу (событие раньше chat:msg)
     wait_for(&mut arx, "chat:typing", 3, |p| p["on"] == false).await;
     let got = wait_for(&mut arx, "chat:msg", 10, |p| p["new"] == true).await;
     assert_eq!(got["msg"]["reply"], mid.as_str());
-    a.dispatch("chat_edit", json!({"id": mid, "text": "Привет, Борис! (исправлено)"})).await.unwrap();
+    a.dispatch(
+        "chat_edit",
+        json!({"id": mid, "text": "Привет, Борис! (исправлено)"}),
+    )
+    .await
+    .unwrap();
     let ed = wait_for(&mut brx, "chat:msg", 10, |p| p["new"] == false).await;
     assert_eq!(ed["msg"]["body"], "Привет, Борис! (исправлено)");
     assert!(ed["msg"]["edited"].as_u64().is_some());
     // чужое изменить нельзя
-    assert!(a.dispatch("chat_edit", json!({"id": r["id"], "text": "x"})).await.is_err());
+    assert!(
+        a.dispatch("chat_edit", json!({"id": r["id"], "text": "x"}))
+            .await
+            .is_err()
+    );
 
     step("удаление у всех");
-    a.dispatch("chat_delete", json!({"id": mid, "everyone": true})).await.unwrap();
+    a.dispatch("chat_delete", json!({"id": mid, "everyone": true}))
+        .await
+        .unwrap();
     let del = wait_for(&mut brx, "chat:msg", 10, |p| p["msg"]["deleted"] == true).await;
     assert_eq!(del["msg"]["body"], "");
-    let h = b.dispatch("chat_history", json!({"chat": chat_b})).await.unwrap();
+    let h = b
+        .dispatch("chat_history", json!({"chat": chat_b}))
+        .await
+        .unwrap();
     assert_eq!(h["msgs"].as_array().unwrap().len(), 2);
 
     step("файл: ручной приём");
     let src = da.path().join("отчёт.bin");
     let data: Vec<u8> = (0..300_000u32).map(|i| (i * 7 % 251) as u8).collect();
     std::fs::write(&src, &data).unwrap();
-    let fm = a.dispatch("chat_send_file", json!({"chat": chat_a, "path": src.display().to_string()})).await.unwrap();
+    let fm = a
+        .dispatch(
+            "chat_send_file",
+            json!({"chat": chat_a, "path": src.display().to_string()}),
+        )
+        .await
+        .unwrap();
     assert_eq!(fm["kind"], "file");
     assert_eq!(fm["file"]["st"], "ready");
-    let got = wait_for(&mut brx, "chat:msg", 10, |p| p["new"] == true && p["msg"]["kind"] == "file").await;
+    let got = wait_for(&mut brx, "chat:msg", 10, |p| {
+        p["new"] == true && p["msg"]["kind"] == "file"
+    })
+    .await;
     assert_eq!(got["msg"]["file"]["st"], "offered");
     assert_eq!(got["msg"]["file"]["name"], "отчёт.bin");
     let fid = got["msg"]["file"]["fid"].as_str().unwrap().to_string();
-    b.dispatch("chat_file_accept", json!({"fid": fid})).await.unwrap();
-    let done = wait_for(&mut brx, "chat:file", 20, |p| p["st"] == "done" || p["st"] == "failed").await;
+    b.dispatch("chat_file_accept", json!({"fid": fid}))
+        .await
+        .unwrap();
+    let done = wait_for(&mut brx, "chat:file", 20, |p| {
+        p["st"] == "done" || p["st"] == "failed"
+    })
+    .await;
     assert_eq!(done["st"], "done", "{done}");
     let path = done["path"].as_str().unwrap();
     assert!(path.ends_with("отчёт.bin"));
@@ -136,20 +207,41 @@ async fn chats_p2p_files_mailbox() {
     step("картинка: автоприём и предпросмотр");
     let png = da.path().join("pic.png");
     std::fs::write(&png, b"\x89PNG\r\n\x1a\nnot-really-a-png").unwrap();
-    a.dispatch("chat_send_file", json!({"chat": chat_a, "path": png.display().to_string(), "text": "смотри"})).await.unwrap();
+    a.dispatch(
+        "chat_send_file",
+        json!({"chat": chat_a, "path": png.display().to_string(), "text": "смотри"}),
+    )
+    .await
+    .unwrap();
     let done = wait_for(&mut brx, "chat:file", 20, |p| p["st"] == "done").await;
-    let pv = b.dispatch("chat_file_data", json!({"fid": done["fid"]})).await.unwrap();
-    assert!(pv["url"].as_str().unwrap().starts_with("data:image/png;base64,"));
+    let pv = b
+        .dispatch("chat_file_data", json!({"fid": done["fid"]}))
+        .await
+        .unwrap();
+    assert!(
+        pv["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/png;base64,")
+    );
 
     step("получатель не в сети → почтовый ящик");
     b.shutdown().await;
     drop(b);
     drop(brx);
     tokio::time::sleep(Duration::from_millis(500)).await;
-    let m1 = a.dispatch("chat_send", json!({"chat": chat_a, "text": "Ты где?"})).await.unwrap();
-    let long: String = (0..9000).map(|i| char::from(b'a' + ((i * 7919 + i / 3) % 26) as u8)).collect::<String>()
+    let m1 = a
+        .dispatch("chat_send", json!({"chat": chat_a, "text": "Ты где?"}))
+        .await
+        .unwrap();
+    let long: String = (0..9000)
+        .map(|i| char::from(b'a' + ((i * 7919 + i / 3) % 26) as u8))
+        .collect::<String>()
         + &zv_proto::ids::rand_hex(3000);
-    let m2 = a.dispatch("chat_send", json!({"chat": chat_a, "text": long})).await.unwrap();
+    let m2 = a
+        .dispatch("chat_send", json!({"chat": chat_a, "text": long}))
+        .await
+        .unwrap();
     // через ~8 с без подтверждения — в ящик (состояние 1)
     let mut mailed = std::collections::HashSet::new();
     while mailed.len() < 2 {
@@ -158,7 +250,9 @@ async fn chats_p2p_files_mailbox() {
             mailed.insert(id.as_str().unwrap().to_string());
         }
     }
-    assert!(mailed.contains(m1["id"].as_str().unwrap()) && mailed.contains(m2["id"].as_str().unwrap()));
+    assert!(
+        mailed.contains(m1["id"].as_str().unwrap()) && mailed.contains(m2["id"].as_str().unwrap())
+    );
     let st = a.dispatch("chat_status", Value::Null).await.unwrap();
     assert_eq!(st["mailed"], 2, "{st}");
 
@@ -171,7 +265,11 @@ async fn chats_p2p_files_mailbox() {
     }
     assert!(got.iter().any(|m| m["body"] == "Ты где?"));
     assert!(got.iter().all(|m| m["via"] == "mail"), "{got:?}");
-    assert!(got.iter().any(|m| m["body"].as_str() == Some(long.as_str())), "длинное сообщение не собралось");
+    assert!(
+        got.iter()
+            .any(|m| m["body"].as_str() == Some(long.as_str())),
+        "длинное сообщение не собралось"
+    );
     let mut acked = std::collections::HashSet::new();
     while acked.len() < 2 {
         let p = wait_for(&mut arx, "chat:state", 30, |p| p["st"] == 2).await;
@@ -181,13 +279,21 @@ async fn chats_p2p_files_mailbox() {
     }
     let st = a.dispatch("chat_status", Value::Null).await.unwrap();
     assert_eq!(st["outbox"], 0, "{st}");
-    let hb = b.dispatch("chat_history", json!({"chat": chat_b})).await.unwrap();
+    let hb = b
+        .dispatch("chat_history", json!({"chat": chat_b}))
+        .await
+        .unwrap();
     assert_eq!(hb["msgs"].as_array().unwrap().len(), 6);
 
     step("удаление контакта стирает переписку");
     let cid = b.dispatch("contacts_list", Value::Null).await.unwrap()[0]["id"].clone();
-    b.dispatch("contact_delete", json!({"id": cid})).await.unwrap();
-    let hb = b.dispatch("chat_history", json!({"chat": chat_b})).await.unwrap();
+    b.dispatch("contact_delete", json!({"id": cid}))
+        .await
+        .unwrap();
+    let hb = b
+        .dispatch("chat_history", json!({"chat": chat_b}))
+        .await
+        .unwrap();
     assert!(hb["msgs"].as_array().unwrap().is_empty());
 }
 
@@ -201,10 +307,15 @@ async fn file_resume_after_break() {
     let (a, mut arx) = start(da.path(), "Аня", &mock.url).await;
     let (b, mut brx) = start(db.path(), "Борис", &mock.url).await;
     let inv = a.dispatch("contact_invite", json!({})).await.unwrap();
-    b.dispatch("contact_add", json!({"code": inv["code"]})).await.unwrap();
+    b.dispatch("contact_add", json!({"code": inv["code"]}))
+        .await
+        .unwrap();
     wait_for(&mut brx, "contact:added", 15, |_| true).await;
     wait_for(&mut arx, "contact:added", 5, |_| true).await;
-    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
+    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     step("большой файл: предложение и приём");
     const SIZE: usize = 160 << 20;
@@ -218,26 +329,55 @@ async fn file_resume_after_break() {
     }
     let src = da.path().join("big.bin");
     std::fs::write(&src, &data).unwrap();
-    a.dispatch("chat_send_file", json!({"chat": chat_a, "path": src.display().to_string()})).await.unwrap();
-    let got = wait_for(&mut brx, "chat:msg", 30, |p| p["new"] == true && p["msg"]["kind"] == "file").await;
+    a.dispatch(
+        "chat_send_file",
+        json!({"chat": chat_a, "path": src.display().to_string()}),
+    )
+    .await
+    .unwrap();
+    let got = wait_for(&mut brx, "chat:msg", 30, |p| {
+        p["new"] == true && p["msg"]["kind"] == "file"
+    })
+    .await;
     let fid = got["msg"]["file"]["fid"].as_str().unwrap().to_string();
-    b.dispatch("chat_file_accept", json!({"fid": fid})).await.unwrap();
+    b.dispatch("chat_file_accept", json!({"fid": fid}))
+        .await
+        .unwrap();
 
     step("обрыв посреди передачи");
-    wait_for(&mut brx, "chat:file", 30, |p| p["st"] == "loading" && p["done"].as_u64().unwrap_or(0) > 0).await;
-    b.dispatch("settings_set", json!({"patch": {"p2p": false}})).await.unwrap();
-    let w = wait_for(&mut brx, "chat:file", 30, |p| p["st"] == "waiting" || p["st"] == "done" || p["st"] == "failed").await;
+    wait_for(&mut brx, "chat:file", 30, |p| {
+        p["st"] == "loading" && p["done"].as_u64().unwrap_or(0) > 0
+    })
+    .await;
+    b.dispatch("settings_set", json!({"patch": {"p2p": false}}))
+        .await
+        .unwrap();
+    let w = wait_for(&mut brx, "chat:file", 30, |p| {
+        p["st"] == "waiting" || p["st"] == "done" || p["st"] == "failed"
+    })
+    .await;
     assert_eq!(w["st"], "waiting", "передача должна прерваться: {w}");
     let part = format!("{}.part", w["path"].as_str().unwrap());
     let part_len = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
-    assert!(part_len > 0 && part_len < SIZE as u64, "в .part {part_len} байт");
+    assert!(
+        part_len > 0 && part_len < SIZE as u64,
+        "в .part {part_len} байт"
+    );
     eprintln!("[докачка] прервано на {} из {} байт", part_len, SIZE);
 
     step("связь вернулась → докачка с места обрыва");
-    b.dispatch("settings_set", json!({"patch": {"p2p": true}})).await.unwrap();
+    b.dispatch("settings_set", json!({"patch": {"p2p": true}}))
+        .await
+        .unwrap();
     let r = wait_for(&mut brx, "chat:file", 60, |p| p["st"] == "loading").await;
-    assert!(r["done"].as_u64().unwrap() >= part_len, "докачка началась не с места обрыва: {r}");
-    let done = wait_for(&mut brx, "chat:file", 120, |p| p["st"] == "done" || p["st"] == "failed").await;
+    assert!(
+        r["done"].as_u64().unwrap() >= part_len,
+        "докачка началась не с места обрыва: {r}"
+    );
+    let done = wait_for(&mut brx, "chat:file", 120, |p| {
+        p["st"] == "done" || p["st"] == "failed"
+    })
+    .await;
     assert_eq!(done["st"], "done", "{done}");
     let path = done["path"].as_str().unwrap();
     assert!(!std::path::Path::new(&part).exists());
@@ -259,32 +399,71 @@ async fn profile_transfer() {
     let (a, mut arx) = start(da.path(), "Аня", &mock.url).await;
     let (b, mut brx) = start(db.path(), "Борис", &mock.url).await;
     let inv = a.dispatch("contact_invite", json!({})).await.unwrap();
-    b.dispatch("contact_add", json!({"code": inv["code"]})).await.unwrap();
+    b.dispatch("contact_add", json!({"code": inv["code"]}))
+        .await
+        .unwrap();
     wait_for(&mut brx, "contact:added", 15, |_| true).await;
     wait_for(&mut arx, "contact:added", 5, |_| true).await;
-    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
-    a.dispatch("link_create", json!({"name": "Рабочая"})).await.unwrap();
-    let m = a.dispatch("chat_send", json!({"chat": chat_a, "text": "до переноса"})).await.unwrap();
-    wait_for(&mut arx, "chat:state", 10, |p| p["st"] == 2 && p["ids"][0] == m["id"]).await;
+    let chat_a = a.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    a.dispatch("link_create", json!({"name": "Рабочая"}))
+        .await
+        .unwrap();
+    let m = a
+        .dispatch("chat_send", json!({"chat": chat_a, "text": "до переноса"}))
+        .await
+        .unwrap();
+    wait_for(&mut arx, "chat:state", 10, |p| {
+        p["st"] == 2 && p["ids"][0] == m["id"]
+    })
+    .await;
     let id_a = a.device_id().unwrap();
 
     step("экспорт: короткий пароль не принимается, нормальный — файл");
-    assert!(a.dispatch("profile_export", json!({"password": "123"})).await.is_err());
-    let e = a.dispatch("profile_export", json!({"password": "секрет-пароль"})).await.unwrap();
+    assert!(
+        a.dispatch("profile_export", json!({"password": "123"}))
+            .await
+            .is_err()
+    );
+    let e = a
+        .dispatch("profile_export", json!({"password": "секрет-пароль"}))
+        .await
+        .unwrap();
     let file = e["path"].as_str().unwrap().to_string();
     assert!(file.ends_with(".zvp"), "{e}");
     assert_eq!(e["summary"]["contacts"], 1);
     let raw = std::fs::read(&file).unwrap();
-    assert!(!raw.windows(11).any(|w| w == "до переноса".as_bytes()[..11].as_ref()), "переписка видна в файле открытым текстом");
-    let p = a.dispatch("chat_file_path", json!({"export": true})).await.unwrap_or_default();
+    assert!(
+        !raw.windows(11)
+            .any(|w| w == "до переноса".as_bytes()[..11].as_ref()),
+        "переписка видна в файле открытым текстом"
+    );
+    let p = a
+        .dispatch("chat_file_path", json!({"export": true}))
+        .await
+        .unwrap_or_default();
     assert_eq!(p["path"], file.as_str());
 
     step("импорт на новом компьютере: неверный пароль, верный → после перезапуска");
     let (c, _crx) = start(dc.path(), "Новый", &mock.url).await;
     let id_c0 = c.device_id().unwrap();
-    let bad = c.dispatch("profile_import", json!({"path": file, "password": "не тот пароль"})).await.unwrap_err();
+    let bad = c
+        .dispatch(
+            "profile_import",
+            json!({"path": file, "password": "не тот пароль"}),
+        )
+        .await
+        .unwrap_err();
     assert_eq!(bad, "Неверный пароль или файл повреждён");
-    let r = c.dispatch("profile_import", json!({"path": file, "password": "секрет-пароль"})).await.unwrap();
+    let r = c
+        .dispatch(
+            "profile_import",
+            json!({"path": file, "password": "секрет-пароль"}),
+        )
+        .await
+        .unwrap();
     assert_eq!(r["contacts"], 1, "{r}");
     assert_eq!(r["restart"], true);
     c.shutdown().await;
@@ -312,14 +491,39 @@ async fn profile_transfer() {
     assert_eq!(l[0]["name"], "Борис");
     let links = c.dispatch("links_list", Value::Null).await.unwrap();
     assert!(links.to_string().contains("Рабочая"), "{links}");
-    let chat_c = c.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"].as_str().unwrap().to_string();
+    let chat_c = c.dispatch("chats_list", Value::Null).await.unwrap()[0]["chat"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert_eq!(chat_c, chat_a);
-    let h = c.dispatch("chat_history", json!({"chat": chat_c})).await.unwrap();
-    assert!(h["msgs"].as_array().unwrap().iter().any(|m| m["body"] == "до переноса"), "{h}");
+    let h = c
+        .dispatch("chat_history", json!({"chat": chat_c}))
+        .await
+        .unwrap();
+    assert!(
+        h["msgs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["body"] == "до переноса"),
+        "{h}"
+    );
 
     step("контакт переписывается с новым компьютером");
-    let m2 = c.dispatch("chat_send", json!({"chat": chat_c, "text": "я на новом ПК"})).await.unwrap();
-    let got = wait_for(&mut brx, "chat:msg", 30, |p| p["new"] == true && p["msg"]["body"] == "я на новом ПК").await;
+    let m2 = c
+        .dispatch(
+            "chat_send",
+            json!({"chat": chat_c, "text": "я на новом ПК"}),
+        )
+        .await
+        .unwrap();
+    let got = wait_for(&mut brx, "chat:msg", 30, |p| {
+        p["new"] == true && p["msg"]["body"] == "я на новом ПК"
+    })
+    .await;
     assert_eq!(got["msg"]["out"], false);
-    wait_for(&mut crx, "chat:state", 30, |p| p["st"] == 2 && p["ids"][0] == m2["id"]).await;
+    wait_for(&mut crx, "chat:state", 30, |p| {
+        p["st"] == 2 && p["ids"][0] == m2["id"]
+    })
+    .await;
 }

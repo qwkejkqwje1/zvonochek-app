@@ -4,7 +4,10 @@ use serde_json::Value;
 use zv_proto::{Room, topics};
 
 fn vectors() -> Value {
-    let p = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/vectors/web-v40.json");
+    let p = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../spec/vectors/web-v40.json"
+    );
     serde_json::from_str(&std::fs::read_to_string(p).expect("vectors file")).expect("json")
 }
 
@@ -17,10 +20,16 @@ fn derive_and_open_web_sealed() {
     for r in rooms {
         let room = Room::derive(r["secret"].as_str().unwrap()).unwrap();
         assert_eq!(room.topic, r["topic"].as_str().unwrap(), "topic");
-        assert_eq!(topics::ntfy_signaling_topic(&room.topic), r["ntfy"].as_str().unwrap(), "ntfy");
+        assert_eq!(
+            topics::ntfy_signaling_topic(&room.topic),
+            r["ntfy"].as_str().unwrap(),
+            "ntfy"
+        );
         for s in r["sealed"].as_array().unwrap() {
             let sealed = s["sealed"].as_str().unwrap();
-            let got = room.open(sealed).unwrap_or_else(|| panic!("open failed: {sealed}"));
+            let got = room
+                .open(sealed)
+                .unwrap_or_else(|| panic!("open failed: {sealed}"));
             assert_eq!(got, s["plain"], "plain");
             opened += 1;
         }

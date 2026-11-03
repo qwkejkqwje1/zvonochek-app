@@ -61,7 +61,13 @@ impl MailAddr {
         let key = room.subkey("zv4-mail-key");
         let tag = hex::encode(Sha256::digest(chat_id.as_bytes()));
         let ntfy_topic = zv_proto::topics::ntfy_topic(NTFY_PREFIX, &chat_id);
-        Some(MailAddr { chat_id, token, key, tag, ntfy_topic })
+        Some(MailAddr {
+            chat_id,
+            token,
+            key,
+            tag,
+            ntfy_topic,
+        })
     }
 
     /// Запечатать данные (≤ `MAX_PLAIN`). `fixed` — ровно `ITEM_BYTES`.
@@ -72,11 +78,17 @@ impl MailAddr {
         let mut pt = Vec::with_capacity(PLAIN_BYTES);
         pt.extend_from_slice(&(data.len() as u32).to_be_bytes());
         pt.extend_from_slice(data);
-        let target = if fixed { PLAIN_BYTES } else { pt.len().div_ceil(64) * 64 };
+        let target = if fixed {
+            PLAIN_BYTES
+        } else {
+            pt.len().div_ceil(64) * 64
+        };
         pt.resize(target, 0);
         let mut iv = [0u8; 12];
         rand::fill(&mut iv);
-        let ct = Aes256Gcm::new((&self.key).into()).encrypt(&Nonce::from(iv), Payload { msg: &pt, aad: AAD }).ok()?;
+        let ct = Aes256Gcm::new((&self.key).into())
+            .encrypt(&Nonce::from(iv), Payload { msg: &pt, aad: AAD })
+            .ok()?;
         let mut out = iv.to_vec();
         out.extend(ct);
         Some(out)
@@ -87,7 +99,15 @@ impl MailAddr {
             return None;
         }
         let iv: [u8; 12] = item[..12].try_into().ok()?;
-        let pt = Aes256Gcm::new((&self.key).into()).decrypt(&Nonce::from(iv), Payload { msg: &item[12..], aad: AAD }).ok()?;
+        let pt = Aes256Gcm::new((&self.key).into())
+            .decrypt(
+                &Nonce::from(iv),
+                Payload {
+                    msg: &item[12..],
+                    aad: AAD,
+                },
+            )
+            .ok()?;
         let n = u32::from_be_bytes(pt[..4].try_into().ok()?) as usize;
         (n <= pt.len() - 4).then(|| pt[4..4 + n].to_vec())
     }
@@ -147,11 +167,19 @@ impl Mailbox {
     }
 
     fn worker(&self) -> Option<String> {
-        self.cfg.worker_url.as_ref().map(|u| u.trim_end_matches('/').to_string())
+        self.cfg
+            .worker_url
+            .as_ref()
+            .map(|u| u.trim_end_matches('/').to_string())
     }
 
     fn relays(&self) -> Vec<String> {
-        self.cfg.nostr_relays.iter().take(NOSTR_RELAYS).cloned().collect()
+        self.cfg
+            .nostr_relays
+            .iter()
+            .take(NOSTR_RELAYS)
+            .cloned()
+            .collect()
     }
 
     /// Положить данные (≤ `MAX_PLAIN`) во все доступные хранилища.
@@ -171,7 +199,11 @@ impl Mailbox {
         let n = async {
             let mut ok = 0;
             let mut errs = Vec::new();
-            let futs: Vec<_> = self.relays().into_iter().map(|r| nostr_put(r, addr.tag.clone(), blob.clone())).collect();
+            let futs: Vec<_> = self
+                .relays()
+                .into_iter()
+                .map(|r| nostr_put(r, addr.tag.clone(), blob.clone()))
+                .collect();
             for r in futures_util::future::join_all(futs).await {
                 match r {
                     Ok(()) => ok += 1,
@@ -183,7 +215,9 @@ impl Mailbox {
         let t = async {
             let body = zv_proto::b64u::enc(&short);
             match &self.cfg.ntfy_base {
-                Some(base) if body.len() <= zv_proto::topics::NTFY_MAX_BODY - 96 => ntfy_put(base, &addr.ntfy_topic, body).await.map(|_| true),
+                Some(base) if body.len() <= zv_proto::topics::NTFY_MAX_BODY - 96 => {
+                    ntfy_put(base, &addr.ntfy_topic, body).await.map(|_| true)
+                }
                 _ => Ok(false),
             }
         };
@@ -211,8 +245,16 @@ impl Mailbox {
             }
         };
         let now_s = zv_proto::ids::now_ms() / 1000;
-        let since = if cur.nostr == 0 { now_s.saturating_sub(NOSTR_LOOKBACK_S) } else { cur.nostr.saturating_sub(600) };
-        let n = futures_util::future::join_all(self.relays().into_iter().map(|r| nostr_fetch(r, addr.tag.clone(), since)));
+        let since = if cur.nostr == 0 {
+            now_s.saturating_sub(NOSTR_LOOKBACK_S)
+        } else {
+            cur.nostr.saturating_sub(600)
+        };
+        let n = futures_util::future::join_all(
+            self.relays()
+                .into_iter()
+                .map(|r| nostr_fetch(r, addr.tag.clone(), since)),
+        );
         let t = async {
             match &self.cfg.ntfy_base {
                 Some(base) => Some(ntfy_fetch(base, &addr.ntfy_topic, &cur.ntfy).await),
@@ -226,7 +268,11 @@ impl Mailbox {
                 cur.seq = cur.seq.max(last);
                 for (seq, blob) in items {
                     if let Some(d) = zv_proto::b64u::dec(&blob).ok().and_then(|b| addr.open(&b)) {
-                        rep.items.push(MailItem { data: d, via: "worker", seq: Some(seq) });
+                        rep.items.push(MailItem {
+                            data: d,
+                            via: "worker",
+                            seq: Some(seq),
+                        });
                     }
                 }
             }
@@ -239,8 +285,13 @@ impl Mailbox {
                     rep.nostr_ok += 1;
                     cur.nostr = cur.nostr.max(max_ts);
                     for blob in items {
-                        if let Some(d) = zv_proto::b64u::dec(&blob).ok().and_then(|b| addr.open(&b)) {
-                            rep.items.push(MailItem { data: d, via: "nostr", seq: None });
+                        if let Some(d) = zv_proto::b64u::dec(&blob).ok().and_then(|b| addr.open(&b))
+                        {
+                            rep.items.push(MailItem {
+                                data: d,
+                                via: "nostr",
+                                seq: None,
+                            });
                         }
                     }
                 }
@@ -255,7 +306,11 @@ impl Mailbox {
                 }
                 for blob in items {
                     if let Some(d) = zv_proto::b64u::dec(&blob).ok().and_then(|b| addr.open(&b)) {
-                        rep.items.push(MailItem { data: d, via: "ntfy", seq: None });
+                        rep.items.push(MailItem {
+                            data: d,
+                            via: "ntfy",
+                            seq: None,
+                        });
                     }
                 }
             }
@@ -264,7 +319,8 @@ impl Mailbox {
         }
         // одно и то же могло прийти из нескольких хранилищ
         let mut seen = std::collections::HashSet::new();
-        rep.items.retain(|i| seen.insert(Sha256::digest(&i.data).to_vec()) || i.seq.is_some());
+        rep.items
+            .retain(|i| seen.insert(Sha256::digest(&i.data).to_vec()) || i.seq.is_some());
         rep
     }
 
@@ -324,13 +380,23 @@ async fn worker_put(base: &str, addr: &MailAddr, blob: &str) -> anyhow::Result<u
     anyhow::bail!("нет доступа")
 }
 
-async fn worker_fetch(base: &str, addr: &MailAddr, after: u64, dev: &str) -> anyhow::Result<(Vec<(u64, String)>, u64)> {
+async fn worker_fetch(
+    base: &str,
+    addr: &MailAddr,
+    after: u64,
+    dev: &str,
+) -> anyhow::Result<(Vec<(u64, String)>, u64)> {
     let mut out = Vec::new();
     let mut after = after;
     let mut inited = false;
     for _ in 0..20 {
         let url = format!("{base}/chat/{}/fetch?after={after}", addr.chat_id);
-        let r = crate::tls::http().get(&url).header("x-access-token", &addr.token).timeout(HTTP_TIMEOUT).send().await?;
+        let r = crate::tls::http()
+            .get(&url)
+            .header("x-access-token", &addr.token)
+            .timeout(HTTP_TIMEOUT)
+            .send()
+            .await?;
         let st = r.status();
         if st.as_u16() == 401 && !inited {
             // комнаты ещё нет — создаём (пустая)
@@ -343,10 +409,17 @@ async fn worker_fetch(base: &str, addr: &MailAddr, after: u64, dev: &str) -> any
         }
         anyhow::ensure!(st.is_success(), "fetch HTTP {st}");
         let v: Value = r.json().await?;
-        let msgs = v.get("messages").and_then(|m| m.as_array()).cloned().unwrap_or_default();
+        let msgs = v
+            .get("messages")
+            .and_then(|m| m.as_array())
+            .cloned()
+            .unwrap_or_default();
         let n = msgs.len();
         for m in msgs {
-            let (Some(seq), Some(blob)) = (m.get("seq").and_then(|x| x.as_u64()), m.get("blob").and_then(|x| x.as_str())) else {
+            let (Some(seq), Some(blob)) = (
+                m.get("seq").and_then(|x| x.as_u64()),
+                m.get("blob").and_then(|x| x.as_str()),
+            ) else {
                 continue;
             };
             after = after.max(seq);
@@ -362,14 +435,21 @@ async fn worker_fetch(base: &str, addr: &MailAddr, after: u64, dev: &str) -> any
 async fn nostr_put(relay: String, tag: String, blob: String) -> anyhow::Result<()> {
     let key = crate::nostr::NostrKey::random();
     let now_s = zv_proto::ids::now_ms() / 1000;
-    let (id, frame) = key.event_kind(NOSTR_KIND, json!([["t", NOSTR_TAG], ["z", tag]]), &blob, now_s);
+    let (id, frame) = key.event_kind(
+        NOSTR_KIND,
+        json!([["t", NOSTR_TAG], ["z", tag]]),
+        &blob,
+        now_s,
+    );
     let mut ws = crate::tls::ws_connect(&relay, None, "ZVONochek-Desktop", WS_TIMEOUT).await?;
     ws.send(Message::Text(frame.into())).await?;
     let r = tokio::time::timeout(WS_TIMEOUT, async {
         while let Some(m) = ws.next().await {
             let Message::Text(t) = m? else { continue };
             let v: Value = serde_json::from_str(t.as_str()).unwrap_or(Value::Null);
-            if v.get(0).and_then(|x| x.as_str()) == Some("OK") && v.get(1).and_then(|x| x.as_str()) == Some(id.as_str()) {
+            if v.get(0).and_then(|x| x.as_str()) == Some("OK")
+                && v.get(1).and_then(|x| x.as_str()) == Some(id.as_str())
+            {
                 if v.get(2).and_then(|x| x.as_bool()) == Some(true) {
                     return Ok(());
                 }
@@ -426,28 +506,51 @@ fn event_matches(ev: &Value, tag: &str) -> bool {
     if ev.get("kind").and_then(|x| x.as_u64()) != Some(NOSTR_KIND) {
         return false;
     }
-    let tags = ev.get("tags").and_then(|t| t.as_array()).cloned().unwrap_or_default();
-    let has = |k: &str, v: &str| tags.iter().any(|t| t.get(0).and_then(|x| x.as_str()) == Some(k) && t.get(1).and_then(|x| x.as_str()) == Some(v));
+    let tags = ev
+        .get("tags")
+        .and_then(|t| t.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let has = |k: &str, v: &str| {
+        tags.iter().any(|t| {
+            t.get(0).and_then(|x| x.as_str()) == Some(k)
+                && t.get(1).and_then(|x| x.as_str()) == Some(v)
+        })
+    };
     has("t", NOSTR_TAG) && has("z", tag)
 }
 
 async fn ntfy_put(base: &str, topic: &str, body: String) -> anyhow::Result<()> {
     let url = format!("{}/{topic}", base.trim_end_matches('/'));
-    let r = crate::tls::http().post(url).body(body).timeout(HTTP_TIMEOUT).send().await?;
+    let r = crate::tls::http()
+        .post(url)
+        .body(body)
+        .timeout(HTTP_TIMEOUT)
+        .send()
+        .await?;
     anyhow::ensure!(r.status().is_success(), "HTTP {}", r.status());
     Ok(())
 }
 
 async fn ntfy_fetch(base: &str, topic: &str, since: &str) -> anyhow::Result<(Vec<String>, String)> {
     let since = if since.is_empty() { "12h" } else { since };
-    let url = format!("{}/{topic}/json?poll=1&since={since}", base.trim_end_matches('/'));
-    let r = crate::tls::http().get(url).timeout(HTTP_TIMEOUT).send().await?;
+    let url = format!(
+        "{}/{topic}/json?poll=1&since={since}",
+        base.trim_end_matches('/')
+    );
+    let r = crate::tls::http()
+        .get(url)
+        .timeout(HTTP_TIMEOUT)
+        .send()
+        .await?;
     anyhow::ensure!(r.status().is_success(), "HTTP {}", r.status());
     let text = r.text().await?;
     let mut out = Vec::new();
     let mut last = String::new();
     for line in text.lines() {
-        let Ok(v) = serde_json::from_str::<Value>(line) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
         if v.get("event").and_then(|x| x.as_str()) != Some("message") {
             continue;
         }
@@ -497,7 +600,14 @@ mod tests {
         let mut cur = Cursor::default();
         let t0 = std::time::Instant::now();
         let r = mb.fetch(&a, &mut cur, "live").await;
-        println!("пустой fetch {:?}: worker {} nostr {} ntfy {} ошибки {:?}", t0.elapsed(), r.worker_ok, r.nostr_ok, r.ntfy_ok, r.errors);
+        println!(
+            "пустой fetch {:?}: worker {} nostr {} ntfy {} ошибки {:?}",
+            t0.elapsed(),
+            r.worker_ok,
+            r.nostr_ok,
+            r.ntfy_ok,
+            r.errors
+        );
         let t0 = std::time::Instant::now();
         let p = mb.put(&a, "привет из теста".as_bytes()).await;
         println!("put {:?}: {:?}", t0.elapsed(), p);
@@ -505,8 +615,18 @@ mod tests {
         let mut cur2 = Cursor::default();
         let t0 = std::time::Instant::now();
         let r = mb.fetch(&a, &mut cur2, "live").await;
-        let vias: Vec<_> = r.items.iter().map(|i| (i.via, String::from_utf8_lossy(&i.data).to_string())).collect();
-        println!("fetch {:?}: {:?}; курсор {:?}; ошибки {:?}", t0.elapsed(), vias, cur2, r.errors);
+        let vias: Vec<_> = r
+            .items
+            .iter()
+            .map(|i| (i.via, String::from_utf8_lossy(&i.data).to_string()))
+            .collect();
+        println!(
+            "fetch {:?}: {:?}; курсор {:?}; ошибки {:?}",
+            t0.elapsed(),
+            vias,
+            cur2,
+            r.errors
+        );
         assert!(!r.items.is_empty());
     }
 
@@ -528,7 +648,10 @@ mod tests {
         assert!(mb.put(&a, b"one").await.worker);
         assert!(mb.put(&a, b"two").await.worker);
         let r = mb.fetch(&a, &mut cur, "dev1").await;
-        assert_eq!(r.items.iter().map(|i| i.data.clone()).collect::<Vec<_>>(), vec![b"one".to_vec(), b"two".to_vec()]);
+        assert_eq!(
+            r.items.iter().map(|i| i.data.clone()).collect::<Vec<_>>(),
+            vec![b"one".to_vec(), b"two".to_vec()]
+        );
         assert_eq!(cur.seq, 2);
         mb.ack(&a, &[1, 2], "dev1").await;
         assert!(mb.fetch(&a, &mut cur, "dev1").await.items.is_empty());

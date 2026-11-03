@@ -38,19 +38,43 @@ pub type LinkId = u64;
 
 pub enum Event {
     /// Линк поднят (рукопожатие `hello4` прошло). Исходящие допущены сразу.
-    LinkUp { link: LinkId, peer: String, outbound: bool, hello: Value },
-    Msg { link: LinkId, peer: String, msg: Value },
-    Datagram { link: LinkId, peer: String, data: Bytes },
-    LinkDown { link: LinkId, peer: String, reason: String },
+    LinkUp {
+        link: LinkId,
+        peer: String,
+        outbound: bool,
+        hello: Value,
+    },
+    Msg {
+        link: LinkId,
+        peer: String,
+        msg: Value,
+    },
+    Datagram {
+        link: LinkId,
+        peer: String,
+        data: Bytes,
+    },
+    LinkDown {
+        link: LinkId,
+        peer: String,
+        reason: String,
+    },
     /// Собеседник открыл дополнительный поток (файлы). Только у допущенных линков.
-    Stream { link: LinkId, peer: String, send: SendStream, recv: RecvStream },
+    Stream {
+        link: LinkId,
+        peer: String,
+        send: SendStream,
+        recv: RecvStream,
+    },
 }
 
 impl std::fmt::Debug for Event {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Event::LinkUp { link, outbound, .. } => write!(f, "LinkUp({link}, out={outbound})"),
-            Event::Msg { link, msg, .. } => write!(f, "Msg({link}, {})", msg.get("t").unwrap_or(&Value::Null)),
+            Event::Msg { link, msg, .. } => {
+                write!(f, "Msg({link}, {})", msg.get("t").unwrap_or(&Value::Null))
+            }
             Event::Datagram { link, data, .. } => write!(f, "Datagram({link}, {} B)", data.len()),
             Event::LinkDown { link, reason, .. } => write!(f, "LinkDown({link}, {reason})"),
             Event::Stream { link, .. } => write!(f, "Stream({link})"),
@@ -99,7 +123,10 @@ pub struct Node {
 }
 
 fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 pub fn encode_frame(v: &Value) -> Bytes {
@@ -125,7 +152,8 @@ pub async fn read_frame(recv: &mut RecvStream) -> anyhow::Result<Option<Value>> 
 }
 
 fn is_hello4(v: &Value) -> bool {
-    v.get("t").and_then(|t| t.as_str()) == Some("hello4") && v.get("proto").and_then(|p| p.as_u64()).unwrap_or(0) >= 1
+    v.get("t").and_then(|t| t.as_str()) == Some("hello4")
+        && v.get("proto").and_then(|p| p.as_u64()).unwrap_or(0) >= 1
 }
 
 /// Адрес собеседника: ID + подсказки `{r: релей, a: ["ip:port", …]}` (из `hello` или контакта).
@@ -133,7 +161,11 @@ pub fn endpoint_addr(peer: &str, hint: Option<&Value>) -> anyhow::Result<Endpoin
     let id = EndpointId::from_str(peer.trim())?;
     let mut addrs = Vec::new();
     if let Some(h) = hint {
-        if let Some(r) = h.get("r").and_then(|v| v.as_str()).and_then(|s| RelayUrl::from_str(s).ok()) {
+        if let Some(r) = h
+            .get("r")
+            .and_then(|v| v.as_str())
+            .and_then(|s| RelayUrl::from_str(s).ok())
+        {
             addrs.push(TransportAddr::Relay(r));
         }
         if let Some(a) = h.get("a").and_then(|v| v.as_array()) {
@@ -224,7 +256,9 @@ impl Node {
 
     /// Подождать подключения к домашнему релею (не дольше `t`).
     pub async fn online(&self, t: Duration) -> bool {
-        tokio::time::timeout(t, self.inner.ep.online()).await.is_ok()
+        tokio::time::timeout(t, self.inner.ep.online())
+            .await
+            .is_ok()
     }
 
     /// Установить исходящий линк (или вернуть живой допущенный к этому собеседнику).
@@ -253,7 +287,11 @@ impl Node {
         let links = self.inner.lock_links();
         links
             .values()
-            .filter(|l| l.peer_s == peer && l.alive.load(Ordering::Relaxed) && l.authorized.load(Ordering::Relaxed))
+            .filter(|l| {
+                l.peer_s == peer
+                    && l.alive.load(Ordering::Relaxed)
+                    && l.authorized.load(Ordering::Relaxed)
+            })
             .max_by_key(|l| l.id)
             .map(|l| l.id)
     }
@@ -263,11 +301,19 @@ impl Node {
     }
 
     pub fn is_alive(&self, link: LinkId) -> bool {
-        self.inner.lock_links().get(&link).map(|l| l.alive.load(Ordering::Relaxed)).unwrap_or(false)
+        self.inner
+            .lock_links()
+            .get(&link)
+            .map(|l| l.alive.load(Ordering::Relaxed))
+            .unwrap_or(false)
     }
 
     pub fn is_authorized(&self, link: LinkId) -> bool {
-        self.inner.lock_links().get(&link).map(|l| l.authorized.load(Ordering::Relaxed)).unwrap_or(false)
+        self.inner
+            .lock_links()
+            .get(&link)
+            .map(|l| l.authorized.load(Ordering::Relaxed))
+            .unwrap_or(false)
     }
 
     pub fn remote_hello(&self, link: LinkId) -> Value {
@@ -285,7 +331,9 @@ impl Node {
     }
 
     pub fn send(&self, link: LinkId, msg: &Value) -> bool {
-        let Some(l) = self.inner.lock_links().get(&link).cloned() else { return false };
+        let Some(l) = self.inner.lock_links().get(&link).cloned() else {
+            return false;
+        };
         if !l.alive.load(Ordering::Relaxed) {
             return false;
         }
@@ -303,7 +351,9 @@ impl Node {
 
     /// Датаграмма (без гарантий). `false` — не влезла или линк мёртв.
     pub fn send_datagram(&self, link: LinkId, data: Bytes) -> bool {
-        let Some(l) = self.inner.lock_links().get(&link).cloned() else { return false };
+        let Some(l) = self.inner.lock_links().get(&link).cloned() else {
+            return false;
+        };
         if !l.alive.load(Ordering::Relaxed) {
             return false;
         }
@@ -318,7 +368,12 @@ impl Node {
 
     /// Открыть дополнительный поток к собеседнику (файлы). Первый кадр пишет вызывающий.
     pub async fn open_stream(&self, link: LinkId) -> anyhow::Result<(SendStream, RecvStream)> {
-        let l = self.inner.lock_links().get(&link).cloned().ok_or_else(|| anyhow::anyhow!("нет линка"))?;
+        let l = self
+            .inner
+            .lock_links()
+            .get(&link)
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("нет линка"))?;
         anyhow::ensure!(l.alive.load(Ordering::Relaxed), "линк закрыт");
         Ok(l.conn.open_bi().await?)
     }
@@ -332,11 +387,16 @@ impl Node {
 
     /// Путь линка: `direct` / `relay` и RTT, мс.
     pub fn path(&self, link: LinkId) -> (String, Option<u64>) {
-        let Some(l) = self.inner.lock_links().get(&link).cloned() else { return ("none".into(), None) };
+        let Some(l) = self.inner.lock_links().get(&link).cloned() else {
+            return ("none".into(), None);
+        };
         let paths = l.conn.paths();
         let sel = paths.iter().find(|p| p.is_selected());
         match sel {
-            Some(p) => ((if p.is_relay() { "relay" } else { "direct" }).into(), Some(p.rtt().as_millis() as u64)),
+            Some(p) => (
+                (if p.is_relay() { "relay" } else { "direct" }).into(),
+                Some(p.rtt().as_millis() as u64),
+            ),
             None => ("none".into(), None),
         }
     }
@@ -355,7 +415,13 @@ impl Node {
         let mut lv = Vec::new();
         for l in links {
             let (path, rtt) = self.path(l.id);
-            let name = l.remote.lock().unwrap_or_else(|e| e.into_inner()).get("name").cloned().unwrap_or(Value::Null);
+            let name = l
+                .remote
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get("name")
+                .cloned()
+                .unwrap_or(Value::Null);
             lv.push(json!({
                 "link": l.id,
                 "peer": &l.peer_s[..12.min(l.peer_s.len())],
@@ -396,7 +462,14 @@ impl Inner {
         Value::Object(h)
     }
 
-    fn add_link(self: Arc<Self>, conn: Connection, outbound: bool, remote: Value, send: SendStream, recv: RecvStream) -> LinkId {
+    fn add_link(
+        self: Arc<Self>,
+        conn: Connection,
+        outbound: bool,
+        remote: Value,
+        send: SendStream,
+        recv: RecvStream,
+    ) -> LinkId {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = mpsc::unbounded_channel();
         let peer = conn.remote_id();
@@ -414,7 +487,12 @@ impl Inner {
             recvd: AtomicU64::new(0),
         });
         self.lock_links().insert(id, link.clone());
-        let _ = self.events.send(Event::LinkUp { link: id, peer: link.peer_s.clone(), outbound, hello: remote });
+        let _ = self.events.send(Event::LinkUp {
+            link: id,
+            peer: link.peer_s.clone(),
+            outbound,
+            hello: remote,
+        });
         if !outbound {
             let l = link.clone();
             tokio::spawn(async move {
@@ -436,11 +514,22 @@ impl Inner {
                 let _ = recv.stop(3u32.into());
                 continue;
             }
-            let _ = self.events.send(Event::Stream { link: link.id, peer: link.peer_s.clone(), send, recv });
+            let _ = self.events.send(Event::Stream {
+                link: link.id,
+                peer: link.peer_s.clone(),
+                send,
+                recv,
+            });
         }
     }
 
-    async fn run_link(self: Arc<Self>, link: Arc<Link>, mut send: SendStream, mut recv: RecvStream, mut rx: mpsc::UnboundedReceiver<Bytes>) {
+    async fn run_link(
+        self: Arc<Self>,
+        link: Arc<Link>,
+        mut send: SendStream,
+        mut recv: RecvStream,
+        mut rx: mpsc::UnboundedReceiver<Bytes>,
+    ) {
         let writer = tokio::spawn(async move {
             while let Some(b) = rx.recv().await {
                 if send.write_all(&b).await.is_err() {
@@ -482,7 +571,11 @@ impl Inner {
         writer.abort();
         link.conn.close(0u32.into(), b"done");
         self.lock_links().remove(&link.id);
-        let _ = self.events.send(Event::LinkDown { link: link.id, peer: link.peer_s.clone(), reason });
+        let _ = self.events.send(Event::LinkDown {
+            link: link.id,
+            peer: link.peer_s.clone(),
+            reason,
+        });
     }
 }
 
@@ -492,7 +585,8 @@ async fn accept_loop(inner: Arc<Inner>) {
         tokio::spawn(async move {
             let Ok(conn) = incoming.await else { return };
             let r = async {
-                let (mut send, mut recv) = tokio::time::timeout(HELLO_TIMEOUT, conn.accept_bi()).await??;
+                let (mut send, mut recv) =
+                    tokio::time::timeout(HELLO_TIMEOUT, conn.accept_bi()).await??;
                 let first = tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await??;
                 let first = first.ok_or_else(|| anyhow::anyhow!("пусто"))?;
                 anyhow::ensure!(is_hello4(&first), "не hello4");
@@ -532,7 +626,11 @@ mod tests {
 
     async fn next_msg(rx: &mut mpsc::UnboundedReceiver<Event>) -> (LinkId, Value) {
         loop {
-            match tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap() {
+            match tokio::time::timeout(Duration::from_secs(5), rx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            {
                 Event::Msg { link, msg, .. } => return (link, msg),
                 _ => continue,
             }
@@ -560,7 +658,11 @@ mod tests {
         assert_eq!(m["d"].as_str().unwrap().len(), 70_000);
         assert!(a.send_datagram(la, Bytes::from_static(b"Evoice")));
         loop {
-            match tokio::time::timeout(Duration::from_secs(5), brx.recv()).await.unwrap().unwrap() {
+            match tokio::time::timeout(Duration::from_secs(5), brx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            {
                 Event::Datagram { data, .. } => {
                     assert_eq!(&data[..], b"Evoice");
                     break;
@@ -572,7 +674,12 @@ mod tests {
         assert_eq!(a.path(la).0, "direct");
         a.close_link(la, "test");
         loop {
-            if let Event::LinkDown { link, .. } = tokio::time::timeout(Duration::from_secs(5), brx.recv()).await.unwrap().unwrap() {
+            if let Event::LinkDown { link, .. } =
+                tokio::time::timeout(Duration::from_secs(5), brx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+            {
                 assert_eq!(link, lb);
                 break;
             }
@@ -596,8 +703,14 @@ mod tests {
         };
         let (a, _arx) = mk(11).await;
         let (b, mut brx) = mk(12).await;
-        assert!(a.online(Duration::from_secs(15)).await, "a не подключился к релею");
-        assert!(b.online(Duration::from_secs(15)).await, "b не подключился к релею");
+        assert!(
+            a.online(Duration::from_secs(15)).await,
+            "a не подключился к релею"
+        );
+        assert!(
+            b.online(Duration::from_secs(15)).await,
+            "b не подключился к релею"
+        );
         println!("a: {}", a.addr_json());
         // только ID: адрес найдётся через DNS/pkarr n0
         let t0 = std::time::Instant::now();
@@ -620,10 +733,18 @@ mod tests {
         b.authorize(lb);
         // a → b: запрос и 1 МБ данных в ответ
         let (mut s, mut r) = a.open_stream(la).await.unwrap();
-        s.write_all(&encode_frame(&json!({"t": "get", "fid": "x"}))).await.unwrap();
+        s.write_all(&encode_frame(&json!({"t": "get", "fid": "x"})))
+            .await
+            .unwrap();
         let (mut bs, mut br) = loop {
-            match tokio::time::timeout(Duration::from_secs(5), brx.recv()).await.unwrap().unwrap() {
-                Event::Stream { send, recv, link, .. } => {
+            match tokio::time::timeout(Duration::from_secs(5), brx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            {
+                Event::Stream {
+                    send, recv, link, ..
+                } => {
                     assert_eq!(link, lb);
                     break (send, recv);
                 }
@@ -633,7 +754,9 @@ mod tests {
         let head = read_frame(&mut br).await.unwrap().unwrap();
         assert_eq!(head["fid"], "x");
         let data = vec![7u8; 1 << 20];
-        bs.write_all(&encode_frame(&json!({"ok": true, "size": data.len()}))).await.unwrap();
+        bs.write_all(&encode_frame(&json!({"ok": true, "size": data.len()})))
+            .await
+            .unwrap();
         bs.write_all(&data).await.unwrap();
         bs.finish().unwrap();
         let ok = read_frame(&mut r).await.unwrap().unwrap();
@@ -650,7 +773,12 @@ mod tests {
         let la = a.connect(b.id(), Some(&b.addr_json())).await.unwrap();
         let t0 = std::time::Instant::now();
         loop {
-            if let Event::LinkDown { link, .. } = tokio::time::timeout(Duration::from_secs(15), arx.recv()).await.unwrap().unwrap() {
+            if let Event::LinkDown { link, .. } =
+                tokio::time::timeout(Duration::from_secs(15), arx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+            {
                 assert_eq!(link, la);
                 break;
             }

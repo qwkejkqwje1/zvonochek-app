@@ -27,7 +27,6 @@ use crate::{Incoming, Inner, RoomRole, s};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use zv_p2p::LinkId;
 use zv_proto::ids::{now_ms, rand_hex};
 use zv_signal::mailbox::{Cursor, MAX_PLAIN, MailAddr, Mailbox};
 
@@ -58,7 +57,13 @@ pub(crate) fn is_group(chat: &str) -> bool {
 }
 
 fn clean_name(s: &str) -> String {
-    s.trim().chars().filter(|c| !c.is_control()).take(NAME_MAX).collect::<String>().trim().to_string()
+    s.trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(NAME_MAX)
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 #[derive(Default)]
@@ -108,7 +113,8 @@ pub(crate) struct GroupCall {
 /// Откуда пришло сообщение группы.
 #[derive(Debug, Clone)]
 pub(crate) enum GSrc {
-    Link(LinkId, String),
+    /// Прямая связь с автором (ID устройства).
+    Link(String),
     Room(String),
     Mail(String),
 }
@@ -127,14 +133,20 @@ pub(crate) fn verify_gm(gm: &Value) -> Option<(String, String, Value)> {
     if str_of(gm, "t") != "gm" {
         return None;
     }
-    let (g, f, d, sig) = (str_of(gm, "g"), str_of(gm, "f"), str_of(gm, "d"), str_of(gm, "s"));
+    let (g, f, d, sig) = (
+        str_of(gm, "g"),
+        str_of(gm, "f"),
+        str_of(gm, "d"),
+        str_of(gm, "s"),
+    );
     if !is_group(g) || !zv_p2p::valid_id(f) || d.len() > 200_000 {
         return None;
     }
     let fb: [u8; 32] = hex::decode(f).ok()?.try_into().ok()?;
     let sb: [u8; 64] = hex::decode(sig).ok()?.try_into().ok()?;
     let pk = zv_p2p::iroh::PublicKey::from_bytes(&fb).ok()?;
-    pk.verify(&sig_input(g, d), &zv_p2p::iroh::Signature::from_bytes(&sb)).ok()?;
+    pk.verify(&sig_input(g, d), &zv_p2p::iroh::Signature::from_bytes(&sb))
+        .ok()?;
     let p: Value = serde_json::from_str(d).ok()?;
     p.is_object().then(|| (g.to_string(), f.to_string(), p))
 }
@@ -151,8 +163,15 @@ fn parse_members(v: Option<&Value>) -> Option<Vec<GroupMember>> {
         if !zv_p2p::valid_id(id) || out.iter().any(|x| x.id == id) {
             return None;
         }
-        let hint = m.get("hint").filter(|h| h.is_object() && h.to_string().len() < 2000).cloned();
-        out.push(GroupMember { id: id.to_string(), name: clean_name(str_of(m, "name")), hint });
+        let hint = m
+            .get("hint")
+            .filter(|h| h.is_object() && h.to_string().len() < 2000)
+            .cloned();
+        out.push(GroupMember {
+            id: id.to_string(),
+            name: clean_name(str_of(m, "name")),
+            hint,
+        });
     }
     Some(out)
 }
@@ -161,7 +180,12 @@ fn parse_members(v: Option<&Value>) -> Option<Vec<GroupMember>> {
 fn secrets_for(g: &Group, kind: &str, now: u64) -> Vec<String> {
     let mut v = vec![g.secret.clone()];
     if kind == "sync" {
-        v.extend(g.old.iter().filter(|o| o.until > now).map(|o| o.secret.clone()));
+        v.extend(
+            g.old
+                .iter()
+                .filter(|o| o.until > now)
+                .map(|o| o.secret.clone()),
+        );
     }
     v
 }
@@ -181,17 +205,36 @@ fn gm_items(room: &zv_proto::Room, fid: &str, gm: &Value) -> Option<Vec<Vec<u8>>
         return Some(vec![one]);
     }
     let chunk = MAX_PLAIN - 200;
-    let parts: Vec<&str> = sealed.as_bytes().chunks(chunk).map(|c| std::str::from_utf8(c).unwrap_or("")).collect();
+    let parts: Vec<&str> = sealed
+        .as_bytes()
+        .chunks(chunk)
+        .map(|c| std::str::from_utf8(c).unwrap_or(""))
+        .collect();
     if parts.len() > MAX_PARTS || parts.iter().any(|p| p.is_empty()) {
         return None;
     }
     let n = parts.len();
-    Some(parts.iter().enumerate().map(|(i, p)| json!({"m": fid, "i": i, "n": n, "p": p}).to_string().into_bytes()).collect())
+    Some(
+        parts
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                json!({"m": fid, "i": i, "n": n, "p": p})
+                    .to_string()
+                    .into_bytes()
+            })
+            .collect(),
+    )
 }
 
 impl Inner {
     pub(crate) fn group(&self, gid: &str) -> Option<Group> {
-        self.lock().contacts.groups.iter().find(|g| g.id == gid).cloned()
+        self.lock()
+            .contacts
+            .groups
+            .iter()
+            .find(|g| g.id == gid)
+            .cloned()
     }
 
     fn my_id(&self) -> Option<String> {
@@ -214,20 +257,39 @@ impl Inner {
         if !st.settings.p2p {
             return Vec::new();
         }
-        st.contacts.groups.iter().filter(|g| !g.left).map(|g| (g.secret.clone(), RoomRole::Group)).collect()
+        st.contacts
+            .groups
+            .iter()
+            .filter(|g| !g.left)
+            .map(|g| (g.secret.clone(), RoomRole::Group))
+            .collect()
     }
 
     /// Участник одной из моих групп (его линки допускаем, его просьбы о файлах группы — тоже).
     pub(crate) fn is_group_peer(&self, peer: &str) -> bool {
-        self.lock().contacts.groups.iter().any(|g| !g.left && g.members.iter().any(|m| m.id == peer))
+        self.lock()
+            .contacts
+            .groups
+            .iter()
+            .any(|g| !g.left && g.members.iter().any(|m| m.id == peer))
     }
 
     /// Известные адреса устройства: из контакта или из группы.
     pub(crate) fn peer_hint(&self, peer: &str) -> Option<Value> {
         let st = self.lock();
-        st.contacts.items.iter().find(|c| c.peer == peer).and_then(|c| c.hint.clone()).or_else(|| {
-            st.contacts.groups.iter().flat_map(|g| g.members.iter()).find(|m| m.id == peer).and_then(|m| m.hint.clone())
-        })
+        st.contacts
+            .items
+            .iter()
+            .find(|c| c.peer == peer)
+            .and_then(|c| c.hint.clone())
+            .or_else(|| {
+                st.contacts
+                    .groups
+                    .iter()
+                    .flat_map(|g| g.members.iter())
+                    .find(|m| m.id == peer)
+                    .and_then(|m| m.hint.clone())
+            })
     }
 
     /// Имя участника для показа: как записан у меня в контактах, иначе — как назвался сам.
@@ -236,7 +298,12 @@ impl Inner {
         if let Some(c) = st.contacts.items.iter().find(|c| c.peer == id) {
             return c.name.clone();
         }
-        let cur = st.contacts.groups.iter().find(|x| x.id == g.id).unwrap_or(g);
+        let cur = st
+            .contacts
+            .groups
+            .iter()
+            .find(|x| x.id == g.id)
+            .unwrap_or(g);
         cur.members
             .iter()
             .chain(cur.former.iter())
@@ -269,15 +336,26 @@ impl Inner {
     ) -> Result<(String, Value), String> {
         let node = self.node().ok_or_else(|| self.p2p_unavailable())?;
         let me = node.id().to_string();
-        let id = p.get("id").and_then(|v| v.as_str()).map(str::to_string).unwrap_or_else(ulid);
+        let id = p
+            .get("id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(ulid);
         p["id"] = json!(id);
         p["n"] = json!(self.my_name());
         p["v"] = json!(g.v);
         if store || kind == "ring" {
             p["a"] = node.addr_json();
         }
-        let gm = self.sign_gm(&g.id, &p).ok_or("не удалось подписать сообщение")?;
-        let all: HashSet<String> = g.members.iter().map(|m| m.id.clone()).filter(|m| *m != me).collect();
+        let gm = self
+            .sign_gm(&g.id, &p)
+            .ok_or("не удалось подписать сообщение")?;
+        let all: HashSet<String> = g
+            .members
+            .iter()
+            .map(|m| m.id.clone())
+            .filter(|m| *m != me)
+            .collect();
         let waiting: HashSet<String> = match to {
             Some(t) => all.intersection(t).cloned().collect(),
             None => all,
@@ -318,13 +396,24 @@ impl Inner {
     }
 
     /// По линкам — тем, к кому есть линк; остальным — через комнату группы (её слышат все).
-    fn group_send_live(self: &Arc<Self>, g: &Group, kind: &str, gm: &Value, to: &HashSet<String>, dial: bool) {
+    fn group_send_live(
+        self: &Arc<Self>,
+        g: &Group,
+        kind: &str,
+        gm: &Value,
+        to: &HashSet<String>,
+        dial: bool,
+    ) {
         if to.is_empty() {
             return;
         }
         let node = self.node();
         let frame = json!({"t": "zvg", "gm": gm});
-        let rest: Vec<String> = to.iter().filter(|m| !node.as_ref().is_some_and(|n| n.send_peer(m, &frame))).cloned().collect();
+        let rest: Vec<String> = to
+            .iter()
+            .filter(|m| !node.as_ref().is_some_and(|n| n.send_peer(m, &frame)))
+            .cloned()
+            .collect();
         if rest.is_empty() {
             return;
         }
@@ -340,14 +429,19 @@ impl Inner {
 
     /// Один раз: живые пути и почтовые ящики (выход из группы — подтверждений уже не дождаться).
     fn group_post_once(self: &Arc<Self>, g: &Group, kind: &str, p: Value) {
-        let Ok((id, gm)) = self.group_post(g, kind, p, false, None) else { return };
+        let Ok((id, gm)) = self.group_post(g, kind, p, false, None) else {
+            return;
+        };
         let me = self.clone();
         let g = g.clone();
         let kind = kind.to_string();
         self.rt.spawn(async move {
             let mb = Mailbox::new(me.signal_config());
             for sec in secrets_for(&g, &kind, now_ms()) {
-                let (Some(addr), Ok(room)) = (MailAddr::derive(&sec), zv_proto::Room::derive(&sec)) else { continue };
+                let (Some(addr), Ok(room)) = (MailAddr::derive(&sec), zv_proto::Room::derive(&sec))
+                else {
+                    continue;
+                };
                 for it in gm_items(&room, &id, &gm).unwrap_or_default() {
                     mb.put(&addr, &it).await;
                 }
@@ -361,7 +455,10 @@ impl Inner {
         let mut keys = serde_json::Map::new();
         for m in g.members.iter().filter(|m| m.id != me) {
             if let Some(r) = self.pair_room(&m.id) {
-                keys.insert(m.id.clone(), json!(r.seal(&json!({"g": g.id, "k": g.secret}))));
+                keys.insert(
+                    m.id.clone(),
+                    json!(r.seal(&json!({"g": g.id, "k": g.secret}))),
+                );
             }
         }
         let mut p = json!({"t": "g_sync", "name": g.name, "admin": g.admin, "members": g.members, "keys": keys});
@@ -379,7 +476,12 @@ impl Inner {
     /// Приглашение — по каналу контакта, с подтверждением и почтовым ящиком.
     fn group_invite(self: &Arc<Self>, g: &Group, peer: &str) {
         let fid = ulid();
-        self.deliver(peer, &fid, "group", json!({"t": "chat_group", "id": fid, "g": self.group_def(g)}));
+        self.deliver(
+            peer,
+            &fid,
+            "group",
+            json!({"t": "chat_group", "id": fid, "g": self.group_def(g)}),
+        );
     }
 
     /// Запись в ленте группы (кто-то добавлен, вышел, переименовал…).
@@ -403,7 +505,10 @@ impl Inner {
             sender: actor.to_string(),
         };
         if self.db.insert_msg(&m) {
-            self.emit("chat:msg", json!({"msg": self.msg_json(&m), "new": true, "notify": false}));
+            self.emit(
+                "chat:msg",
+                json!({"msg": self.msg_json(&m), "new": true, "notify": false}),
+            );
         }
     }
 
@@ -421,7 +526,9 @@ impl Inner {
             kind: "call".into(),
             body: String::new(),
             reply: None,
-            file: Some(json!({"call": cid, "k": k, "video": video, "until": ts.min(now) + CALL_JOIN_MS})),
+            file: Some(
+                json!({"call": cid, "k": k, "video": video, "until": ts.min(now) + CALL_JOIN_MS}),
+            ),
             st: 3,
             edited: None,
             deleted: false,
@@ -429,7 +536,10 @@ impl Inner {
             sender: actor.to_string(),
         };
         if self.db.msg(&m.id).is_none() && self.db.insert_msg(&m) {
-            self.emit("chat:msg", json!({"msg": self.msg_json(&m), "new": true, "notify": false}));
+            self.emit(
+                "chat:msg",
+                json!({"msg": self.msg_json(&m), "new": true, "notify": false}),
+            );
         }
     }
 
@@ -446,9 +556,9 @@ impl Inner {
     }
 
     /// Кадр `zvg` по P2P-линку.
-    pub(crate) fn on_group_link(self: &Arc<Self>, link: LinkId, peer: &str, msg: &Value) {
+    pub(crate) fn on_group_link(self: &Arc<Self>, peer: &str, msg: &Value) {
         if let Some(gm) = msg.get("gm") {
-            self.on_gm(GSrc::Link(link, peer.to_string()), gm);
+            self.on_gm(GSrc::Link(peer.to_string()), gm);
         }
     }
 
@@ -462,7 +572,7 @@ impl Inner {
         let g = self.group(&gid)?;
         let from_ok = match &src {
             GSrc::Room(topic) => topics_of(&g).iter().any(|t| t == topic),
-            GSrc::Link(_, peer) => *peer == f,
+            GSrc::Link(peer) => *peer == f,
             GSrc::Mail(m) => *m == gid,
         };
         if !from_ok || g.left || !g.members.iter().any(|m| m.id == f) {
@@ -515,11 +625,22 @@ impl Inner {
             GSrc::Mail(_) => Some((f, ack)),
             GSrc::Link(..) => {
                 let to: HashSet<String> = [f.clone()].into();
-                let _ = self.group_post(&g, "ack", json!({"t": "g_ack", "ids": [ack]}), false, Some(&to));
+                let _ = self.group_post(
+                    &g,
+                    "ack",
+                    json!({"t": "g_ack", "ids": [ack]}),
+                    false,
+                    Some(&to),
+                );
                 None
             }
             GSrc::Room(_) => {
-                self.lock().groups.acks.entry((g.id.clone(), f)).or_default().push(ack);
+                self.lock()
+                    .groups
+                    .acks
+                    .entry((g.id.clone(), f))
+                    .or_default()
+                    .push(ack);
                 None
             }
         }
@@ -528,12 +649,18 @@ impl Inner {
     /// Автор на связи: имя и адреса, не отстали ли мы, очередь ему.
     fn group_member_seen(self: &Arc<Self>, g: &Group, f: &str, p: &Value, src: &GSrc) {
         let n = clean_name(str_of(p, "n"));
-        let a = p.get("a").filter(|a| a.is_object() && a.to_string().len() < 2000).cloned();
+        let a = p
+            .get("a")
+            .filter(|a| a.is_object() && a.to_string().len() < 2000)
+            .cloned();
         let changed = {
             let st = self.lock();
-            st.contacts.groups.iter().find(|x| x.id == g.id).and_then(|x| x.members.iter().find(|m| m.id == f)).is_some_and(|m| {
-                (!n.is_empty() && m.name != n) || (a.is_some() && m.hint != a)
-            })
+            st.contacts
+                .groups
+                .iter()
+                .find(|x| x.id == g.id)
+                .and_then(|x| x.members.iter().find(|m| m.id == f))
+                .is_some_and(|m| (!n.is_empty() && m.name != n) || (a.is_some() && m.hint != a))
         };
         if changed {
             self.group_update(&g.id, |x| {
@@ -585,9 +712,17 @@ impl Inner {
         if g.joined > 0 && ts + 60_000 < g.joined {
             return Some(id);
         }
-        let kind = if str_of(p, "k") == "file" { "file" } else { "text" };
+        let kind = if str_of(p, "k") == "file" {
+            "file"
+        } else {
+            "text"
+        };
         let body = clean_text(str_of(p, "b"));
-        let file = if kind == "file" { self.file_meta(p) } else { None };
+        let file = if kind == "file" {
+            self.file_meta(p)
+        } else {
+            None
+        };
         if (kind == "text" && body.is_empty()) || (kind == "file" && file.is_none()) {
             return Some(id);
         }
@@ -602,10 +737,18 @@ impl Inner {
             out: false,
             ts: ts.min(now + 300_000),
             rx: now,
-            lc: p.get("lc").and_then(|v| v.as_u64()).unwrap_or(0).min(u64::MAX / 4),
+            lc: p
+                .get("lc")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                .min(u64::MAX / 4),
             kind: kind.into(),
             body,
-            reply: p.get("re").and_then(|v| v.as_str()).filter(|r| valid_id(r)).map(str::to_string),
+            reply: p
+                .get("re")
+                .and_then(|v| v.as_str())
+                .filter(|r| valid_id(r))
+                .map(str::to_string),
             file: file.clone(),
             st: 0,
             edited: None,
@@ -614,12 +757,21 @@ impl Inner {
             sender: f.to_string(),
         };
         // такой id уже есть, но чужой (подделка) — игнор
-        let clash = self.db.msg(&id).is_some_and(|x| x.chat != g.id || x.out || x.sender != f);
+        let clash = self
+            .db
+            .msg(&id)
+            .is_some_and(|x| x.chat != g.id || x.out || x.sender != f);
         if !clash && self.db.insert_msg(&m) {
             if let Some(fl) = &file {
                 self.file_offered(&g.id, &m, fl);
             }
-            let was = self.lock().groups.typing.get_mut(&g.id).and_then(|t| t.remove(f)).is_some();
+            let was = self
+                .lock()
+                .groups
+                .typing
+                .get_mut(&g.id)
+                .and_then(|t| t.remove(f))
+                .is_some();
             if was {
                 self.emit_group_typing(&g.id);
             }
@@ -634,12 +786,27 @@ impl Inner {
     fn g_on_edit(self: &Arc<Self>, g: &Group, f: &str, p: &Value, t: &str) -> Option<String> {
         let fid = str_of(p, "id").to_string();
         let mid = str_of(p, "m");
-        if let Some(m) = self.db.msg(mid).filter(|m| m.chat == g.id && !m.out && m.sender == f && m.kind != "sys") {
+        if let Some(m) = self
+            .db
+            .msg(mid)
+            .filter(|m| m.chat == g.id && !m.out && m.sender == f && m.kind != "sys")
+        {
             let changed = if t == "chat_edit" {
                 let b = clean_text(str_of(p, "b"));
-                m.kind == "text" && !b.is_empty() && self.db.edit(mid, &b, p.get("ts").and_then(|v| v.as_u64()).unwrap_or(now_ms()))
+                m.kind == "text"
+                    && !b.is_empty()
+                    && self.db.edit(
+                        mid,
+                        &b,
+                        p.get("ts").and_then(|v| v.as_u64()).unwrap_or(now_ms()),
+                    )
             } else {
-                if let Some(x) = m.file.as_ref().and_then(|x| x.get("fid")).and_then(|x| x.as_str()) {
+                if let Some(x) = m
+                    .file
+                    .as_ref()
+                    .and_then(|x| x.get("fid"))
+                    .and_then(|x| x.as_str())
+                {
                     self.file_cancel_inner(x, true);
                 }
                 self.db.mark_deleted(mid)
@@ -656,7 +823,14 @@ impl Inner {
         let ids: Vec<String> = p
             .get("ids")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str()).filter(|x| valid_id(x)).take(500).map(str::to_string).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str())
+                    .filter(|x| valid_id(x))
+                    .take(500)
+                    .map(str::to_string)
+                    .collect()
+            })
             .unwrap_or_default();
         for id in ids {
             self.g_acked(&g.id, &id, f);
@@ -667,7 +841,9 @@ impl Inner {
     fn g_acked(self: &Arc<Self>, gid: &str, fid: &str, who: &str) {
         let (done, kind, waiting) = {
             let mut st = self.lock();
-            let Some(e) = st.groups.pending.get_mut(fid) else { return };
+            let Some(e) = st.groups.pending.get_mut(fid) else {
+                return;
+            };
             if e.gid != gid || !e.waiting.remove(who) {
                 return;
             }
@@ -696,7 +872,12 @@ impl Inner {
     fn g_on_typing(&self, g: &Group, f: &str) {
         let first = {
             let mut st = self.lock();
-            st.groups.typing.entry(g.id.clone()).or_default().insert(f.to_string(), now_ms() + TYPING_TTL_MS).is_none()
+            st.groups
+                .typing
+                .entry(g.id.clone())
+                .or_default()
+                .insert(f.to_string(), now_ms() + TYPING_TTL_MS)
+                .is_none()
         };
         if first {
             self.emit_group_typing(&g.id);
@@ -708,15 +889,29 @@ impl Inner {
         let now = now_ms();
         let ids: Vec<String> = {
             let st = self.lock();
-            st.groups.typing.get(gid).map(|t| t.iter().filter(|(_, u)| **u > now).map(|(id, _)| id.clone()).collect()).unwrap_or_default()
+            st.groups
+                .typing
+                .get(gid)
+                .map(|t| {
+                    t.iter()
+                        .filter(|(_, u)| **u > now)
+                        .map(|(id, _)| id.clone())
+                        .collect()
+                })
+                .unwrap_or_default()
         };
-        let Some(g) = self.group(gid) else { return Vec::new() };
+        let Some(g) = self.group(gid) else {
+            return Vec::new();
+        };
         ids.iter().map(|id| self.member_name(&g, id)).collect()
     }
 
     fn emit_group_typing(&self, gid: &str) {
         let who = self.group_typers(gid);
-        self.emit("chat:typing", json!({"chat": gid, "on": !who.is_empty(), "who": who}));
+        self.emit(
+            "chat:typing",
+            json!({"chat": gid, "on": !who.is_empty(), "who": who}),
+        );
     }
 
     fn g_on_ring(self: &Arc<Self>, g: &Group, f: &str, p: &Value) {
@@ -725,7 +920,9 @@ impl Inner {
         if cid.is_empty() || cid.len() > 32 || !cid.bytes().all(|b| b.is_ascii_alphanumeric()) {
             return;
         }
-        let Ok(room) = zv_proto::Room::derive(&k) else { return };
+        let Ok(room) = zv_proto::Room::derive(&k) else {
+            return;
+        };
         let now = now_ms();
         let ts = p.get("ts").and_then(|v| v.as_u64()).unwrap_or(0);
         if ts + RING_FRESH_MS < now || ts > now + RING_FRESH_MS {
@@ -740,12 +937,23 @@ impl Inner {
             return;
         }
         // уже ответили, отклонили или сами в этом звонке
-        if st.groups.calls.contains_key(&room.topic) || st.rooms.get(&room.topic).is_some_and(|r| r.joined) {
+        if st.groups.calls.contains_key(&room.topic)
+            || st.rooms.get(&room.topic).is_some_and(|r| r.joined)
+        {
             return;
         }
         st.groups.calls.insert(
             room.topic.clone(),
-            GroupCall { cid: cid.clone(), gid: g.id.clone(), out: false, secret: k.clone(), video, started: now, last_ring: now, accepted: false },
+            GroupCall {
+                cid: cid.clone(),
+                gid: g.id.clone(),
+                out: false,
+                secret: k.clone(),
+                video,
+                started: now,
+                last_ring: now,
+                accepted: false,
+            },
         );
         if st.settings.dnd {
             let e = HistoryEntry {
@@ -789,17 +997,27 @@ impl Inner {
         };
         st.incoming.insert(cid, inc.clone());
         drop(st);
-        self.emit("call:incoming", serde_json::to_value(&inc).unwrap_or_default());
+        self.emit(
+            "call:incoming",
+            serde_json::to_value(&inc).unwrap_or_default(),
+        );
     }
 
     fn g_on_ring_end(self: &Arc<Self>, g: &Group, p: &Value) {
         let cid = str_of(p, "cid").to_string();
-        let ringing = self.lock().incoming.get(&cid).is_some_and(|i| i.group_id.as_deref() == Some(g.id.as_str()));
+        let ringing = self
+            .lock()
+            .incoming
+            .get(&cid)
+            .is_some_and(|i| i.group_id.as_deref() == Some(g.id.as_str()));
         if ringing {
             self.end_incoming(&cid, "missed");
         }
         let id = format!("call-{cid}");
-        if let Some(m) = self.db.msg(&id).filter(|m| m.chat == g.id && m.kind == "call")
+        if let Some(m) = self
+            .db
+            .msg(&id)
+            .filter(|m| m.chat == g.id && m.kind == "call")
             && let Some(mut f) = m.file
         {
             f["ended"] = json!(true);
@@ -814,7 +1032,8 @@ impl Inner {
         let name = self.member_name(g, f);
         let me = self.my_id().unwrap_or_default();
         if g.admin == me {
-            let _ = self.group_remove_member(&g.id, f, &format!("«{name}» выходит из группы"), "left");
+            let _ =
+                self.group_remove_member(&g.id, f, &format!("«{name}» выходит из группы"), "left");
         } else {
             // администратор пришлёт новый состав и ключ; пока — просто убрать
             self.group_update(&g.id, |x| {
@@ -841,13 +1060,17 @@ impl Inner {
             // мог прийти раньше передачи прав — повторим после следующего состава
             let mut st = self.lock();
             st.groups.deferred.retain(|(_, x, _)| x != gm);
-            st.groups.deferred.push((g.id.clone(), gm.clone(), now_ms()));
+            st.groups
+                .deferred
+                .push((g.id.clone(), gm.clone(), now_ms()));
             return ack;
         }
         self.group_apply_sync(g, f, p);
         let later: Vec<Value> = {
             let mut st = self.lock();
-            let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut st.groups.deferred).into_iter().partition(|(gid, _, _)| *gid == g.id);
+            let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut st.groups.deferred)
+                .into_iter()
+                .partition(|(gid, _, _)| *gid == g.id);
             st.groups.deferred = rest;
             mine.into_iter().map(|x| x.1).collect()
         };
@@ -859,16 +1082,28 @@ impl Inner {
 
     fn group_apply_sync(self: &Arc<Self>, g: &Group, f: &str, p: &Value) {
         let Some(me) = self.my_id() else { return };
-        let Some(members) = parse_members(p.get("members")) else { return };
+        let Some(members) = parse_members(p.get("members")) else {
+            return;
+        };
         let admin = str_of(p, "admin").to_string();
         if !members.iter().any(|m| m.id == admin) && members.iter().any(|m| m.id == me) {
             return;
         }
         let v = p.get("v").and_then(|x| x.as_u64()).unwrap_or(0);
         let name = clean_name(str_of(p, "name"));
-        let name = if name.is_empty() { g.name.clone() } else { name };
+        let name = if name.is_empty() {
+            g.name.clone()
+        } else {
+            name
+        };
         let by = self.member_name(g, f);
-        let why = |id: &str| p.get("why").and_then(|w| w.get(id)).and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let why = |id: &str| {
+            p.get("why")
+                .and_then(|w| w.get(id))
+                .and_then(|x| x.as_str())
+                .unwrap_or("")
+                .to_string()
+        };
         let now = now_ms();
         if !members.iter().any(|m| m.id == me) {
             // меня исключили (если вышел сам — группа уже помечена)
@@ -880,7 +1115,11 @@ impl Inner {
             });
             self.group_drop_pending(&g.id);
             self.sync_listeners();
-            let text = if f == me { "Вы вышли из группы".to_string() } else { format!("«{by}» исключает вас из группы") };
+            let text = if f == me {
+                "Вы вышли из группы".to_string()
+            } else {
+                format!("«{by}» исключает вас из группы")
+            };
             self.group_note(&g.id, f, &text);
             self.emit("group:changed", json!({"chat": g.id}));
             return;
@@ -896,8 +1135,18 @@ impl Inner {
         let old: HashSet<&str> = g.members.iter().map(|m| m.id.as_str()).collect();
         let new: HashSet<&str> = members.iter().map(|m| m.id.as_str()).collect();
         let mut notes = Vec::new();
-        for m in members.iter().filter(|m| !old.contains(m.id.as_str()) && m.id != me) {
-            let n = self.lock().contacts.items.iter().find(|c| c.peer == m.id).map(|c| c.name.clone()).unwrap_or_else(|| m.name.clone());
+        for m in members
+            .iter()
+            .filter(|m| !old.contains(m.id.as_str()) && m.id != me)
+        {
+            let n = self
+                .lock()
+                .contacts
+                .items
+                .iter()
+                .find(|c| c.peer == m.id)
+                .map(|c| c.name.clone())
+                .unwrap_or_else(|| m.name.clone());
             notes.push((f.to_string(), format!("«{by}» добавляет в группу «{n}»")));
         }
         for m in g.members.iter().filter(|m| !new.contains(m.id.as_str())) {
@@ -909,25 +1158,47 @@ impl Inner {
             }
         }
         if name != g.name {
-            notes.push((f.to_string(), format!("«{by}» переименовывает группу в «{name}»")));
+            notes.push((
+                f.to_string(),
+                format!("«{by}» переименовывает группу в «{name}»"),
+            ));
         }
         if admin != g.admin {
             let text = if admin == me {
                 "Теперь вы администратор группы".to_string()
             } else {
-                let n = members.iter().find(|m| m.id == admin).map(|m| m.name.clone()).unwrap_or_default();
-                let n = self.lock().contacts.items.iter().find(|c| c.peer == admin).map(|c| c.name.clone()).unwrap_or(n);
+                let n = members
+                    .iter()
+                    .find(|m| m.id == admin)
+                    .map(|m| m.name.clone())
+                    .unwrap_or_default();
+                let n = self
+                    .lock()
+                    .contacts
+                    .items
+                    .iter()
+                    .find(|c| c.peer == admin)
+                    .map(|c| c.name.clone())
+                    .unwrap_or(n);
                 format!("Администратор группы теперь «{n}»")
             };
             notes.push((admin.clone(), text));
         }
-        let gone: Vec<String> = g.members.iter().filter(|m| !new.contains(m.id.as_str())).map(|m| m.id.clone()).collect();
+        let gone: Vec<String> = g
+            .members
+            .iter()
+            .filter(|m| !new.contains(m.id.as_str()))
+            .map(|m| m.id.clone())
+            .collect();
         self.group_update(&g.id, |x| {
             if let Some(k) = key
                 && k != x.secret
             {
                 let prev = std::mem::replace(&mut x.secret, k);
-                x.old.push(OldKey { secret: prev, until: now + OLD_KEY_MS });
+                x.old.push(OldKey {
+                    secret: prev,
+                    until: now + OLD_KEY_MS,
+                });
             }
             for m in x.members.iter().filter(|m| !new.contains(m.id.as_str())) {
                 let m = m.clone();
@@ -940,7 +1211,10 @@ impl Inner {
                 .map(|m| {
                     let mut m = m.clone();
                     if m.hint.is_none() {
-                        m.hint = prev.iter().find(|o| o.id == m.id).and_then(|o| o.hint.clone());
+                        m.hint = prev
+                            .iter()
+                            .find(|o| o.id == m.id)
+                            .and_then(|o| o.hint.clone());
                     }
                     m
                 })
@@ -972,7 +1246,12 @@ impl Inner {
     fn group_forget_member(self: &Arc<Self>, gid: &str, who: &str) {
         let fids: Vec<String> = {
             let st = self.lock();
-            st.groups.pending.iter().filter(|(_, e)| e.gid == gid && e.waiting.contains(who)).map(|(k, _)| k.clone()).collect()
+            st.groups
+                .pending
+                .iter()
+                .filter(|(_, e)| e.gid == gid && e.waiting.contains(who))
+                .map(|(k, _)| k.clone())
+                .collect()
         };
         for fid in fids {
             self.g_acked(gid, &fid, who);
@@ -1000,8 +1279,13 @@ impl Inner {
             if !force && now.saturating_sub(last) < FLUSH_EVERY_MS {
                 return;
             }
-            let v: Vec<String> =
-                st.groups.pending.iter().filter(|(_, e)| e.gid == g.id && e.waiting.contains(who)).map(|(k, _)| k.clone()).collect();
+            let v: Vec<String> = st
+                .groups
+                .pending
+                .iter()
+                .filter(|(_, e)| e.gid == g.id && e.waiting.contains(who))
+                .map(|(k, _)| k.clone())
+                .collect();
             if v.is_empty() {
                 return;
             }
@@ -1019,8 +1303,14 @@ impl Inner {
 
     /// Появился линк к участнику: повторить ему очередь всех общих групп.
     pub(crate) fn groups_link_up(self: &Arc<Self>, peer: &str) {
-        let groups: Vec<Group> =
-            self.lock().contacts.groups.iter().filter(|g| !g.left && g.members.iter().any(|m| m.id == peer)).cloned().collect();
+        let groups: Vec<Group> = self
+            .lock()
+            .contacts
+            .groups
+            .iter()
+            .filter(|g| !g.left && g.members.iter().any(|m| m.id == peer))
+            .cloned()
+            .collect();
         for g in &groups {
             self.group_flush_member(g, peer, true);
         }
@@ -1037,11 +1327,22 @@ impl Inner {
             !std::mem::replace(&mut st.groups.loaded, true)
         };
         if first {
-            let rows: Vec<OutEntry> = self.db.out_all().into_iter().filter(|e| is_group(&e.peer)).collect();
+            let rows: Vec<OutEntry> = self
+                .db
+                .out_all()
+                .into_iter()
+                .filter(|e| is_group(&e.peer))
+                .collect();
             let mut st = self.lock();
             for e in rows {
-                let waiting: HashSet<String> =
-                    e.frame["w"].as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                let waiting: HashSet<String> = e.frame["w"]
+                    .as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 st.groups.pending.insert(
                     e.fid,
                     GPending {
@@ -1085,7 +1386,12 @@ impl Inner {
                 if now >= e.next_live && !e.waiting.is_empty() {
                     e.next_live = now + (LIVE_FIRST_MS << e.live_n.min(8)).min(LIVE_MAX_MS);
                     e.live_n += 1;
-                    v.push((fid.clone(), e.gid.clone(), e.kind.clone(), e.waiting.clone()));
+                    v.push((
+                        fid.clone(),
+                        e.gid.clone(),
+                        e.kind.clone(),
+                        e.waiting.clone(),
+                    ));
                 }
             }
             v
@@ -1101,7 +1407,13 @@ impl Inner {
             if let Some(g) = self.group(&gid) {
                 let to: HashSet<String> = [f].into();
                 for part in ids.chunks(ACKS_PER_FRAME) {
-                    let _ = self.group_post(&g, "ack", json!({"t": "g_ack", "ids": part}), false, Some(&to));
+                    let _ = self.group_post(
+                        &g,
+                        "ack",
+                        json!({"t": "g_ack", "ids": part}),
+                        false,
+                        Some(&to),
+                    );
                 }
             }
         }
@@ -1128,7 +1440,11 @@ impl Inner {
             st.groups
                 .calls
                 .iter()
-                .filter(|(_, c)| c.out && now.saturating_sub(c.started) < RING_TIMEOUT_MS && now.saturating_sub(c.last_ring) >= RING_EVERY_MS)
+                .filter(|(_, c)| {
+                    c.out
+                        && now.saturating_sub(c.started) < RING_TIMEOUT_MS
+                        && now.saturating_sub(c.last_ring) >= RING_EVERY_MS
+                })
                 .map(|(t, _)| t.clone())
                 .collect()
         };
@@ -1138,15 +1454,37 @@ impl Inner {
         // уборка
         let expired_keys = {
             let mut st = self.lock();
-            st.groups.deferred.retain(|(_, _, t)| now.saturating_sub(*t) < DEFER_TTL_MS);
-            st.groups.flushed.retain(|_, t| now.saturating_sub(*t) < 10 * 60_000);
-            let joined: HashSet<String> = st.rooms.iter().filter(|(_, r)| r.joined).map(|(t, _)| t.clone()).collect();
+            st.groups
+                .deferred
+                .retain(|(_, _, t)| now.saturating_sub(*t) < DEFER_TTL_MS);
+            st.groups
+                .flushed
+                .retain(|_, t| now.saturating_sub(*t) < 10 * 60_000);
+            let joined: HashSet<String> = st
+                .rooms
+                .iter()
+                .filter(|(_, r)| r.joined)
+                .map(|(t, _)| t.clone())
+                .collect();
             // чужие вызовы, в которые не вошли, — через 10 мин; свои и свои входы — по выходу из комнаты
-            st.groups.calls.retain(|t, c| joined.contains(t) || now.saturating_sub(c.started) < if c.accepted { 12 * 3_600_000 } else { 600_000 });
-            st.contacts.groups.iter().any(|g| g.old.iter().any(|o| o.until <= now))
+            st.groups.calls.retain(|t, c| {
+                joined.contains(t)
+                    || now.saturating_sub(c.started)
+                        < if c.accepted { 12 * 3_600_000 } else { 600_000 }
+            });
+            st.contacts
+                .groups
+                .iter()
+                .any(|g| g.old.iter().any(|o| o.until <= now))
         };
         if expired_keys {
-            let ids: Vec<String> = self.lock().contacts.groups.iter().map(|g| g.id.clone()).collect();
+            let ids: Vec<String> = self
+                .lock()
+                .contacts
+                .groups
+                .iter()
+                .map(|g| g.id.clone())
+                .collect();
             for id in ids {
                 self.group_update(&id, |g| g.old.retain(|o| o.until > now));
             }
@@ -1154,7 +1492,15 @@ impl Inner {
     }
 
     async fn group_mail_put(self: &Arc<Self>, fid: &str) {
-        let Some((gid, kind)) = self.lock().groups.pending.get(fid).map(|e| (e.gid.clone(), e.kind.clone())) else { return };
+        let Some((gid, kind)) = self
+            .lock()
+            .groups
+            .pending
+            .get(fid)
+            .map(|e| (e.gid.clone(), e.kind.clone()))
+        else {
+            return;
+        };
         let entry = self.db.out_get(fid, &gid);
         let g = self.group(&gid);
         let (Some(entry), Some(g)) = (entry, g) else {
@@ -1169,7 +1515,10 @@ impl Inner {
         let mb = Mailbox::new(self.signal_config());
         let mut all = true;
         for sec in secrets_for(&g, &kind, now_ms()) {
-            let (Some(addr), Ok(room)) = (MailAddr::derive(&sec), zv_proto::Room::derive(&sec)) else { continue };
+            let (Some(addr), Ok(room)) = (MailAddr::derive(&sec), zv_proto::Room::derive(&sec))
+            else {
+                continue;
+            };
             let Some(items) = gm_items(&room, fid, &gm) else {
                 all = false;
                 continue;
@@ -1220,7 +1569,12 @@ impl Inner {
                 .filter(|g| !g.left)
                 .flat_map(|g| {
                     std::iter::once(g.secret.clone())
-                        .chain(g.old.iter().filter(|o| o.until > now).map(|o| o.secret.clone()))
+                        .chain(
+                            g.old
+                                .iter()
+                                .filter(|o| o.until > now)
+                                .map(|o| o.secret.clone()),
+                        )
                         .map(move |s| (g.id.clone(), s))
                 })
                 .collect()
@@ -1232,9 +1586,17 @@ impl Inner {
         let mut acks: HashMap<(String, String), Vec<String>> = HashMap::new();
         let (mut items, mut frames, mut ok, mut errors) = (0usize, 0usize, false, Vec::new());
         for (gid, secret) in jobs {
-            let (Some(addr), Ok(room)) = (MailAddr::derive(&secret), zv_proto::Room::derive(&secret)) else { continue };
+            let (Some(addr), Ok(room)) =
+                (MailAddr::derive(&secret), zv_proto::Room::derive(&secret))
+            else {
+                continue;
+            };
             let key = format!("gmail:{}", &addr.chat_id[..16]);
-            let mut cur: Cursor = self.db.kv(&key).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+            let mut cur: Cursor = self
+                .db
+                .kv(&key)
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
             let rep = mb.fetch(&addr, &mut cur, dev).await;
             ok |= rep.worker_ok || rep.nostr_ok > 0 || rep.ntfy_ok;
             items += rep.items.len();
@@ -1246,7 +1608,8 @@ impl Inner {
                     }
                 }
             }
-            self.db.kv_set(&key, &serde_json::to_string(&cur).unwrap_or_default());
+            self.db
+                .kv_set(&key, &serde_json::to_string(&cur).unwrap_or_default());
             let seqs: Vec<u64> = rep.items.iter().filter_map(|i| i.seq).collect();
             if !seqs.is_empty() {
                 mb.ack(&addr, &seqs, dev).await;
@@ -1255,9 +1618,19 @@ impl Inner {
         }
         for ((gid, f), ids) in acks {
             if let Some(g) = self.group(&gid) {
-                let to: HashSet<String> = [f].into();
+                let to: HashSet<String> = [f.clone()].into();
                 for part in ids.chunks(ACKS_PER_FRAME) {
-                    let _ = self.group_post(&g, "ack", json!({"t": "g_ack", "ids": part}), false, Some(&to));
+                    let _ = self.group_post(
+                        &g,
+                        "ack",
+                        json!({"t": "g_ack", "ids": part}),
+                        false,
+                        Some(&to),
+                    );
+                }
+                // без прямой связи подтверждение могло не дойти — поднимем линк: автор повторит по нему
+                if self.node().is_some_and(|n| n.link_for(&f).is_none()) {
+                    self.ensure_link(&f);
                 }
             }
         }
@@ -1267,19 +1640,30 @@ impl Inner {
     fn open_group_item(&self, room: &zv_proto::Room, data: &[u8]) -> Option<Value> {
         let v: Value = serde_json::from_slice(data).ok()?;
         let sealed = if let Some(n) = v.get("n").and_then(|x| x.as_u64()) {
-            let (n, i, m) = (n as usize, v.get("i")?.as_u64()? as usize, str_of(&v, "m").to_string());
+            let (n, i, m) = (
+                n as usize,
+                v.get("i")?.as_u64()? as usize,
+                str_of(&v, "m").to_string(),
+            );
             if n == 0 || n > MAX_PARTS || i >= n || !valid_id(&m) {
                 return None;
             }
             let key = format!("g{}|{m}", room.topic);
             let mut st = self.lock();
-            let e = st.chats.parts.entry(key.clone()).or_insert_with(|| (n, HashMap::new(), now_ms()));
+            let e = st
+                .chats
+                .parts
+                .entry(key.clone())
+                .or_insert_with(|| (n, HashMap::new(), now_ms()));
             e.1.insert(i, str_of(&v, "p").to_string());
             if e.1.len() < e.0 {
                 return None;
             }
             let (n, parts, _) = st.chats.parts.remove(&key)?;
-            (0..n).map(|i| parts.get(&i).cloned()).collect::<Option<Vec<_>>>()?.concat()
+            (0..n)
+                .map(|i| parts.get(&i).cloned())
+                .collect::<Option<Vec<_>>>()?
+                .concat()
         } else {
             str_of(&v, "s").to_string()
         };
@@ -1289,14 +1673,20 @@ impl Inner {
     // ---------- приглашение ----------
 
     /// Приглашение в группу от контакта (кадр `chat_group`). Возвращает id для подтверждения.
-    pub(crate) fn on_group_invite(self: &Arc<Self>, c: &crate::model::Contact, frame: &Value) -> Option<String> {
+    pub(crate) fn on_group_invite(
+        self: &Arc<Self>,
+        c: &crate::model::Contact,
+        frame: &Value,
+    ) -> Option<String> {
         let fid = str_of(frame, "id").to_string();
         let ack = valid_id(&fid).then_some(fid);
         let me = self.my_id()?;
         let Some(d) = frame.get("g") else { return ack };
         let gid = str_of(d, "id").to_string();
         let secret = str_of(d, "secret").to_string();
-        let Some(members) = parse_members(d.get("members")) else { return ack };
+        let Some(members) = parse_members(d.get("members")) else {
+            return ack;
+        };
         // приглашает только администратор, и я в составе
         if !is_group(&gid)
             || str_of(d, "admin") != c.peer
@@ -1311,7 +1701,11 @@ impl Inner {
         let v = d.get("v").and_then(|x| x.as_u64()).unwrap_or(1);
         let at = d.get("at").and_then(|x| x.as_u64()).unwrap_or(now).min(now);
         let name = clean_name(str_of(d, "name"));
-        let name = if name.is_empty() { "Группа".to_string() } else { name };
+        let name = if name.is_empty() {
+            "Группа".to_string()
+        } else {
+            name
+        };
         let existing = self.group(&gid);
         if existing.as_ref().is_some_and(|x| !x.left && x.v >= v) {
             return ack; // повтор
@@ -1325,10 +1719,21 @@ impl Inner {
             admin: c.peer.clone(),
             members,
             v,
-            created: d.get("created").and_then(|x| x.as_u64()).unwrap_or(now).min(now),
-            joined: if fresh { at } else { existing.as_ref().map(|x| x.joined).unwrap_or(at) },
+            created: d
+                .get("created")
+                .and_then(|x| x.as_u64())
+                .unwrap_or(now)
+                .min(now),
+            joined: if fresh {
+                at
+            } else {
+                existing.as_ref().map(|x| x.joined).unwrap_or(at)
+            },
             left: false,
-            former: existing.as_ref().map(|x| x.former.clone()).unwrap_or_default(),
+            former: existing
+                .as_ref()
+                .map(|x| x.former.clone())
+                .unwrap_or_default(),
         };
         {
             let mut st = self.lock();
@@ -1340,8 +1745,15 @@ impl Inner {
         }
         self.sync_listeners();
         if fresh {
-            self.group_note(&gid, &c.peer, &format!("«{}» добавляет вас в группу «{name}»", c.name));
-            self.emit("group:joined", json!({"chat": gid, "name": name, "by": c.name}));
+            self.group_note(
+                &gid,
+                &c.peer,
+                &format!("«{}» добавляет вас в группу «{name}»", c.name),
+            );
+            self.emit(
+                "group:joined",
+                json!({"chat": gid, "name": name, "by": c.name}),
+            );
         }
         self.emit("group:changed", json!({"chat": gid}));
         // заглянуть в ящик группы — там может ждать переписка с момента приглашения
@@ -1355,7 +1767,36 @@ impl Inner {
     // ---------- команды ----------
 
     fn group_of(&self, args: &Value) -> Result<Group, String> {
-        self.group(s(args, "chat")?).ok_or_else(|| "нет такой группы".to_string())
+        self.group(s(args, "chat")?)
+            .ok_or_else(|| "нет такой группы".to_string())
+    }
+
+    /// Группа, в которую я могу писать (участник).
+    pub(crate) fn group_writable(&self, gid: &str) -> Result<Group, String> {
+        let g = self.group(gid).ok_or("нет такой группы")?;
+        if g.left {
+            return Err("Вы больше не участник этой группы".into());
+        }
+        if self.node().is_none() {
+            return Err(self.p2p_unavailable());
+        }
+        Ok(g)
+    }
+
+    /// Может ли устройство `peer` получить файл чата `chat` (контакт этого чата или участник группы).
+    pub(crate) fn file_peer_ok(&self, peer: &str, chat: &str) -> bool {
+        let st = self.lock();
+        if is_group(chat) {
+            st.contacts
+                .groups
+                .iter()
+                .any(|g| g.id == chat && !g.left && g.members.iter().any(|m| m.id == peer))
+        } else {
+            st.contacts
+                .items
+                .iter()
+                .any(|c| c.id == chat && c.peer == peer)
+        }
     }
 
     fn group_admin_of(&self, args: &Value) -> Result<Group, String> {
@@ -1370,12 +1811,24 @@ impl Inner {
     }
 
     fn contacts_by_ids(&self, v: Option<&Value>) -> Result<Vec<crate::model::Contact>, String> {
-        let ids: Vec<String> =
-            v.and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default();
+        let ids: Vec<String> = v
+            .and_then(|x| x.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
         let st = self.lock();
         let mut out: Vec<crate::model::Contact> = Vec::new();
         for id in ids {
-            let c = st.contacts.items.iter().find(|c| c.id == id).cloned().ok_or("нет такого контакта")?;
+            let c = st
+                .contacts
+                .items
+                .iter()
+                .find(|c| c.id == id)
+                .cloned()
+                .ok_or("нет такого контакта")?;
             if !out.iter().any(|x| x.peer == c.peer) {
                 out.push(c);
             }
@@ -1384,7 +1837,15 @@ impl Inner {
     }
 
     fn member_of(c: &crate::model::Contact) -> GroupMember {
-        GroupMember { id: c.peer.clone(), name: if c.their_name.is_empty() { c.name.clone() } else { c.their_name.clone() }, hint: c.hint.clone() }
+        GroupMember {
+            id: c.peer.clone(),
+            name: if c.their_name.is_empty() {
+                c.name.clone()
+            } else {
+                c.their_name.clone()
+            },
+            hint: c.hint.clone(),
+        }
     }
 
     pub(crate) fn group_create(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
@@ -1398,12 +1859,23 @@ impl Inner {
             return Err("Выберите хотя бы одного участника".into());
         }
         if contacts.len() + 1 > GROUP_MAX {
-            return Err(format!("В группе может быть до {GROUP_MAX} участников, считая вас"));
+            return Err(format!(
+                "В группе может быть до {GROUP_MAX} участников, считая вас"
+            ));
         }
         let me = node.id().to_string();
         let now = now_ms();
-        let mut members = vec![GroupMember { id: me.clone(), name: self.my_name(), hint: None }];
-        members.extend(contacts.iter().filter(|c| c.peer != me).map(Self::member_of));
+        let mut members = vec![GroupMember {
+            id: me.clone(),
+            name: self.my_name(),
+            hint: None,
+        }];
+        members.extend(
+            contacts
+                .iter()
+                .filter(|c| c.peer != me)
+                .map(Self::member_of),
+        );
         let g = Group {
             id: format!("g{}", rand_hex(8)),
             name: name.clone(),
@@ -1457,7 +1929,12 @@ impl Inner {
                 })
             })
             .collect();
-        members.sort_by_key(|m| (!m["me"].as_bool().unwrap_or(false), !m["admin"].as_bool().unwrap_or(false)));
+        members.sort_by_key(|m| {
+            (
+                !m["me"].as_bool().unwrap_or(false),
+                !m["admin"].as_bool().unwrap_or(false),
+            )
+        });
         Ok(json!({
             "chat": g.id,
             "name": g.name,
@@ -1471,7 +1948,11 @@ impl Inner {
     }
 
     /// Разослать новый состав (хранимо: с подтверждениями и почтовым ящиком).
-    fn group_publish(self: &Arc<Self>, g: &Group, why: Option<(&str, &str)>) -> Result<Value, String> {
+    fn group_publish(
+        self: &Arc<Self>,
+        g: &Group,
+        why: Option<(&str, &str)>,
+    ) -> Result<Value, String> {
         let p = self.group_sync_payload(g, why);
         let (_, gm) = self.group_post(g, "sync", p, true, None)?;
         Ok(gm)
@@ -1502,13 +1983,18 @@ impl Inner {
 
     pub(crate) fn group_add(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let g = self.group_admin_of(args)?;
-        let add: Vec<crate::model::Contact> =
-            self.contacts_by_ids(args.get("members"))?.into_iter().filter(|c| !g.members.iter().any(|m| m.id == c.peer)).collect();
+        let add: Vec<crate::model::Contact> = self
+            .contacts_by_ids(args.get("members"))?
+            .into_iter()
+            .filter(|c| !g.members.iter().any(|m| m.id == c.peer))
+            .collect();
         if add.is_empty() {
             return Err("Выберите, кого добавить".into());
         }
         if g.members.len() + add.len() > GROUP_MAX {
-            return Err(format!("В группе может быть до {GROUP_MAX} участников, считая вас"));
+            return Err(format!(
+                "В группе может быть до {GROUP_MAX} участников, считая вас"
+            ));
         }
         let g = self
             .group_update(&g.id, |x| {
@@ -1537,12 +2023,23 @@ impl Inner {
             return Err("Чтобы выйти из группы, выберите «Покинуть группу»".into());
         }
         let name = self.member_name(&g, &who);
-        self.group_remove_member(&g.id, &who, &format!("Вы исключили из группы «{name}»"), "removed")?;
+        self.group_remove_member(
+            &g.id,
+            &who,
+            &format!("Вы исключили из группы «{name}»"),
+            "removed",
+        )?;
         Ok(Value::Null)
     }
 
     /// Администратор убирает участника: новый ключ (только оставшимся) и новый состав.
-    fn group_remove_member(self: &Arc<Self>, gid: &str, who: &str, note: &str, why: &str) -> Result<(), String> {
+    fn group_remove_member(
+        self: &Arc<Self>,
+        gid: &str,
+        who: &str,
+        note: &str,
+        why: &str,
+    ) -> Result<(), String> {
         let now = now_ms();
         let g = self
             .group_update(gid, |x| {
@@ -1551,7 +2048,10 @@ impl Inner {
                 x.former.retain(|o| o.id != m.id);
                 x.former.push(m);
                 let prev = std::mem::replace(&mut x.secret, zv_proto::link::new_secret());
-                x.old.push(OldKey { secret: prev, until: now + OLD_KEY_MS });
+                x.old.push(OldKey {
+                    secret: prev,
+                    until: now + OLD_KEY_MS,
+                });
                 x.v += 1;
                 Some(x.clone())
             })
@@ -1559,7 +2059,10 @@ impl Inner {
             .ok_or("нет такого участника")?;
         // недоставленное приглашение ему — уже не нужно
         self.db.out_del_kind(who, "group");
-        self.lock().chats.pending.retain(|(_, p), e| !(p == who && e.kind == "group"));
+        self.lock()
+            .chats
+            .pending
+            .retain(|(_, p), e| !(p == who && e.kind == "group"));
         self.group_forget_member(gid, who);
         self.sync_listeners();
         let me = self.my_id().unwrap_or_default();
@@ -1591,7 +2094,10 @@ impl Inner {
                     x.members.retain(|m| m.id != me);
                     x.admin = next.clone();
                     let prev = std::mem::replace(&mut x.secret, zv_proto::link::new_secret());
-                    x.old.push(OldKey { secret: prev, until: now + OLD_KEY_MS });
+                    x.old.push(OldKey {
+                        secret: prev,
+                        until: now + OLD_KEY_MS,
+                    });
                     x.v += 1;
                     x.clone()
                 });
@@ -1652,22 +2158,37 @@ impl Inner {
         }
         let video = args.get("video").and_then(|v| v.as_bool()).unwrap_or(false);
         let secret = zv_proto::link::new_secret();
-        let topic = zv_proto::Room::derive(&secret).map_err(|e| e.to_string())?.topic;
+        let topic = zv_proto::Room::derive(&secret)
+            .map_err(|e| e.to_string())?
+            .topic;
         let cid = rand_hex(8);
         let now = now_ms();
         self.lock().groups.calls.insert(
             topic.clone(),
-            GroupCall { cid: cid.clone(), gid: g.id.clone(), out: true, secret: secret.clone(), video, started: now, last_ring: 0, accepted: true },
+            GroupCall {
+                cid: cid.clone(),
+                gid: g.id.clone(),
+                out: true,
+                secret: secret.clone(),
+                video,
+                started: now,
+                last_ring: 0,
+                accepted: true,
+            },
         );
         self.group_call_note(&g, &me, &cid, &secret, video, now);
         self.group_ring(&topic);
-        Ok(json!({"secret": secret, "roomId": topic, "callId": cid, "name": g.name, "video": video, "groupId": g.id}))
+        Ok(
+            json!({"secret": secret, "roomId": topic, "callId": cid, "name": g.name, "video": video, "groupId": g.id}),
+        )
     }
 
     fn group_ring(self: &Arc<Self>, topic: &str) {
         let call = {
             let mut st = self.lock();
-            let Some(c) = st.groups.calls.get_mut(topic) else { return };
+            let Some(c) = st.groups.calls.get_mut(topic) else {
+                return;
+            };
             c.last_ring = now_ms();
             c.clone()
         };
@@ -1683,14 +2204,20 @@ impl Inner {
         if g.left {
             return Err("Вы больше не участник этой группы".into());
         }
-        let m = self.db.msg(s(args, "id")?).filter(|m| m.chat == g.id && m.kind == "call").ok_or("звонок не найден")?;
+        let m = self
+            .db
+            .msg(s(args, "id")?)
+            .filter(|m| m.chat == g.id && m.kind == "call")
+            .ok_or("звонок не найден")?;
         let f = m.file.unwrap_or(Value::Null);
         let k = str_of(&f, "k").to_string();
         let until = f.get("until").and_then(|v| v.as_u64()).unwrap_or(0);
         if until < now_ms() || f.get("ended").and_then(|v| v.as_bool()) == Some(true) {
             return Err("Звонок уже закончился".into());
         }
-        let topic = zv_proto::Room::derive(&k).map_err(|_| "звонок не найден")?.topic;
+        let topic = zv_proto::Room::derive(&k)
+            .map_err(|_| "звонок не найден")?
+            .topic;
         let cid = str_of(&f, "call").to_string();
         let video = f.get("video").and_then(|v| v.as_bool()).unwrap_or(false);
         {
@@ -1699,16 +2226,20 @@ impl Inner {
                 return Err("Сначала завершите текущий звонок".into());
             }
             let now = now_ms();
-            let e = st.groups.calls.entry(topic.clone()).or_insert_with(|| GroupCall {
-                cid: cid.clone(),
-                gid: g.id.clone(),
-                out: false,
-                secret: k.clone(),
-                video,
-                started: now,
-                last_ring: 0,
-                accepted: true,
-            });
+            let e = st
+                .groups
+                .calls
+                .entry(topic.clone())
+                .or_insert_with(|| GroupCall {
+                    cid: cid.clone(),
+                    gid: g.id.clone(),
+                    out: false,
+                    secret: k.clone(),
+                    video,
+                    started: now,
+                    last_ring: 0,
+                    accepted: true,
+                });
             e.accepted = true;
         }
         // если ещё звонит — уже не нужно
@@ -1719,24 +2250,22 @@ impl Inner {
         Ok(json!({"secret": k, "roomId": topic, "name": g.name, "video": video, "groupId": g.id}))
     }
 
-    /// Вошли в комнату группового звонка (ответ на вызов).
-    pub(crate) fn group_call_accepted(&self, topic: &str) -> Option<(String, String)> {
-        let mut st = self.lock();
-        let c = st.groups.calls.get_mut(topic)?;
-        c.accepted = true;
-        let gid = c.gid.clone();
-        let name = st.contacts.groups.iter().find(|g| g.id == gid).map(|g| g.name.clone()).unwrap_or_default();
-        Some((gid, name))
-    }
-
     /// Вышли из комнаты группового звонка: свой вызов, на который никто не пришёл, — отменить.
     pub(crate) fn group_call_left(self: &Arc<Self>, topic: &str, peer_seen: bool) {
-        let Some(call) = self.lock().groups.calls.remove(topic) else { return };
+        let Some(call) = self.lock().groups.calls.remove(topic) else {
+            return;
+        };
         if call.out
             && !peer_seen
             && let Some(g) = self.group(&call.gid).filter(|g| !g.left)
         {
-            let _ = self.group_post(&g, "ring_end", json!({"t": "g_ring_end", "cid": call.cid}), false, None);
+            let _ = self.group_post(
+                &g,
+                "ring_end",
+                json!({"t": "g_ring_end", "cid": call.cid}),
+                false,
+                None,
+            );
             let id = format!("call-{}", call.cid);
             if let Some(m) = self.db.msg(&id)
                 && let Some(mut f) = m.file
@@ -1764,7 +2293,12 @@ impl Inner {
             st.groups.my_typing.insert(g.id.clone(), now);
         }
         let Some(node) = self.node() else { return };
-        let linked: HashSet<String> = g.members.iter().filter(|m| m.id != node.id() && node.link_for(&m.id).is_some()).map(|m| m.id.clone()).collect();
+        let linked: HashSet<String> = g
+            .members
+            .iter()
+            .filter(|m| m.id != node.id() && node.link_for(&m.id).is_some())
+            .map(|m| m.id.clone())
+            .collect();
         if !linked.is_empty() {
             let _ = self.group_post(g, "typing", json!({"t": "g_typing"}), false, Some(&linked));
         }
@@ -1773,7 +2307,8 @@ impl Inner {
     /// Отправить своё сообщение в группу.
     pub(crate) fn group_send_msg(self: &Arc<Self>, g: &Group, m: &Msg) -> Result<(), String> {
         self.lock().groups.my_typing.remove(&g.id);
-        self.group_post(g, "chat", frame_of(m), true, None).map(|_| ())
+        self.group_post(g, "chat", frame_of(m), true, None)
+            .map(|_| ())
     }
 
     /// Неподтверждённое в группах (для `chat_status`).
@@ -1789,6 +2324,59 @@ impl Inner {
     /// Участники групп, кому есть что доставить (поднимать к ним линки).
     pub(crate) fn groups_waiting_peers(&self) -> HashSet<String> {
         let st = self.lock();
-        st.groups.pending.values().flat_map(|e| e.waiting.iter().cloned()).collect()
+        st.groups
+            .pending
+            .values()
+            .flat_map(|e| e.waiting.iter().cloned())
+            .collect()
+    }
+
+    /// Строки групп для `chats_list`.
+    pub(crate) fn group_rows(&self, unread: &HashMap<String, u64>) -> Vec<Value> {
+        let groups = self.lock().contacts.groups.clone();
+        let me = self.my_id().unwrap_or_default();
+        groups
+            .iter()
+            .map(|g| {
+                let typers = self.group_typers(&g.id);
+                json!({
+                    "chat": g.id,
+                    "group": true,
+                    "name": g.name,
+                    "members": g.members.iter()
+                        .map(|m| json!({"id": m.id, "name": self.member_name(g, &m.id), "me": m.id == me, "admin": m.id == g.admin}))
+                        .collect::<Vec<_>>(),
+                    "admin": g.admin == me,
+                    "left": g.left,
+                    "last": self.db.last_msg(&g.id).map(|m| self.msg_json(&m)),
+                    "unread": unread.get(&g.id).copied().unwrap_or(0),
+                    "typing": !typers.is_empty(),
+                    "typingWho": typers,
+                    "created": g.created,
+                })
+            })
+            .collect()
+    }
+
+    /// Сообщение группы для интерфейса: имя автора; у звонка — без ключа, с флагом «можно войти».
+    pub(crate) fn group_msg_extra(&self, m: &Msg, v: &mut Value) {
+        if !is_group(&m.chat) {
+            return;
+        }
+        let Some(g) = self.group(&m.chat) else { return };
+        if !m.out && !m.sender.is_empty() {
+            v["senderName"] = json!(self.member_name(&g, &m.sender));
+        }
+        if m.kind == "call"
+            && let Some(f) = v.get_mut("file").and_then(|f| f.as_object_mut())
+        {
+            let until = f.get("until").and_then(|x| x.as_u64()).unwrap_or(0);
+            let ended = f.get("ended").and_then(|x| x.as_bool()) == Some(true);
+            f.remove("k");
+            f.insert(
+                "joinable".into(),
+                json!(!g.left && !ended && until > now_ms()),
+            );
+        }
     }
 }

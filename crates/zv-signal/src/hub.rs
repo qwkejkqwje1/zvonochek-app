@@ -44,7 +44,10 @@ pub struct HubStatus {
 #[derive(Debug)]
 pub enum HubEvent {
     /// Расшифрованное сообщение собеседника (поле `via` уже проставлено).
-    Message { msg: Value, via: &'static str },
+    Message {
+        msg: Value,
+        via: &'static str,
+    },
     Status(HubStatus),
     /// Поднялся канал — веб в этот момент повторяет `hello`.
     TransportUp,
@@ -53,13 +56,23 @@ pub enum HubEvent {
 }
 
 enum HubCmd {
-    Send { msg: Value, mid: String, opts: SendOpts },
-    SetIdentity { self_id: String, inst: String },
+    Send {
+        msg: Value,
+        mid: String,
+        opts: SendOpts,
+    },
+    SetIdentity {
+        self_id: String,
+        inst: String,
+    },
     SetExtras(Map<String, Value>),
     SetProfile(Profile),
     AddChannel(Arc<dyn Channel>),
     RemoveChannel(String),
-    Inject { data: String, via: &'static str },
+    Inject {
+        data: String,
+        via: &'static str,
+    },
     Status(oneshot::Sender<HubStatus>),
     Channels(oneshot::Sender<Vec<ChanInfo>>),
     Stats(oneshot::Sender<Value>),
@@ -74,7 +87,12 @@ pub struct RoomHub {
 }
 
 impl RoomHub {
-    pub fn spawn(room: Room, cfg: Arc<SignalConfig>, profile: Profile, events: mpsc::UnboundedSender<HubEvent>) -> RoomHub {
+    pub fn spawn(
+        room: Room,
+        cfg: Arc<SignalConfig>,
+        profile: Profile,
+        events: mpsc::UnboundedSender<HubEvent>,
+    ) -> RoomHub {
         let (tx, rx) = mpsc::unbounded_channel();
         let topic = room.topic.clone();
         let (chan_tx, chan_rx) = mpsc::unbounded_channel();
@@ -112,13 +130,20 @@ impl RoomHub {
     /// Отправить сообщение веб-протокола (объект с `type`). Возвращает `mid`.
     pub fn send(&self, msg: Value, opts: SendOpts) -> String {
         let mid = zv_proto::ids::rid();
-        let _ = self.tx.send(HubCmd::Send { msg, mid: mid.clone(), opts });
+        let _ = self.tx.send(HubCmd::Send {
+            msg,
+            mid: mid.clone(),
+            opts,
+        });
         mid
     }
 
     /// `selfId`/`inst` клиента звонка (до этого — случайные).
     pub fn set_identity(&self, self_id: &str, inst: &str) {
-        let _ = self.tx.send(HubCmd::SetIdentity { self_id: self_id.into(), inst: inst.into() });
+        let _ = self.tx.send(HubCmd::SetIdentity {
+            self_id: self_id.into(),
+            inst: inst.into(),
+        });
     }
 
     /// Поля приложения, которые дописываются в `hello`/`hi`/`g_hi` (`app`, `av`, `zv`).
@@ -241,7 +266,12 @@ impl Hub {
         let topic = self.room.topic.clone();
         while self.mqtt.len() < self.want_mqtt() {
             let spec = self.cfg.brokers[self.mqtt.len()].clone();
-            self.mqtt.push(crate::mqtt::spawn(&spec, &topic, &self.cfg, self.chan_tx.clone()));
+            self.mqtt.push(crate::mqtt::spawn(
+                &spec,
+                &topic,
+                &self.cfg,
+                self.chan_tx.clone(),
+            ));
         }
         while self.mqtt.len() > self.want_mqtt() {
             if let Some(c) = self.mqtt.pop() {
@@ -250,7 +280,13 @@ impl Hub {
         }
         while self.nostr.len() < self.want_nostr() {
             let url = self.cfg.nostr_relays[self.nostr.len()].clone();
-            self.nostr.push(crate::nostr::spawn(&url, &topic, self.npk.clone(), &self.cfg, self.chan_tx.clone()));
+            self.nostr.push(crate::nostr::spawn(
+                &url,
+                &topic,
+                self.npk.clone(),
+                &self.cfg,
+                self.chan_tx.clone(),
+            ));
         }
         while self.nostr.len() > self.want_nostr() {
             if let Some(c) = self.nostr.pop() {
@@ -272,15 +308,28 @@ impl Hub {
         if self.ntfy.is_none()
             && let Some(base) = self.cfg.ntfy_base.clone().filter(|s| !s.is_empty())
         {
-            self.ntfy = Some(crate::ntfy::spawn(&base, &topic, &self.cfg, self.chan_tx.clone()));
+            self.ntfy = Some(crate::ntfy::spawn(
+                &base,
+                &topic,
+                &self.cfg,
+                self.chan_tx.clone(),
+            ));
         }
     }
 
-    async fn run(mut self, mut rx: mpsc::UnboundedReceiver<HubCmd>, mut chan_rx: mpsc::UnboundedReceiver<ChanEvent>) {
+    async fn run(
+        mut self,
+        mut rx: mpsc::UnboundedReceiver<HubCmd>,
+        mut chan_rx: mpsc::UnboundedReceiver<ChanEvent>,
+    ) {
         self.ensure_channels();
         self.emit_status();
         loop {
-            let up_at = if self.up_pending { self.up_last.map(|t| t + UP_COALESCE) } else { None };
+            let up_at = if self.up_pending {
+                self.up_last.map(|t| t + UP_COALESCE)
+            } else {
+                None
+            };
             tokio::select! {
                 cmd = rx.recv() => {
                     let Some(cmd) = cmd else { self.shutdown(); return };
@@ -380,7 +429,11 @@ impl Hub {
 
     fn send(&mut self, msg: Value, mid: String, opts: SendOpts) {
         let Value::Object(mut obj) = msg else { return };
-        let t = obj.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let t = obj
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if matches!(t.as_str(), "hello" | "hi" | "g_hi") {
             for (k, v) in &self.extras {
                 obj.entry(k.clone()).or_insert_with(|| v.clone());
@@ -398,7 +451,11 @@ impl Hub {
             self.send_voice(data);
             return;
         }
-        let meta = SendMeta { critical: is_critical(&t), voice: false, post_ok: true };
+        let meta = SendMeta {
+            critical: is_critical(&t),
+            voice: false,
+            post_ok: true,
+        };
         for c in &self.extra {
             if c.is_up() {
                 c.send(data.clone(), meta);
@@ -419,7 +476,9 @@ impl Hub {
                 c.send(ev.clone(), meta);
             }
         }
-        if self.ntfy.is_some() && data.len() <= zv_proto::topics::NTFY_MAX_BODY && self.ntfy_wanted(&t)
+        if self.ntfy.is_some()
+            && data.len() <= zv_proto::topics::NTFY_MAX_BODY
+            && self.ntfy_wanted(&t)
             && let Some(n) = &self.ntfy
         {
             n.send(data, meta);
@@ -427,7 +486,11 @@ impl Hub {
     }
 
     fn send_voice(&mut self, data: Arc<str>) {
-        let meta = SendMeta { critical: false, voice: true, post_ok: false };
+        let meta = SendMeta {
+            critical: false,
+            voice: true,
+            post_ok: false,
+        };
         let mut sent = false;
         for c in self.extra.iter().filter(|c| c.is_up()) {
             c.send(data.clone(), meta);
@@ -442,7 +505,13 @@ impl Hub {
                 w.send(data.clone(), meta);
                 sent = true;
             } else if !sent {
-                w.send(data.clone(), SendMeta { post_ok: true, ..meta });
+                w.send(
+                    data.clone(),
+                    SendMeta {
+                        post_ok: true,
+                        ..meta
+                    },
+                );
                 sent = true;
             }
         }
@@ -456,14 +525,20 @@ impl Hub {
         if raw.is_empty() || raw.len() > MAX_RAW {
             return;
         }
-        let Some(Value::Object(mut m)) = self.room.open(raw) else { return };
+        let Some(Value::Object(mut m)) = self.room.open(raw) else {
+            return;
+        };
         if m.get("from").and_then(|v| v.as_str()) == Some(self.self_id.as_str()) {
             return;
         }
-        if truthy(m.get("to")) && m.get("to").and_then(|v| v.as_str()) != Some(self.self_id.as_str()) {
+        if truthy(m.get("to"))
+            && m.get("to").and_then(|v| v.as_str()) != Some(self.self_id.as_str())
+        {
             return;
         }
-        if truthy(m.get("toInst")) && m.get("toInst").and_then(|v| v.as_str()) != Some(self.inst.as_str()) {
+        if truthy(m.get("toInst"))
+            && m.get("toInst").and_then(|v| v.as_str()) != Some(self.inst.as_str())
+        {
             return;
         }
         if !truthy(m.get("mid")) {
@@ -482,10 +557,14 @@ impl Hub {
         self.seen.insert(mid, now);
         *self.first.entry(via).or_insert(0) += 1;
         if self.seen.len() > SEEN_PRUNE_AT {
-            self.seen.retain(|_, t| now.saturating_sub(*t) <= SEEN_TTL_MS);
+            self.seen
+                .retain(|_, t| now.saturating_sub(*t) <= SEEN_TTL_MS);
         }
         m.insert("via".into(), Value::String(via.into()));
-        let _ = self.events.send(HubEvent::Message { msg: Value::Object(m), via });
+        let _ = self.events.send(HubEvent::Message {
+            msg: Value::Object(m),
+            via,
+        });
     }
 
     fn status(&self) -> HubStatus {
@@ -511,7 +590,11 @@ impl Hub {
             nostr_total: self.nostr.len(),
             ntfy_up: self.ntfy.as_ref().map(|c| c.is_up() as usize).unwrap_or(0),
             ntfy_total: self.ntfy.is_some() as usize,
-            p2p_up: self.extra.iter().filter(|c| c.kind() == Kind::P2p && c.is_up()).count(),
+            p2p_up: self
+                .extra
+                .iter()
+                .filter(|c| c.kind() == Kind::P2p && c.is_up())
+                .count(),
             listen: self.profile == Profile::Listen,
         }
     }

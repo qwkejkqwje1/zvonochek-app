@@ -7,11 +7,13 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::{NewWindowResponse, PermissionKind, PermissionResponse};
-use tauri::{AppHandle, DragDropEvent, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window, WindowEvent};
+use tauri::{
+    AppHandle, DragDropEvent, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    Window, WindowEvent,
+};
 
 /// Одинаковые для всех окон (общее окружение WebView2): мелодия звонка без жеста пользователя.
-const BROWSER_ARGS: &str =
-    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
+const BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
 const TRAY_ID: &str = "zv-tray";
 
 fn is_app_url(u: &url::Url) -> bool {
@@ -31,7 +33,11 @@ fn open_outside(app: &AppHandle, u: &url::Url) {
     }
 }
 
-fn base<'a>(app: &'a AppHandle, label: &str, page: &str) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
+fn base<'a>(
+    app: &'a AppHandle,
+    label: &str,
+    page: &str,
+) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
     let nav_app = app.clone();
     let win_app = app.clone();
     WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
@@ -63,7 +69,9 @@ pub fn build_main(app: &AppHandle, visible: bool) -> tauri::Result<WebviewWindow
         .initialization_script(PRELOAD)
         .on_permission_request(|_, kind| match kind {
             PermissionKind::Autoplay | PermissionKind::ClipboardRead => PermissionResponse::Allow,
-            PermissionKind::Microphone | PermissionKind::Camera | PermissionKind::Geolocation => PermissionResponse::Deny,
+            PermissionKind::Microphone | PermissionKind::Camera | PermissionKind::Geolocation => {
+                PermissionResponse::Deny
+            }
             _ => PermissionResponse::Default,
         })
         .build()
@@ -91,7 +99,10 @@ pub fn open_call(app: &AppHandle, secret: &str, boot: Value) -> Result<Value, St
         return Err("неверная ссылка".into());
     }
     let st = app.state::<AppState>();
-    let replace = boot.get("replace").and_then(|v| v.as_bool()).unwrap_or(false);
+    let replace = boot
+        .get("replace")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let cur = st.current_call.lock().unwrap().clone();
     if let Some(label) = cur
         && let Some(w) = app.get_webview_window(&label)
@@ -104,7 +115,9 @@ pub fn open_call(app: &AppHandle, secret: &str, boot: Value) -> Result<Value, St
         }
         // ответ на второй звонок: текущий завершаем сразу (bye), окно закрываем
         *st.current_call.lock().unwrap() = None;
-        let _ = st.core.dispatch_sync("rooms_leave_all", &json!({"bye": true}));
+        let _ = st
+            .core
+            .dispatch_sync("rooms_leave_all", &json!({"bye": true}));
         let _ = w.destroy();
     }
     let n = st.call_seq.fetch_add(1, Ordering::SeqCst) + 1;
@@ -179,7 +192,14 @@ pub fn close_incoming(app: &AppHandle) {
 pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let st = app.state::<AppState>();
     let open = MenuItem::with_id(app, "open", "Открыть ZVONochek", true, None::<&str>)?;
-    let dnd = CheckMenuItem::with_id(app, "dnd", "Не беспокоить", true, st.core.settings().dnd, None::<&str>)?;
+    let dnd = CheckMenuItem::with_id(
+        app,
+        "dnd",
+        "Не беспокоить",
+        true,
+        st.core.settings().dnd,
+        None::<&str>,
+    )?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Выход", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &dnd, &sep, &quit])?;
@@ -194,13 +214,20 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             "dnd" => {
                 let st = app.state::<AppState>();
                 let dnd = !st.core.settings().dnd;
-                let _ = st.core.dispatch_sync("settings_set", &json!({"patch": {"dnd": dnd}}));
+                let _ = st
+                    .core
+                    .dispatch_sync("settings_set", &json!({"patch": {"dnd": dnd}}));
             }
             "quit" => crate::quit(app),
             _ => {}
         })
         .on_tray_icon_event(|tray, e| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            {
                 show_main(tray.app_handle());
             }
         })
@@ -212,12 +239,19 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 /// Подсказка трея: ждём ли звонков по своим ссылкам.
 pub fn update_tray(app: &AppHandle) {
     let st = app.state::<AppState>();
-    let links = st.core.dispatch_sync("links_list", &Value::Null).and_then(|r| r.ok()).unwrap_or(Value::Null);
+    let links = st
+        .core
+        .dispatch_sync("links_list", &Value::Null)
+        .and_then(|r| r.ok())
+        .unwrap_or(Value::Null);
     let listen: Vec<&Value> = links
         .as_array()
         .map(|a| {
             a.iter()
-                .filter(|l| l.get("kind").and_then(|v| v.as_str()) == Some("mine") && l.get("listen").and_then(|v| v.as_bool()) == Some(true))
+                .filter(|l| {
+                    l.get("kind").and_then(|v| v.as_str()) == Some("mine")
+                        && l.get("listen").and_then(|v| v.as_bool()) == Some(true)
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -226,7 +260,8 @@ pub fn update_tray(app: &AppHandle) {
         .filter(|l| {
             let s = &l["status"];
             let n = |k: &str| s.get(k).and_then(|v| v.as_u64()).unwrap_or(0);
-            n("mqttUp") + n("nostrUp") + n("ntfyUp") + n("p2pUp") > 0 || s.get("worker").and_then(|v| v.as_str()) == Some("up")
+            n("mqttUp") + n("nostrUp") + n("ntfyUp") + n("p2pUp") > 0
+                || s.get("worker").and_then(|v| v.as_str()) == Some("up")
         })
         .count();
     let unread = st.unread.load(Ordering::SeqCst);
@@ -241,7 +276,11 @@ pub fn update_tray(app: &AppHandle) {
     } else {
         "ZVONochek — нет связи".to_string()
     };
-    let text = if unread > 0 { format!("{text}\nНепрочитанных сообщений: {unread}") } else { text };
+    let text = if unread > 0 {
+        format!("{text}\nНепрочитанных сообщений: {unread}")
+    } else {
+        text
+    };
     if let Some(t) = app.tray_by_id(TRAY_ID) {
         let _ = t.set_tooltip(Some(&text));
     }
@@ -260,7 +299,11 @@ pub fn flash_main(app: &AppHandle) {
 pub fn set_unread_badge(app: &AppHandle, n: u64) {
     #[cfg(windows)]
     if let Some(w) = app.get_webview_window("main") {
-        let icon = if n > 0 { Image::from_bytes(include_bytes!("../icons/badge.png")).ok() } else { None };
+        let icon = if n > 0 {
+            Image::from_bytes(include_bytes!("../icons/badge.png")).ok()
+        } else {
+            None
+        };
         let _ = w.set_overlay_icon(icon);
     }
     #[cfg(not(windows))]
@@ -281,19 +324,31 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 api.prevent_close();
                 let _ = window.hide();
                 if !s.tray_hint_shown {
-                    crate::host::notify(app, "ZVONochek работает в трее", "Звонки по вашим ссылкам будут приходить. Выход — в меню значка в трее.");
-                    let _ = st.core.dispatch_sync("settings_set", &json!({"patch": {"trayHintShown": true}}));
+                    crate::host::notify(
+                        app,
+                        "ZVONochek работает в трее",
+                        "Звонки по вашим ссылкам будут приходить. Выход — в меню значка в трее.",
+                    );
+                    let _ = st
+                        .core
+                        .dispatch_sync("settings_set", &json!({"patch": {"trayHintShown": true}}));
                 }
             }
         }
         // файлы перетащили в главное окно — оболочка отправит их в открытый чат
         WindowEvent::DragDrop(e) if label == "main" => {
             let ev = match e {
-                DragDropEvent::Enter { .. } => Some(json!({"event": "host:drag", "payload": {"on": true}})),
-                DragDropEvent::Leave => Some(json!({"event": "host:drag", "payload": {"on": false}})),
-                DragDropEvent::Drop { paths, .. } => Some(json!({"event": "host:drop", "payload": {
-                    "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()
-                }})),
+                DragDropEvent::Enter { .. } => {
+                    Some(json!({"event": "host:drag", "payload": {"on": true}}))
+                }
+                DragDropEvent::Leave => {
+                    Some(json!({"event": "host:drag", "payload": {"on": false}}))
+                }
+                DragDropEvent::Drop { paths, .. } => {
+                    Some(json!({"event": "host:drop", "payload": {
+                        "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>()
+                    }}))
+                }
                 _ => None,
             };
             if let Some(ev) = ev {
@@ -307,13 +362,16 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                     *cur = None;
                     drop(cur);
                     // окно закрыли посреди звонка — выйти из комнаты с bye
-                    let _ = st.core.dispatch_sync("rooms_leave_all", &json!({"bye": true}));
+                    let _ = st
+                        .core
+                        .dispatch_sync("rooms_leave_all", &json!({"bye": true}));
                 }
             }
             if label == "main" {
                 st.main_ready.store(false, Ordering::SeqCst);
             }
-            if (label == "main" || label.starts_with("call-")) && !st.core.settings().close_to_tray {
+            if (label == "main" || label.starts_with("call-")) && !st.core.settings().close_to_tray
+            {
                 let call_open = st.current_call.lock().unwrap().is_some();
                 if app.get_webview_window("main").is_none() && !call_open {
                     crate::quit(app);

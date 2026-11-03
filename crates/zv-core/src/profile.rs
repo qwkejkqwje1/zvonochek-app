@@ -32,7 +32,8 @@ fn kdf(password: &str, salt: &[u8], m: u32, t: u32, p: u32) -> Result<[u8; 32], 
     let params = argon2::Params::new(m, t, p, Some(32)).map_err(|e| e.to_string())?;
     let a = argon2::Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     let mut key = [0u8; 32];
-    a.hash_password_into(password.as_bytes(), salt, &mut key).map_err(|e| e.to_string())?;
+    a.hash_password_into(password.as_bytes(), salt, &mut key)
+        .map_err(|e| e.to_string())?;
     Ok(key)
 }
 
@@ -57,7 +58,15 @@ pub(crate) fn seal(password: &str, plain: &[u8]) -> Result<Vec<u8>, String> {
     out.extend(&header);
     let key = kdf(password, &salt, KDF_M, KDF_T, KDF_P)?;
     let cipher = XChaCha20Poly1305::new_from_slice(&key).map_err(|e| e.to_string())?;
-    let ct = cipher.encrypt(&XNonce::from(nonce), Payload { msg: plain, aad: &out }).map_err(|_| "не удалось зашифровать")?;
+    let ct = cipher
+        .encrypt(
+            &XNonce::from(nonce),
+            Payload {
+                msg: plain,
+                aad: &out,
+            },
+        )
+        .map_err(|_| "не удалось зашифровать")?;
     out.extend(ct);
     Ok(out)
 }
@@ -77,14 +86,22 @@ pub(crate) fn open(password: &str, data: &[u8]) -> Result<Vec<u8>, String> {
     if h["v"].as_u64().unwrap_or(0) > VERSION {
         return Err("Файл сохранён более новой версией ZVONochek — обновите приложение".into());
     }
-    let num = |k: &str| h[k].as_u64().filter(|v| *v <= u32::MAX as u64).map(|v| v as u32);
-    let (Some(m), Some(t), Some(p)) = (num("m"), num("t"), num("p")) else { return Err(BAD.into()) };
+    let num = |k: &str| {
+        h[k].as_u64()
+            .filter(|v| *v <= u32::MAX as u64)
+            .map(|v| v as u32)
+    };
+    let (Some(m), Some(t), Some(p)) = (num("m"), num("t"), num("p")) else {
+        return Err(BAD.into());
+    };
     // чужой файл не должен заставить считать вечно или съесть всю память
     if h["kdf"] != "argon2id" || m > 1 << 20 || t > 16 || p > 16 {
         return Err(BAD.into());
     }
     let b = |k: &str| h[k].as_str().and_then(|v| B64.decode(v).ok());
-    let (Some(salt), Some(nonce)) = (b("salt"), b("nonce")) else { return Err(BAD.into()) };
+    let (Some(salt), Some(nonce)) = (b("salt"), b("nonce")) else {
+        return Err(BAD.into());
+    };
     let nonce: [u8; 24] = nonce.try_into().map_err(|_| BAD)?;
     if salt.len() < 8 {
         return Err(BAD.into());
@@ -93,7 +110,13 @@ pub(crate) fn open(password: &str, data: &[u8]) -> Result<Vec<u8>, String> {
     let cipher = XChaCha20Poly1305::new_from_slice(&key).map_err(|e| e.to_string())?;
     let aad = &data[..MAGIC.len() + 4 + hl];
     cipher
-        .decrypt(&XNonce::from(nonce), Payload { msg: &data[aad.len()..], aad })
+        .decrypt(
+            &XNonce::from(nonce),
+            Payload {
+                msg: &data[aad.len()..],
+                aad,
+            },
+        )
         .map_err(|_| "Неверный пароль или файл повреждён".into())
 }
 
@@ -128,7 +151,10 @@ pub(crate) fn apply_pending(dir: &Path) {
 
 fn apply(dir: &Path, p: &Value) -> anyhow::Result<()> {
     let chats = B64.decode(p["chats"].as_str().unwrap_or(""))?;
-    anyhow::ensure!(chats.is_empty() || chats.starts_with(SQLITE_MAGIC), "переписка повреждена");
+    anyhow::ensure!(
+        chats.is_empty() || chats.starts_with(SQLITE_MAGIC),
+        "переписка повреждена"
+    );
     // отметки этого компьютера (вопрос про автозапуск, подсказка трея) — свои
     let local: Settings = JsonFile::new(dir, "settings.json", false).load();
     let mut settings: Settings = serde_json::from_value(p["settings"].clone())?;
@@ -136,9 +162,12 @@ fn apply(dir: &Path, p: &Value) -> anyhow::Result<()> {
     settings.tray_hint_shown = local.tray_hint_shown;
     let identity: Identity = serde_json::from_value(p["identity"].clone())?;
     JsonFile::new(dir, "identity.dat", true).save(&identity)?;
-    JsonFile::new(dir, "contacts.dat", true).save(&serde_json::from_value::<Contacts>(p["contacts"].clone())?)?;
-    JsonFile::new(dir, "links.dat", true).save(&serde_json::from_value::<Links>(p["links"].clone())?)?;
-    JsonFile::new(dir, "history.json", false).save(&serde_json::from_value::<History>(p["history"].clone())?)?;
+    JsonFile::new(dir, "contacts.dat", true)
+        .save(&serde_json::from_value::<Contacts>(p["contacts"].clone())?)?;
+    JsonFile::new(dir, "links.dat", true)
+        .save(&serde_json::from_value::<Links>(p["links"].clone())?)?;
+    JsonFile::new(dir, "history.json", false)
+        .save(&serde_json::from_value::<History>(p["history"].clone())?)?;
     JsonFile::new(dir, "settings.json", false).save(&settings)?;
     for ext in ["", "-wal", "-shm", "-journal"] {
         let _ = std::fs::remove_file(dir.join(format!("chats.db{ext}")));
@@ -147,7 +176,10 @@ fn apply(dir: &Path, p: &Value) -> anyhow::Result<()> {
         std::fs::write(dir.join("chats.db"), &chats)?;
         // пути недокачанных файлов — со старого компьютера: докачаем заново в свою папку
         let c = rusqlite::Connection::open(dir.join("chats.db"))?;
-        c.execute("UPDATE files SET path = '', done = 0 WHERE out = 0 AND st != 'done'", [])?;
+        c.execute(
+            "UPDATE files SET path = '', done = 0 WHERE out = 0 AND st != 'done'",
+            [],
+        )?;
     }
     Ok(())
 }
@@ -164,7 +196,10 @@ impl Inner {
     pub(crate) async fn profile_export(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let pw = s(args, "password")?.to_string();
         check_password(&pw)?;
-        let tmp = self.opts.data_dir.join(format!("chats.export-{}.tmp", rand_hex(4)));
+        let tmp = self
+            .opts
+            .data_dir
+            .join(format!("chats.export-{}.tmp", rand_hex(4)));
         let snap = self.db.snapshot(&tmp);
         let chats = std::fs::read(&tmp).unwrap_or_default();
         let _ = std::fs::remove_file(&tmp);
@@ -197,8 +232,14 @@ impl Inner {
             (payload, summary)
         };
         let plain = serde_json::to_vec(&payload).map_err(|e| e.to_string())?;
-        let data = tokio::task::spawn_blocking(move || seal(&pw, &plain)).await.map_err(|e| e.to_string())??;
-        let path = match args.get("path").and_then(|v| v.as_str()).filter(|p| !p.is_empty()) {
+        let data = tokio::task::spawn_blocking(move || seal(&pw, &plain))
+            .await
+            .map_err(|e| e.to_string())??;
+        let path = match args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .filter(|p| !p.is_empty())
+        {
             Some(p) => PathBuf::from(p),
             None => {
                 let dir = self.downloads_dir();
@@ -207,10 +248,12 @@ impl Inner {
             }
         };
         let tmp = PathBuf::from(format!("{}.tmp", path.display()));
-        std::fs::write(&tmp, &data).and_then(|_| std::fs::rename(&tmp, &path)).map_err(|e| {
-            let _ = std::fs::remove_file(&tmp);
-            format!("Не удалось сохранить файл: {e}")
-        })?;
+        std::fs::write(&tmp, &data)
+            .and_then(|_| std::fs::rename(&tmp, &path))
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&tmp);
+                format!("Не удалось сохранить файл: {e}")
+            })?;
         self.lock().last_export = Some(path.clone());
         tracing::info!("профиль: сохранён ({} байт)", data.len());
         Ok(json!({
@@ -230,22 +273,33 @@ impl Inner {
             return Err("Это не файл профиля ZVONochek".into());
         }
         let data = std::fs::read(&path).map_err(|e| format!("Не удалось прочитать файл: {e}"))?;
-        let plain = tokio::task::spawn_blocking(move || open(&pw, &data)).await.map_err(|e| e.to_string())??;
+        let plain = tokio::task::spawn_blocking(move || open(&pw, &data))
+            .await
+            .map_err(|e| e.to_string())??;
         let p: Value = serde_json::from_slice(&plain).map_err(|_| "Файл профиля повреждён")?;
         // проверить всё до записи
-        let id: Identity = serde_json::from_value(p["identity"].clone()).map_err(|_| "Файл профиля повреждён")?;
+        let id: Identity =
+            serde_json::from_value(p["identity"].clone()).map_err(|_| "Файл профиля повреждён")?;
         if hex::decode(&id.seed).map(|b| b.len()) != Ok(32) {
             return Err("Файл профиля повреждён".into());
         }
-        let contacts: Contacts = serde_json::from_value(p["contacts"].clone()).map_err(|_| "Файл профиля повреждён")?;
-        let links: Links = serde_json::from_value(p["links"].clone()).map_err(|_| "Файл профиля повреждён")?;
-        serde_json::from_value::<Settings>(p["settings"].clone()).map_err(|_| "Файл профиля повреждён")?;
-        serde_json::from_value::<History>(p["history"].clone()).map_err(|_| "Файл профиля повреждён")?;
-        let chats = B64.decode(p["chats"].as_str().unwrap_or("")).map_err(|_| "Файл профиля повреждён")?;
+        let contacts: Contacts =
+            serde_json::from_value(p["contacts"].clone()).map_err(|_| "Файл профиля повреждён")?;
+        let links: Links =
+            serde_json::from_value(p["links"].clone()).map_err(|_| "Файл профиля повреждён")?;
+        serde_json::from_value::<Settings>(p["settings"].clone())
+            .map_err(|_| "Файл профиля повреждён")?;
+        serde_json::from_value::<History>(p["history"].clone())
+            .map_err(|_| "Файл профиля повреждён")?;
+        let chats = B64
+            .decode(p["chats"].as_str().unwrap_or(""))
+            .map_err(|_| "Файл профиля повреждён")?;
         if !chats.is_empty() && !chats.starts_with(SQLITE_MAGIC) {
             return Err("Файл профиля повреждён".into());
         }
-        JsonFile::new(&self.opts.data_dir, PENDING, true).save(&p).map_err(|e| format!("Не удалось подготовить перенос: {e}"))?;
+        JsonFile::new(&self.opts.data_dir, PENDING, true)
+            .save(&p)
+            .map_err(|e| format!("Не удалось подготовить перенос: {e}"))?;
         tracing::info!("профиль: перенос подготовлен, применится при перезапуске");
         Ok(json!({
             "ok": true,
@@ -273,13 +327,19 @@ mod tests {
         let data = seal("пароль-123", b"hello profile").unwrap();
         assert!(data.starts_with(MAGIC));
         assert_eq!(open("пароль-123", &data).unwrap(), b"hello profile");
-        assert_eq!(open("пароль-124", &data).unwrap_err(), "Неверный пароль или файл повреждён");
+        assert_eq!(
+            open("пароль-124", &data).unwrap_err(),
+            "Неверный пароль или файл повреждён"
+        );
         // подмена заголовка (параметры KDF) ломает проверку
         let mut bad = data.clone();
         let i = MAGIC.len() + 4 + 2;
         bad[i] ^= 1;
         assert!(open("пароль-123", &bad).is_err());
-        assert_eq!(open("x", b"PK\x03\x04").unwrap_err(), "Это не файл профиля ZVONochek");
+        assert_eq!(
+            open("x", b"PK\x03\x04").unwrap_err(),
+            "Это не файл профиля ZVONochek"
+        );
     }
 
     #[test]

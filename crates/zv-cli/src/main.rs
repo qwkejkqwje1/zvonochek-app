@@ -55,7 +55,9 @@ async fn main() -> anyhow::Result<()> {
         "join" => join(args.next(), args.next(), Profile::Full).await,
         "listen" => join(args.next(), None, Profile::Listen).await,
         _ => {
-            eprintln!("использование: zv-cli probe [секрет] | join <ссылка> [имя] | listen <ссылка>");
+            eprintln!(
+                "использование: zv-cli probe [секрет] | join <ссылка> [имя] | listen <ссылка>"
+            );
             Ok(())
         }
     }
@@ -113,10 +115,19 @@ async fn probe(secret: Option<String>) -> anyhow::Result<()> {
     let drain_a = tokio::spawn(async move { while ra.recv().await.is_some() {} });
     let mut sent_at: BTreeMap<u32, Instant> = BTreeMap::new();
     for i in 0..20u32 {
-        let pad = if i % 5 == 4 { "x".repeat(3000) } else { String::new() };
+        let pad = if i % 5 == 4 {
+            "x".repeat(3000)
+        } else {
+            String::new()
+        };
         let typ = if i % 7 == 6 { "voice" } else { "zvtest" };
         sent_at.insert(i, Instant::now());
-        a.send(json!({"type": typ, "n": i, "pad": pad}), SendOpts { voice: typ == "voice" });
+        a.send(
+            json!({"type": typ, "n": i, "pad": pad}),
+            SendOpts {
+                voice: typ == "voice",
+            },
+        );
         tokio::time::sleep(Duration::from_millis(150)).await;
     }
     let (got_t, _rb) = collector.await?;
@@ -124,7 +135,10 @@ async fn probe(secret: Option<String>) -> anyhow::Result<()> {
     let got: BTreeMap<u32, (String, u128)> = got_t
         .into_iter()
         .map(|(n, (via, t))| {
-            let ms = sent_at.get(&n).map(|s| t.duration_since(*s).as_millis()).unwrap_or(0);
+            let ms = sent_at
+                .get(&n)
+                .map(|s| t.duration_since(*s).as_millis())
+                .unwrap_or(0);
             (n, (via, ms))
         })
         .collect();

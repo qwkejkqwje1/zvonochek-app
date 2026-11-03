@@ -31,11 +31,28 @@ pub(crate) struct ConnHandle {
 }
 
 impl ConnHandle {
-    pub fn new(id: u64) -> (ConnHandle, mpsc::UnboundedReceiver<ConnCmd>, Arc<AtomicUsize>, Arc<AtomicBool>) {
+    pub fn new(
+        id: u64,
+    ) -> (
+        ConnHandle,
+        mpsc::UnboundedReceiver<ConnCmd>,
+        Arc<AtomicUsize>,
+        Arc<AtomicBool>,
+    ) {
         let (tx, rx) = mpsc::unbounded_channel();
         let bytes = Arc::new(AtomicUsize::new(0));
         let rotate = Arc::new(AtomicBool::new(true));
-        (ConnHandle { id, tx, bytes: bytes.clone(), rotate: rotate.clone() }, rx, bytes, rotate)
+        (
+            ConnHandle {
+                id,
+                tx,
+                bytes: bytes.clone(),
+                rotate: rotate.clone(),
+            },
+            rx,
+            bytes,
+            rotate,
+        )
     }
     fn close(&self) {
         let _ = self.tx.send(ConnCmd::Close);
@@ -44,7 +61,12 @@ impl ConnHandle {
 
 pub(crate) trait Spawner: Send + 'static {
     /// Запустить соединение. `renew` — тихая ротация (Worker: `&renew=1`).
-    fn spawn(&mut self, id: u64, renew: bool, events: mpsc::UnboundedSender<ConnEvent>) -> ConnHandle;
+    fn spawn(
+        &mut self,
+        id: u64,
+        renew: bool,
+        events: mpsc::UnboundedSender<ConnEvent>,
+    ) -> ConnHandle;
 }
 
 pub(crate) struct RotatorCfg {
@@ -114,7 +136,10 @@ impl<S: Spawner> Rotator<S> {
     }
 
     pub fn active_bytes(&self) -> usize {
-        self.active.as_ref().map(|a| a.bytes.load(Ordering::Relaxed)).unwrap_or(0)
+        self.active
+            .as_ref()
+            .map(|a| a.bytes.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 
     /// Отправить через активное соединение. `false` — канал не поднят.

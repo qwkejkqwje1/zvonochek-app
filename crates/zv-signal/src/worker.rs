@@ -5,7 +5,9 @@
 //! у бесплатного Worker лимит запросов в сутки.
 
 use crate::chan::{ChanCmd, ChanHandle, Shared};
-use crate::rotator::{ConnCmd, ConnEvent, ConnHandle, Out, Rotator, RotatorCfg, Spawner, sleep_until_opt};
+use crate::rotator::{
+    ConnCmd, ConnEvent, ConnHandle, Out, Rotator, RotatorCfg, Spawner, sleep_until_opt,
+};
 use crate::{ChanEvent, ChanTx, Kind, Profile, SignalConfig};
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
@@ -39,7 +41,12 @@ struct WsSpawner {
 }
 
 impl Spawner for WsSpawner {
-    fn spawn(&mut self, id: u64, renew: bool, events: mpsc::UnboundedSender<ConnEvent>) -> ConnHandle {
+    fn spawn(
+        &mut self,
+        id: u64,
+        renew: bool,
+        events: mpsc::UnboundedSender<ConnEvent>,
+    ) -> ConnHandle {
         let (h, cmd, bytes, _rotate) = ConnHandle::new(id);
         let url = format!(
             "{}/room/{}?peer={}{}",
@@ -193,7 +200,10 @@ impl Worker {
         }
         self.http_state = "polling";
         self.update_info();
-        let url_base = format!("{}/room/{}?peer={}&since=", self.base, self.topic, self.peer);
+        let url_base = format!(
+            "{}/room/{}?peer={}&since=",
+            self.base, self.topic, self.peer
+        );
         let cursor = self.cursor.clone();
         let tx = self.poll_tx.clone();
         self.poll = Some(tokio::spawn(async move {
@@ -201,7 +211,11 @@ impl Worker {
                 let since = cursor.load(Ordering::Relaxed);
                 let url = format!("{url_base}{since}");
                 let r = async {
-                    let resp = crate::tls::http().get(&url).timeout(POLL_TIMEOUT).send().await?;
+                    let resp = crate::tls::http()
+                        .get(&url)
+                        .timeout(POLL_TIMEOUT)
+                        .send()
+                        .await?;
                     if !resp.status().is_success() {
                         anyhow::bail!("HTTP {}", resp.status());
                     }
@@ -254,12 +268,26 @@ impl Worker {
 }
 
 /// Запустить канал Worker. `peer` — идентификатор этого ядра в комнате Worker.
-pub(crate) fn spawn(base: &str, topic: &str, peer: &str, profile: Profile, cfg: &SignalConfig, hub: ChanTx) -> ChanHandle {
+pub(crate) fn spawn(
+    base: &str,
+    topic: &str,
+    peer: &str,
+    profile: Profile,
+    cfg: &SignalConfig,
+    hub: ChanTx,
+) -> ChanHandle {
     let base = base.trim_end_matches('/').to_string();
-    let host = url::Url::parse(&base).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+    let host = url::Url::parse(&base)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_default();
     let (h, mut cmd_rx, shared) = ChanHandle::new(Kind::Worker, &host);
     let fast = Arc::new(AtomicBool::new(profile == Profile::Full));
-    let base_ws = if let Some(rest) = base.strip_prefix("http") { format!("ws{rest}") } else { base.clone() };
+    let base_ws = if let Some(rest) = base.strip_prefix("http") {
+        format!("ws{rest}")
+    } else {
+        base.clone()
+    };
     let sp = WsSpawner {
         base_ws,
         topic: topic.to_string(),
@@ -410,7 +438,12 @@ pub(crate) fn spawn(base: &str, topic: &str, peer: &str, profile: Profile, cfg: 
 
 /// «Маяк» выхода: POST `bye` в Worker (как `navigator.sendBeacon` веба).
 pub async fn post_once(base: &str, topic: &str, peer: &str, data: String) -> anyhow::Result<()> {
-    let url = format!("{}/room/{}?peer={}", base.trim_end_matches('/'), topic, peer);
+    let url = format!(
+        "{}/room/{}?peer={}",
+        base.trim_end_matches('/'),
+        topic,
+        peer
+    );
     crate::tls::http()
         .post(url)
         .header("content-type", "text/plain;charset=UTF-8")

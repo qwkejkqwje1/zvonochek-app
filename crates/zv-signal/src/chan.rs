@@ -61,7 +61,10 @@ pub(crate) struct Shared {
 
 impl Shared {
     pub fn new(kind: Kind, name: &str) -> Arc<Shared> {
-        Arc::new(Shared { up: AtomicBool::new(false), info: Mutex::new(ChanInfo::new(kind, name)) })
+        Arc::new(Shared {
+            up: AtomicBool::new(false),
+            info: Mutex::new(ChanInfo::new(kind, name)),
+        })
     }
     pub fn with<R>(&self, f: impl FnOnce(&mut ChanInfo) -> R) -> R {
         let mut g = self.info.lock().unwrap_or_else(|e| e.into_inner());
@@ -91,10 +94,22 @@ pub(crate) struct ChanHandle {
 }
 
 impl ChanHandle {
-    pub fn new(kind: Kind, name: &str) -> (ChanHandle, mpsc::UnboundedReceiver<ChanCmd>, Arc<Shared>) {
+    pub fn new(
+        kind: Kind,
+        name: &str,
+    ) -> (ChanHandle, mpsc::UnboundedReceiver<ChanCmd>, Arc<Shared>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let shared = Shared::new(kind, name);
-        (ChanHandle { kind, name: name.to_string(), tx, shared: shared.clone() }, rx, shared)
+        (
+            ChanHandle {
+                kind,
+                name: name.to_string(),
+                tx,
+                shared: shared.clone(),
+            },
+            rx,
+            shared,
+        )
     }
 }
 

@@ -69,7 +69,10 @@ impl Channel for P2pChannel {
                 return;
             }
         }
-        self.node.send(self.link, &json!({"t": "env", "r": self.topic, "d": &*data}));
+        self.node.send(
+            self.link,
+            &json!({"t": "env", "r": self.topic, "d": &*data}),
+        );
     }
     fn info(&self) -> ChanInfo {
         let mut i = ChanInfo::new(Kind::P2p, &self.name);
@@ -87,7 +90,8 @@ impl Channel for P2pChannel {
         i
     }
     fn close(&self) {
-        self.node.send(self.link, &json!({"t": "unbind", "r": self.topic}));
+        self.node
+            .send(self.link, &json!({"t": "unbind", "r": self.topic}));
     }
 }
 
@@ -128,7 +132,12 @@ impl Inner {
             secret: zv_p2p::crypto::endpoint_secret(&seed),
             app_version: self.opts.app_version.clone(),
             name,
-            caps: vec!["env".into(), "dgram".into(), "ring".into(), "contact".into()],
+            caps: vec![
+                "env".into(),
+                "dgram".into(),
+                "ring".into(),
+                "contact".into(),
+            ],
             n0: self.opts.p2p_n0,
         };
         let me = self.clone();
@@ -168,7 +177,9 @@ impl Inner {
     /// Поля приложения в `hello`/`hi`/`g_hi`: `app`, `av` и (если P2P работает) `zv: {id, r, a}`.
     /// P2P выключили в настройках: закрыть узел, убрать P2P-каналы из комнат и `zv` из hello.
     pub(crate) fn p2p_stop(self: &Arc<Self>) {
-        let Some(node) = self.p2p.write().unwrap_or_else(|e| e.into_inner()).take() else { return };
+        let Some(node) = self.p2p.write().unwrap_or_else(|e| e.into_inner()).take() else {
+            return;
+        };
         self.p2p_gen.fetch_add(1, Ordering::SeqCst);
         let (hubs, links) = {
             let mut st = self.lock();
@@ -177,7 +188,10 @@ impl Inner {
             st.p2p.dialing.clear();
             st.p2p.binds_sent.clear();
             st.p2p.c.presence.clear();
-            (st.rooms.values().map(|r| r.hub.clone()).collect::<Vec<_>>(), links)
+            (
+                st.rooms.values().map(|r| r.hub.clone()).collect::<Vec<_>>(),
+                links,
+            )
         };
         for h in &hubs {
             for l in &links {
@@ -212,15 +226,25 @@ impl Inner {
     /// Собеседник в комнате звонка прислал `zv` — поднимаем P2P и привязываем комнату.
     pub(crate) fn p2p_consider(self: &Arc<Self>, topic: &str, zv: &Value, name: Option<&str>) {
         let Some(node) = self.node() else { return };
-        let Some(peer) = zv.get("id").and_then(|v| v.as_str()).map(str::to_string) else { return };
+        let Some(peer) = zv.get("id").and_then(|v| v.as_str()).map(str::to_string) else {
+            return;
+        };
         if peer == node.id() || !zv_p2p::valid_id(&peer) {
             return;
         }
         let key = format!("{peer}|{topic}");
         {
             let mut st = self.lock();
-            st.p2p.recent.insert(peer.clone(), (name.unwrap_or("").to_string(), now_ms()));
-            if st.p2p.links.values().any(|l| l.peer == peer && l.rooms.contains(topic)) || st.p2p.dialing.contains(&key) {
+            st.p2p
+                .recent
+                .insert(peer.clone(), (name.unwrap_or("").to_string(), now_ms()));
+            if st
+                .p2p
+                .links
+                .values()
+                .any(|l| l.peer == peer && l.rooms.contains(topic))
+                || st.p2p.dialing.contains(&key)
+            {
                 return;
             }
             st.p2p.dialing.insert(key.clone());
@@ -232,7 +256,12 @@ impl Inner {
         let hint = zv.clone();
         self.rt.spawn(async move {
             tokio::time::sleep(Duration::from_millis(delay)).await;
-            let bound = me.lock().p2p.links.values().any(|l| l.peer == peer && l.rooms.contains(&topic));
+            let bound = me
+                .lock()
+                .p2p
+                .links
+                .values()
+                .any(|l| l.peer == peer && l.rooms.contains(&topic));
             if !bound && me.joined(&topic) {
                 match node.connect(&peer, Some(&hint)).await {
                     Ok(link) => me.send_bind(link, &topic),
@@ -245,7 +274,9 @@ impl Inner {
 
     pub(crate) fn send_bind(&self, link: LinkId, topic: &str) {
         let Some(node) = self.node() else { return };
-        let Some(peer) = node.peer_of(link) else { return };
+        let Some(peer) = node.peer_of(link) else {
+            return;
+        };
         let k = {
             let mut st = self.lock();
             let Some(r) = st.rooms.get(topic) else { return };
@@ -261,11 +292,17 @@ impl Inner {
 
     fn on_bind(self: &Arc<Self>, link: LinkId, peer: &str, msg: &Value) {
         let Some(node) = self.node() else { return };
-        let topic = msg.get("r").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let topic = msg
+            .get("r")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let proof = msg.get("p").and_then(|v| v.as_str()).unwrap_or("");
         let (hub, k, joined) = {
             let st = self.lock();
-            let Some(r) = st.rooms.get(&topic) else { return };
+            let Some(r) = st.rooms.get(&topic) else {
+                return;
+            };
             if !matches!(r.role, RoomRole::Call) {
                 return;
             }
@@ -287,7 +324,12 @@ impl Inner {
             ls.last_used = now_ms();
             let fresh = ls.rooms.insert(topic.clone());
             if joined {
-                let name = node.remote_hello(link).get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let name = node
+                    .remote_hello(link)
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 st.p2p.recent.insert(peer.to_string(), (name, now_ms()));
                 if let Some(sess) = st.rooms.get_mut(&topic).and_then(|r| r.session.as_mut())
                     && sess.peer_id.is_none()
@@ -305,7 +347,11 @@ impl Inner {
                 name: chan_name(link),
                 tx: AtomicU64::new(0),
             }));
-            tracing::info!("p2p: комната {} привязана к линку {link} ({:?})", &topic[..8], node.path(link).0);
+            tracing::info!(
+                "p2p: комната {} привязана к линку {link} ({:?})",
+                &topic[..8],
+                node.path(link).0
+            );
             self.emit("p2p:changed", Value::Null);
             // наш прежний bind мог прийти, когда у собеседника ещё не было комнаты, — отвечаем заново
             self.lock().p2p.binds_sent.remove(&(link, topic.clone()));
@@ -331,7 +377,12 @@ impl Inner {
     pub(crate) fn p2p_room_closed(&self, topic: &str) {
         let links: Vec<LinkId> = {
             let st = self.lock();
-            st.p2p.links.iter().filter(|(_, l)| l.rooms.contains(topic)).map(|(id, _)| *id).collect()
+            st.p2p
+                .links
+                .iter()
+                .filter(|(_, l)| l.rooms.contains(topic))
+                .map(|(id, _)| *id)
+                .collect()
         };
         for l in links {
             if let Some(n) = self.node() {
@@ -343,35 +394,72 @@ impl Inner {
 
     fn on_p2p_event(self: &Arc<Self>, ev: Event) {
         match ev {
-            Event::LinkUp { link, peer, outbound, hello } => {
-                let name = hello.get("name").and_then(|v| v.as_str()).unwrap_or("").chars().take(40).collect::<String>();
+            Event::LinkUp {
+                link,
+                peer,
+                outbound,
+                hello,
+            } => {
+                let name = hello
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .chars()
+                    .take(40)
+                    .collect::<String>();
                 let contact = {
                     let mut st = self.lock();
-                    st.p2p.links.insert(link, LinkState { peer: peer.clone(), rooms: HashSet::new(), last_used: now_ms() });
+                    st.p2p.links.insert(
+                        link,
+                        LinkState {
+                            peer: peer.clone(),
+                            rooms: HashSet::new(),
+                            last_used: now_ms(),
+                        },
+                    );
                     let now = now_ms();
                     let addr = hello.get("addr").filter(|a| a.is_object()).cloned();
-                    let c = st.contacts.items.iter_mut().find(|c| c.peer == peer).map(|c| {
-                        c.last_seen = now;
-                        if !name.is_empty() {
-                            c.their_name = name.clone();
-                        }
-                        if addr.is_some() {
-                            c.hint = addr.clone();
-                        }
-                        c.id.clone()
-                    });
+                    let c = st
+                        .contacts
+                        .items
+                        .iter_mut()
+                        .find(|c| c.peer == peer)
+                        .map(|c| {
+                            c.last_seen = now;
+                            if !name.is_empty() {
+                                c.their_name = name.clone();
+                            }
+                            if addr.is_some() {
+                                c.hint = addr.clone();
+                            }
+                            c.id.clone()
+                        });
                     if c.is_some() {
                         let _ = self.contacts_file.save(&st.contacts);
                     }
                     c
                 };
-                tracing::debug!("p2p: линк {link} {} {}", if outbound { "→" } else { "←" }, &peer[..8]);
-                if let Some(cid) = contact {
-                    if let Some(n) = self.node() {
-                        n.authorize(link);
-                    }
-                    self.presence_set(&cid, true, Some(link));
+                tracing::debug!(
+                    "p2p: линк {link} {} {}",
+                    if outbound { "→" } else { "←" },
+                    &peer[..8]
+                );
+                // участник общей группы допускается, как контакт
+                let group = self.is_group_peer(&peer);
+                if (contact.is_some() || group)
+                    && let Some(n) = self.node()
+                {
+                    n.authorize(link);
+                }
+                if let Some(cid) = &contact {
+                    self.presence_set(cid, true, Some(link));
                     self.chats_link_up(&peer);
+                }
+                if group {
+                    self.groups_link_up(&peer);
+                    if contact.is_none() {
+                        self.files_resume(&peer);
+                    }
                 }
                 self.emit("p2p:changed", Value::Null);
             }
@@ -379,7 +467,11 @@ impl Inner {
                 if let Some(l) = self.lock().p2p.links.get_mut(&link) {
                     l.last_used = now_ms();
                 }
-                let t = msg.get("t").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let t = msg
+                    .get("t")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 match t.as_str() {
                     "bind" => self.on_bind(link, &peer, &msg),
                     "unbind" => {
@@ -401,13 +493,22 @@ impl Inner {
                 }
             }
             Event::Datagram { link, data, .. } => {
-                if data.len() > 33 && data[0] == b'E'
-                    && let (Ok(topic), Ok(d)) = (std::str::from_utf8(&data[1..33]), std::str::from_utf8(&data[33..]))
+                if data.len() > 33
+                    && data[0] == b'E'
+                    && let (Ok(topic), Ok(d)) = (
+                        std::str::from_utf8(&data[1..33]),
+                        std::str::from_utf8(&data[33..]),
+                    )
                 {
                     self.inject(link, topic, d);
                 }
             }
-            Event::Stream { link, peer, send, recv } => {
+            Event::Stream {
+                link,
+                peer,
+                send,
+                recv,
+            } => {
                 if let Some(l) = self.lock().p2p.links.get_mut(&link) {
                     l.last_used = now_ms();
                 }
@@ -417,9 +518,19 @@ impl Inner {
                 tracing::debug!("p2p: линк {link} закрыт: {reason}");
                 let (rooms, contact) = {
                     let mut st = self.lock();
-                    let rooms: Vec<String> = st.p2p.links.remove(&link).map(|l| l.rooms.into_iter().collect()).unwrap_or_default();
+                    let rooms: Vec<String> = st
+                        .p2p
+                        .links
+                        .remove(&link)
+                        .map(|l| l.rooms.into_iter().collect())
+                        .unwrap_or_default();
                     st.p2p.binds_sent.retain(|(l, _)| *l != link);
-                    let c = st.contacts.items.iter().find(|c| c.peer == peer).map(|c| c.id.clone());
+                    let c = st
+                        .contacts
+                        .items
+                        .iter()
+                        .find(|c| c.peer == peer)
+                        .map(|c| c.id.clone());
                     (rooms, c)
                 };
                 for topic in rooms {
@@ -440,7 +551,12 @@ impl Inner {
     fn inject(&self, link: LinkId, topic: &str, d: &str) {
         let hub = {
             let st = self.lock();
-            if !st.p2p.links.get(&link).is_some_and(|l| l.rooms.contains(topic)) {
+            if !st
+                .p2p
+                .links
+                .get(&link)
+                .is_some_and(|l| l.rooms.contains(topic))
+            {
                 return;
             }
             st.rooms.get(topic).map(|r| r.hub.clone())
@@ -459,7 +575,11 @@ impl Inner {
             st.p2p
                 .links
                 .iter()
-                .filter(|(_, l)| l.rooms.is_empty() && !busy.contains(&l.peer) && now.saturating_sub(l.last_used) > LINK_IDLE_MS)
+                .filter(|(_, l)| {
+                    l.rooms.is_empty()
+                        && !busy.contains(&l.peer)
+                        && now.saturating_sub(l.last_used) > LINK_IDLE_MS
+                })
                 .map(|(id, _)| *id)
                 .collect()
         };
@@ -469,7 +589,9 @@ impl Inner {
         if (now / 1000).is_multiple_of(10) {
             self.refresh_extras();
             let mut st = self.lock();
-            st.p2p.recent.retain(|_, (_, t)| now.saturating_sub(*t) < RECENT_MS);
+            st.p2p
+                .recent
+                .retain(|_, (_, t)| now.saturating_sub(*t) < RECENT_MS);
         }
     }
 
@@ -511,7 +633,10 @@ impl Inner {
         let pid = zv_p2p::iroh::EndpointId::from_str_hex(peer)?;
         let secret = zv_p2p::crypto::pair_secret(&node.secret_bytes(), &node.id_bytes(), &pid)?;
         let room = zv_proto::Room::from_raw(&secret).ok()?;
-        self.lock().p2p.pair_rooms.insert(peer.to_string(), room.clone());
+        self.lock()
+            .p2p
+            .pair_rooms
+            .insert(peer.to_string(), room.clone());
         Some(room)
     }
 }

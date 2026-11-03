@@ -10,6 +10,7 @@
 
 use crate::contacts::Src;
 use crate::db::{Msg, OutEntry};
+use crate::groups::is_group;
 use crate::{Inner, s};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
@@ -73,20 +74,32 @@ pub(crate) fn ulid() -> String {
     let mut rv = [0u8; 16];
     rv[6..].copy_from_slice(&r[..10]);
     let v = (t << 80) | u128::from_be_bytes(rv);
-    (0..26).rev().map(|i| A[((v >> (i * 5)) & 31) as usize] as char).collect()
+    (0..26)
+        .rev()
+        .map(|i| A[((v >> (i * 5)) & 31) as usize] as char)
+        .collect()
 }
 
-fn valid_id(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 40 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+pub(crate) fn valid_id(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 40
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-fn str_of<'a>(v: &'a Value, k: &str) -> &'a str {
+pub(crate) fn str_of<'a>(v: &'a Value, k: &str) -> &'a str {
     v.get(k).and_then(|x| x.as_str()).unwrap_or("")
 }
 
-fn clean_text(s: &str) -> String {
-    let t: String = s.chars().filter(|c| !c.is_control() || *c == '\n' || *c == '\t').collect();
-    t.trim_matches(|c: char| c.is_whitespace()).chars().take(MAX_TEXT).collect()
+pub(crate) fn clean_text(s: &str) -> String {
+    let t: String = s
+        .chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+        .collect();
+    t.trim_matches(|c: char| c.is_whitespace())
+        .chars()
+        .take(MAX_TEXT)
+        .collect()
 }
 
 /// Кадр сообщения.
@@ -103,17 +116,31 @@ pub(crate) fn frame_of(m: &Msg) -> Value {
 
 impl Inner {
     fn contact_by_chat(&self, chat: &str) -> Option<crate::model::Contact> {
-        self.lock().contacts.items.iter().find(|c| c.id == chat).cloned()
+        self.lock()
+            .contacts
+            .items
+            .iter()
+            .find(|c| c.id == chat)
+            .cloned()
     }
 
     fn contact_by_peer(&self, peer: &str) -> Option<crate::model::Contact> {
-        self.lock().contacts.items.iter().find(|c| c.peer == peer).cloned()
+        self.lock()
+            .contacts
+            .items
+            .iter()
+            .find(|c| c.peer == peer)
+            .cloned()
     }
 
     /// Сообщение для интерфейса: с состоянием файла.
     pub(crate) fn msg_json(&self, m: &Msg) -> Value {
         let mut v = serde_json::to_value(m).unwrap_or(Value::Null);
-        if let Some(fid) = m.file.as_ref().and_then(|f| f.get("fid")).and_then(|x| x.as_str())
+        if let Some(fid) = m
+            .file
+            .as_ref()
+            .and_then(|f| f.get("fid"))
+            .and_then(|x| x.as_str())
             && let Some(r) = self.db.file(fid)
         {
             v["file"]["st"] = json!(r.st);
@@ -121,17 +148,19 @@ impl Inner {
             v["file"]["path"] = json!(r.path);
             v["file"]["err"] = json!(r.err);
         }
+        self.group_msg_extra(m, &mut v);
         v
     }
 
-    fn focused(&self, chat: &str) -> bool {
+    pub(crate) fn focused(&self, chat: &str) -> bool {
         matches!(&self.lock().chats.focus, Some((c, true)) if c == chat)
     }
 
     pub(crate) fn emit_unread(&self) {
         let u = self.db.unread();
         let total: u64 = u.iter().map(|(_, n)| n).sum();
-        let map: serde_json::Map<String, Value> = u.into_iter().map(|(c, n)| (c, json!(n))).collect();
+        let map: serde_json::Map<String, Value> =
+            u.into_iter().map(|(c, n)| (c, json!(n))).collect();
         self.emit("chat:unread", json!({"total": total, "chats": map}));
     }
 
@@ -141,8 +170,20 @@ impl Inner {
         let (contacts, typing, presence) = {
             let st = self.lock();
             let now = now_ms();
-            let typing: HashSet<String> = st.chats.typing.iter().filter(|(_, t)| **t > now).map(|(c, _)| c.clone()).collect();
-            let presence: HashMap<String, bool> = st.p2p.c.presence.iter().map(|(k, p)| (k.clone(), p.online)).collect();
+            let typing: HashSet<String> = st
+                .chats
+                .typing
+                .iter()
+                .filter(|(_, t)| **t > now)
+                .map(|(c, _)| c.clone())
+                .collect();
+            let presence: HashMap<String, bool> = st
+                .p2p
+                .c
+                .presence
+                .iter()
+                .map(|(k, p)| (k.clone(), p.online))
+                .collect();
             (st.contacts.items.clone(), typing, presence)
         };
         let unread: HashMap<String, u64> = self.db.unread().into_iter().collect();
@@ -167,26 +208,51 @@ impl Inner {
                 )
             })
             .collect();
-        v.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1["name"].as_str().cmp(&b.1["name"].as_str())));
+        for g in self.group_rows(&unread) {
+            let at = g["last"]["ts"]
+                .as_u64()
+                .unwrap_or_else(|| g["created"].as_u64().unwrap_or(0));
+            v.push((at, g));
+        }
+        v.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| a.1["name"].as_str().cmp(&b.1["name"].as_str()))
+        });
         Value::Array(v.into_iter().map(|x| x.1).collect())
     }
 
     pub(crate) fn chat_history(&self, args: &Value) -> Result<Value, String> {
         let chat = s(args, "chat")?;
         let before = args.get("before").and_then(|v| v.as_str());
-        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(60).clamp(1, 500) as usize;
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(60)
+            .clamp(1, 500) as usize;
         let (msgs, more) = self.db.history(chat, before, limit);
         Ok(json!({"msgs": msgs.iter().map(|m| self.msg_json(m)).collect::<Vec<_>>(), "more": more}))
     }
 
     pub(crate) fn chat_send(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let chat = s(args, "chat")?;
-        let c = self.contact_by_chat(chat).ok_or("нет такого контакта")?;
         let body = clean_text(args.get("text").and_then(|v| v.as_str()).unwrap_or(""));
         if body.is_empty() {
             return Err("пустое сообщение".into());
         }
-        let reply = args.get("reply").and_then(|v| v.as_str()).filter(|r| valid_id(r)).map(str::to_string);
+        let reply = args
+            .get("reply")
+            .and_then(|v| v.as_str())
+            .filter(|r| valid_id(r))
+            .map(str::to_string);
+        if is_group(chat) {
+            let g = self.group_writable(chat)?;
+            let m = self.new_out_msg(&g.id, "text", body, reply, None);
+            self.group_send_msg(&g, &m)?;
+            let v = self.msg_json(&m);
+            self.emit("chat:msg", json!({"msg": v, "new": true}));
+            return Ok(v);
+        }
+        let c = self.contact_by_chat(chat).ok_or("нет такого контакта")?;
         let m = self.new_out_msg(&c.id, "text", body, reply, None);
         // у собеседника «печатает…» погаснет с приходом сообщения — следующий ввод сообщим сразу
         self.lock().chats.my_typing.remove(&c.id);
@@ -196,7 +262,14 @@ impl Inner {
         Ok(v)
     }
 
-    pub(crate) fn new_out_msg(&self, chat: &str, kind: &str, body: String, reply: Option<String>, file: Option<Value>) -> Msg {
+    pub(crate) fn new_out_msg(
+        &self,
+        chat: &str,
+        kind: &str,
+        body: String,
+        reply: Option<String>,
+        file: Option<Value>,
+    ) -> Msg {
         let now = now_ms();
         let m = Msg {
             id: ulid(),
@@ -213,6 +286,7 @@ impl Inner {
             edited: None,
             deleted: false,
             via: String::new(),
+            sender: String::new(),
         };
         self.db.insert_msg(&m);
         m
@@ -228,11 +302,28 @@ impl Inner {
         if body.is_empty() {
             return Err("пустое сообщение".into());
         }
-        let c = self.contact_by_chat(&m.chat).ok_or("нет такого контакта")?;
         let now = now_ms();
-        self.db.edit(id, &body, now);
-        let fid = ulid();
-        self.deliver(&c.peer, &fid, "edit", json!({"t": "chat_edit", "id": fid, "m": id, "b": body, "ts": now}));
+        if is_group(&m.chat) {
+            let g = self.group_writable(&m.chat)?;
+            self.db.edit(id, &body, now);
+            self.group_post(
+                &g,
+                "edit",
+                json!({"t": "chat_edit", "m": id, "b": body, "ts": now}),
+                true,
+                None,
+            )?;
+        } else {
+            let c = self.contact_by_chat(&m.chat).ok_or("нет такого контакта")?;
+            self.db.edit(id, &body, now);
+            let fid = ulid();
+            self.deliver(
+                &c.peer,
+                &fid,
+                "edit",
+                json!({"t": "chat_edit", "id": fid, "m": id, "b": body, "ts": now}),
+            );
+        }
         let m = self.db.msg(id).ok_or("нет такого сообщения")?;
         let v = self.msg_json(&m);
         self.emit("chat:msg", json!({"msg": v, "new": false}));
@@ -241,16 +332,35 @@ impl Inner {
 
     pub(crate) fn chat_delete(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let id = s(args, "id")?;
-        let everyone = args.get("everyone").and_then(|v| v.as_bool()).unwrap_or(false);
+        let everyone = args
+            .get("everyone")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let m = self.db.msg(id).ok_or("нет такого сообщения")?;
-        if let Some(fid) = m.file.as_ref().and_then(|f| f.get("fid")).and_then(|x| x.as_str()) {
+        if let Some(fid) = m
+            .file
+            .as_ref()
+            .and_then(|f| f.get("fid"))
+            .and_then(|x| x.as_str())
+        {
             self.file_cancel_inner(fid, false);
         }
         if everyone && m.out && !m.deleted {
-            let c = self.contact_by_chat(&m.chat).ok_or("нет такого контакта")?;
-            self.db.mark_deleted(id);
-            let fid = ulid();
-            self.deliver(&c.peer, &fid, "del", json!({"t": "chat_del", "id": fid, "m": id}));
+            if is_group(&m.chat) {
+                let g = self.group_writable(&m.chat)?;
+                self.db.mark_deleted(id);
+                self.group_post(&g, "del", json!({"t": "chat_del", "m": id}), true, None)?;
+            } else {
+                let c = self.contact_by_chat(&m.chat).ok_or("нет такого контакта")?;
+                self.db.mark_deleted(id);
+                let fid = ulid();
+                self.deliver(
+                    &c.peer,
+                    &fid,
+                    "del",
+                    json!({"t": "chat_del", "id": fid, "m": id}),
+                );
+            }
             if let Some(m) = self.db.msg(id) {
                 self.emit("chat:msg", json!({"msg": self.msg_json(&m), "new": false}));
             }
@@ -271,19 +381,34 @@ impl Inner {
         self.emit_unread();
         let receipts = self.lock().settings.read_receipts;
         if receipts
+            && !is_group(chat)
             && let (Some(last), Some(c)) = (last, self.contact_by_chat(chat))
         {
             // прежняя отметка больше не нужна — новая её покрывает
             self.db.out_del_kind(&c.peer, "read");
-            self.lock().chats.pending.retain(|(_, p), e| !(p == &c.peer && e.kind == "read"));
+            self.lock()
+                .chats
+                .pending
+                .retain(|(_, p), e| !(p == &c.peer && e.kind == "read"));
             let fid = ulid();
-            self.deliver(&c.peer, &fid, "read", json!({"t": "chat_read", "id": fid, "m": last}));
+            self.deliver(
+                &c.peer,
+                &fid,
+                "read",
+                json!({"t": "chat_read", "id": fid, "m": last}),
+            );
         }
         Ok(json!({"read": n}))
     }
 
-    pub(crate) fn chat_typing(&self, args: &Value) -> Result<Value, String> {
+    pub(crate) fn chat_typing(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let chat = s(args, "chat")?;
+        if is_group(chat) {
+            if let Some(g) = self.group(chat).filter(|g| !g.left) {
+                self.group_typing(&g);
+            }
+            return Ok(Value::Null);
+        }
         let now = now_ms();
         {
             let mut st = self.lock();
@@ -300,8 +425,14 @@ impl Inner {
     }
 
     pub(crate) fn chat_focus(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
-        let chat = args.get("chat").and_then(|v| v.as_str()).map(str::to_string);
-        let visible = args.get("visible").and_then(|v| v.as_bool()).unwrap_or(false);
+        let chat = args
+            .get("chat")
+            .and_then(|v| v.as_str())
+            .map(str::to_string);
+        let visible = args
+            .get("visible")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         self.lock().chats.focus = chat.map(|c| (c, visible));
         Ok(Value::Null)
     }
@@ -330,8 +461,10 @@ impl Inner {
     }
 
     pub(crate) fn chat_status(&self) -> Value {
+        let groups = self.groups_status();
         let st = self.lock();
         json!({
+            "groups": groups,
             "outbox": st.chats.pending.len(),
             "mailing": st.chats.pending.values().filter(|p| p.mailing).count(),
             "mailed": st.chats.pending.values().filter(|p| p.mailed).count(),
@@ -347,14 +480,36 @@ impl Inner {
     /// Поставить кадр в очередь и попробовать отправить сразу.
     pub(crate) fn deliver(self: &Arc<Self>, peer: &str, fid: &str, kind: &str, frame: Value) {
         let now = now_ms();
-        self.db.out_put(&OutEntry { fid: fid.into(), peer: peer.into(), kind: kind.into(), frame: frame.clone(), created: now, mailed: false });
-        let known_offline = self.lock().chats.offline_at.get(peer).is_some_and(|t| now.saturating_sub(*t) < OFFLINE_FRESH_MS);
-        let linked = self.node().and_then(|n| n.link_for(peer)).is_some();
-        let mail_after = if !linked && known_offline { now } else { now + MAIL_AFTER_MS };
-        self.lock()
+        self.db.out_put(&OutEntry {
+            fid: fid.into(),
+            peer: peer.into(),
+            kind: kind.into(),
+            frame: frame.clone(),
+            created: now,
+            mailed: false,
+        });
+        let known_offline = self
+            .lock()
             .chats
-            .pending
-            .insert((fid.into(), peer.into()), Pending { kind: kind.into(), last_live: now, mail_after, mailing: false, mailed: false });
+            .offline_at
+            .get(peer)
+            .is_some_and(|t| now.saturating_sub(*t) < OFFLINE_FRESH_MS);
+        let linked = self.node().and_then(|n| n.link_for(peer)).is_some();
+        let mail_after = if !linked && known_offline {
+            now
+        } else {
+            now + MAIL_AFTER_MS
+        };
+        self.lock().chats.pending.insert(
+            (fid.into(), peer.into()),
+            Pending {
+                kind: kind.into(),
+                last_live: now,
+                mail_after,
+                mailing: false,
+                mailed: false,
+            },
+        );
         if linked {
             if let Some(n) = self.node() {
                 n.send_peer(peer, &frame);
@@ -376,12 +531,30 @@ impl Inner {
             st.chats.next_link_retry = now + LINK_RETRY_MS;
             st.chats.pending.keys().map(|(_, p)| p.clone()).collect()
         };
+        peers.extend(self.groups_waiting_peers());
         let waiting = self.db.files_where_st(&["waiting"]);
         if !waiting.is_empty() {
+            let senders: Vec<(String, String)> = waiting
+                .iter()
+                .filter(|f| !f.out && is_group(&f.chat))
+                .filter_map(|f| self.db.msg(&f.msg).map(|m| (f.chat.clone(), m.sender)))
+                .collect();
             let st = self.lock();
             for f in waiting.iter().filter(|f| !f.out) {
                 if let Some(c) = st.contacts.items.iter().find(|c| c.id == f.chat) {
                     peers.insert(c.peer.clone());
+                }
+            }
+            // файл группы качаем у автора сообщения
+            for (gid, who) in senders {
+                if !who.is_empty()
+                    && st
+                        .contacts
+                        .groups
+                        .iter()
+                        .any(|g| g.id == gid && !g.left && g.members.iter().any(|m| m.id == who))
+                {
+                    peers.insert(who);
                 }
             }
         }
@@ -401,12 +574,19 @@ impl Inner {
             if !st.chats.connecting.insert(peer.to_string()) {
                 return;
             }
-            st.contacts.items.iter().find(|c| c.peer == peer).and_then(|c| c.hint.clone())
+            st.contacts
+                .items
+                .iter()
+                .find(|c| c.peer == peer)
+                .and_then(|c| c.hint.clone())
         };
+        let hint = hint.or_else(|| self.peer_hint(peer));
         let me = self.clone();
         let peer = peer.to_string();
         self.rt.spawn(async move {
-            let r = tokio::time::timeout(Duration::from_secs(20), node.connect(&peer, hint.as_ref())).await;
+            let r =
+                tokio::time::timeout(Duration::from_secs(20), node.connect(&peer, hint.as_ref()))
+                    .await;
             let mut st = me.lock();
             st.chats.connecting.remove(&peer);
             if !matches!(r, Ok(Ok(_))) {
@@ -432,7 +612,9 @@ impl Inner {
     /// Повторить очередь к собеседнику (по линку; `force` — не глядя на время прошлой попытки).
     fn flush_peer(self: &Arc<Self>, peer: &str, force: bool) {
         let Some(node) = self.node() else { return };
-        let Some(link) = node.link_for(peer) else { return };
+        let Some(link) = node.link_for(peer) else {
+            return;
+        };
         let now = now_ms();
         let due: Vec<String> = {
             let mut st = self.lock();
@@ -468,10 +650,16 @@ impl Inner {
         if first {
             let all = self.db.out_all();
             let mut st = self.lock();
-            for e in all {
+            for e in all.into_iter().filter(|e| !is_group(&e.peer)) {
                 st.chats.pending.insert(
                     (e.fid, e.peer),
-                    Pending { kind: e.kind, last_live: 0, mail_after: now + MAIL_AFTER_MS, mailing: false, mailed: e.mailed },
+                    Pending {
+                        kind: e.kind,
+                        last_live: 0,
+                        mail_after: now + MAIL_AFTER_MS,
+                        mailing: false,
+                        mailed: e.mailed,
+                    },
                 );
             }
             st.chats.next_fetch = now + FETCH_FIRST_MS;
@@ -500,7 +688,13 @@ impl Inner {
         self.retry_links(now);
         // повтор по живым линкам
         if (now / 1000).is_multiple_of(5) {
-            let peers: HashSet<String> = self.lock().chats.pending.keys().map(|(_, p)| p.clone()).collect();
+            let peers: HashSet<String> = self
+                .lock()
+                .chats
+                .pending
+                .keys()
+                .map(|(_, p)| p.clone())
+                .collect();
             for p in peers {
                 self.flush_peer(&p, false);
             }
@@ -508,20 +702,29 @@ impl Inner {
         // «печатает» истекло
         let expired: Vec<String> = {
             let mut st = self.lock();
-            let v: Vec<String> = st.chats.typing.iter().filter(|(_, t)| **t <= now).map(|(c, _)| c.clone()).collect();
+            let v: Vec<String> = st
+                .chats
+                .typing
+                .iter()
+                .filter(|(_, t)| **t <= now)
+                .map(|(c, _)| c.clone())
+                .collect();
             for c in &v {
                 st.chats.typing.remove(c);
             }
-            st.chats.parts.retain(|_, (_, _, t)| now.saturating_sub(*t) < PARTS_TTL_MS);
+            st.chats
+                .parts
+                .retain(|_, (_, _, t)| now.saturating_sub(*t) < PARTS_TTL_MS);
             v
         };
         for c in expired {
             self.emit("chat:typing", json!({"chat": c, "on": false}));
         }
-        // забрать ящик
+        // забрать ящик (свой и ящики групп)
+        let groups = self.groups_to_fetch();
         let fetch = {
             let mut st = self.lock();
-            let has = !st.contacts.inbox.is_empty() && !st.contacts.items.is_empty();
+            let has = (!st.contacts.inbox.is_empty() && !st.contacts.items.is_empty()) || groups;
             if has && !st.chats.mail_busy && now >= st.chats.next_fetch {
                 st.chats.mail_busy = true;
                 true
@@ -547,17 +750,38 @@ impl Inner {
             return Some(vec![one]);
         }
         let chunk = MAX_PLAIN - 200;
-        let parts: Vec<&str> = sealed.as_bytes().chunks(chunk).map(|c| std::str::from_utf8(c).unwrap_or("")).collect();
+        let parts: Vec<&str> = sealed
+            .as_bytes()
+            .chunks(chunk)
+            .map(|c| std::str::from_utf8(c).unwrap_or(""))
+            .collect();
         if parts.len() > MAX_PARTS || parts.iter().any(|p| p.is_empty()) {
             return None;
         }
         let n = parts.len();
-        Some(parts.iter().enumerate().map(|(i, p)| json!({"h": h, "m": fid, "i": i, "n": n, "p": p}).to_string().into_bytes()).collect())
+        Some(
+            parts
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    json!({"h": h, "m": fid, "i": i, "n": n, "p": p})
+                        .to_string()
+                        .into_bytes()
+                })
+                .collect(),
+        )
     }
 
     async fn mail_put(self: &Arc<Self>, fid: &str, peer: &str) {
-        let entry = self.db.out_all().into_iter().find(|e| e.fid == fid && e.peer == peer);
-        let inbox = self.contact_by_peer(peer).map(|c| c.inbox).unwrap_or_default();
+        let entry = self
+            .db
+            .out_all()
+            .into_iter()
+            .find(|e| e.fid == fid && e.peer == peer);
+        let inbox = self
+            .contact_by_peer(peer)
+            .map(|c| c.inbox)
+            .unwrap_or_default();
         let key = (fid.to_string(), peer.to_string());
         let (Some(entry), Some(addr)) = (entry, MailAddr::derive(&inbox)) else {
             // запись подтвердили или контакта/ящика нет — больше не пытаемся
@@ -612,9 +836,15 @@ impl Inner {
 
     /// Забрать свой почтовый ящик.
     pub(crate) async fn mail_fetch(self: &Arc<Self>) -> Value {
-        let (inbox, dev) = {
+        let (inbox, dev, contacts) = {
             let st = self.lock();
-            (st.contacts.inbox.clone(), self.node().map(|n| format!("zv4-{}", &n.id()[..16])).unwrap_or_default())
+            (
+                st.contacts.inbox.clone(),
+                self.node()
+                    .map(|n| format!("zv4-{}", &n.id()[..16]))
+                    .unwrap_or_default(),
+                !st.contacts.items.is_empty(),
+            )
         };
         let done = |me: &Arc<Self>, v: Value| {
             let mut st = me.lock();
@@ -623,16 +853,45 @@ impl Inner {
             st.chats.last_fetch = v.clone();
             v
         };
-        let Some(addr) = MailAddr::derive(&inbox) else { return done(self, json!({"ok": false, "error": "нет ящика"})) };
         if dev.is_empty() {
             return done(self, json!({"ok": false, "error": "P2P не запущен"}));
         }
-        let mut cur: Cursor = self.db.kv("mail_cursor").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let groups = if self.groups_to_fetch() {
+            self.groups_mail_fetch(&dev).await
+        } else {
+            Value::Null
+        };
+        let Some(addr) = MailAddr::derive(&inbox).filter(|_| contacts) else {
+            let ok = groups.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            let err = if groups.is_null() {
+                json!("нет ящика")
+            } else {
+                Value::Null
+            };
+            return done(
+                self,
+                json!({"ok": ok, "at": now_ms(), "items": 0, "frames": 0, "error": err, "groups": groups}),
+            );
+        };
+        let mut cur: Cursor = self
+            .db
+            .kv("mail_cursor")
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
         let mb = Mailbox::new(self.signal_config());
         let rep = mb.fetch(&addr, &mut cur, &dev).await;
         // подсказки пар: h → собеседник
-        let peers: Vec<String> = self.lock().contacts.items.iter().map(|c| c.peer.clone()).collect();
-        let hints: HashMap<String, String> = peers.into_iter().filter_map(|p| self.pair_room(&p).map(|r| (r.topic.clone(), p))).collect();
+        let peers: Vec<String> = self
+            .lock()
+            .contacts
+            .items
+            .iter()
+            .map(|c| c.peer.clone())
+            .collect();
+        let hints: HashMap<String, String> = peers
+            .into_iter()
+            .filter_map(|p| self.pair_room(&p).map(|r| (r.topic.clone(), p)))
+            .collect();
         let mut n = 0;
         let mut acks: HashMap<String, Vec<String>> = HashMap::new();
         for it in &rep.items {
@@ -643,7 +902,10 @@ impl Inner {
                 }
             }
         }
-        self.db.kv_set("mail_cursor", &serde_json::to_string(&cur).unwrap_or_default());
+        self.db.kv_set(
+            "mail_cursor",
+            &serde_json::to_string(&cur).unwrap_or_default(),
+        );
         let seqs: Vec<u64> = rep.items.iter().filter_map(|i| i.seq).collect();
         if !seqs.is_empty() {
             mb.ack(&addr, &seqs, &dev).await;
@@ -658,7 +920,10 @@ impl Inner {
                 self.ensure_link(&peer);
             }
             if !linked
-                && let (Some(c), Some(items)) = (self.contact_by_peer(&peer), self.mail_items(&peer, "ack", &frame))
+                && let (Some(c), Some(items)) = (
+                    self.contact_by_peer(&peer),
+                    self.mail_items(&peer, "ack", &frame),
+                )
                 && let Some(a) = MailAddr::derive(&c.inbox)
             {
                 for it in items {
@@ -677,28 +942,44 @@ impl Inner {
                 "nostr": rep.nostr_ok,
                 "ntfy": rep.ntfy_ok,
                 "errors": rep.errors,
+                "groups": groups,
             }),
         )
     }
 
-    fn open_mail_item(&self, data: &[u8], hints: &HashMap<String, String>) -> Option<(String, Value)> {
+    fn open_mail_item(
+        &self,
+        data: &[u8],
+        hints: &HashMap<String, String>,
+    ) -> Option<(String, Value)> {
         let v: Value = serde_json::from_slice(data).ok()?;
         let h = str_of(&v, "h");
         let peer = hints.get(h)?.clone();
         let sealed = if let Some(n) = v.get("n").and_then(|x| x.as_u64()) {
-            let (n, i, m) = (n as usize, v.get("i")?.as_u64()? as usize, str_of(&v, "m").to_string());
+            let (n, i, m) = (
+                n as usize,
+                v.get("i")?.as_u64()? as usize,
+                str_of(&v, "m").to_string(),
+            );
             if n == 0 || n > MAX_PARTS || i >= n {
                 return None;
             }
             let key = format!("{h}|{m}");
             let mut st = self.lock();
-            let e = st.chats.parts.entry(key.clone()).or_insert_with(|| (n, HashMap::new(), now_ms()));
+            let e = st
+                .chats
+                .parts
+                .entry(key.clone())
+                .or_insert_with(|| (n, HashMap::new(), now_ms()));
             e.1.insert(i, str_of(&v, "p").to_string());
             if e.1.len() < e.0 {
                 return None;
             }
             let (n, parts, _) = st.chats.parts.remove(&key)?;
-            (0..n).map(|i| parts.get(&i).cloned()).collect::<Option<Vec<_>>>()?.concat()
+            (0..n)
+                .map(|i| parts.get(&i).cloned())
+                .collect::<Option<Vec<_>>>()?
+                .concat()
         } else {
             str_of(&v, "p").to_string()
         };
@@ -735,7 +1016,11 @@ impl Inner {
                     _ => "text",
                 };
                 let body = clean_text(str_of(&frame, "b"));
-                let file = if kind == "file" { self.file_meta(&frame) } else { None };
+                let file = if kind == "file" {
+                    self.file_meta(&frame)
+                } else {
+                    None
+                };
                 if (kind == "text" && body.is_empty()) || (kind == "file" && file.is_none()) {
                     return Some(id);
                 }
@@ -746,21 +1031,30 @@ impl Inner {
                     out: false,
                     ts: ts.min(now + 300_000),
                     rx: now,
-                    lc: frame.get("lc").and_then(|v| v.as_u64()).unwrap_or(0).min(u64::MAX / 4),
+                    lc: frame
+                        .get("lc")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0)
+                        .min(u64::MAX / 4),
                     kind: kind.into(),
                     body,
-                    reply: frame.get("re").and_then(|v| v.as_str()).filter(|r| valid_id(r)).map(str::to_string),
+                    reply: frame
+                        .get("re")
+                        .and_then(|v| v.as_str())
+                        .filter(|r| valid_id(r))
+                        .map(str::to_string),
                     file: file.clone(),
                     st: 0,
                     edited: None,
                     deleted: false,
                     via: via.into(),
+                    sender: String::new(),
                 };
                 // своё сообщение с тем же id (подделка) — игнор
                 let mine = self.db.msg(&id).is_some_and(|x| x.chat != c.id || x.out);
                 if !mine && self.db.insert_msg(&m) {
                     if let Some(f) = &file {
-                        self.file_offered(&c, &m, f);
+                        self.file_offered(&c.id, &m, f);
                     }
                     let was_typing = self.lock().chats.typing.remove(&c.id).is_some();
                     if was_typing {
@@ -778,9 +1072,19 @@ impl Inner {
                 if let Some(m) = self.db.msg(mid).filter(|m| m.chat == c.id && !m.out) {
                     let changed = if t == "chat_edit" {
                         let b = clean_text(str_of(&frame, "b"));
-                        !b.is_empty() && self.db.edit(mid, &b, frame.get("ts").and_then(|v| v.as_u64()).unwrap_or(now))
+                        !b.is_empty()
+                            && self.db.edit(
+                                mid,
+                                &b,
+                                frame.get("ts").and_then(|v| v.as_u64()).unwrap_or(now),
+                            )
                     } else {
-                        if let Some(f) = m.file.as_ref().and_then(|f| f.get("fid")).and_then(|x| x.as_str()) {
+                        if let Some(f) = m
+                            .file
+                            .as_ref()
+                            .and_then(|f| f.get("fid"))
+                            .and_then(|x| x.as_str())
+                        {
                             self.file_cancel_inner(f, true);
                         }
                         self.db.mark_deleted(mid)
@@ -792,11 +1096,19 @@ impl Inner {
                 }
                 valid_id(&fid).then_some(fid)
             }
+            "chat_group" => self.on_group_invite(&c, &frame),
             "chat_ack" => {
                 let ids: Vec<String> = frame
                     .get("ids")
                     .and_then(|v| v.as_array())
-                    .map(|a| a.iter().filter_map(|x| x.as_str()).filter(|x| valid_id(x)).take(500).map(str::to_string).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str())
+                            .filter(|x| valid_id(x))
+                            .take(500)
+                            .map(str::to_string)
+                            .collect()
+                    })
                     .unwrap_or_default();
                 {
                     let mut st = self.lock();
@@ -825,7 +1137,12 @@ impl Inner {
                 if !matches!(src, Src::Link(_)) {
                     return None;
                 }
-                let first = self.lock().chats.typing.insert(c.id.clone(), now + TYPING_TTL_MS).is_none();
+                let first = self
+                    .lock()
+                    .chats
+                    .typing
+                    .insert(c.id.clone(), now + TYPING_TTL_MS)
+                    .is_none();
                 if first {
                     self.emit("chat:typing", json!({"chat": c.id, "on": true}));
                 }

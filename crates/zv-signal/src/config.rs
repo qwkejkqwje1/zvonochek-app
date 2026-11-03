@@ -46,7 +46,12 @@ pub struct SignalConfig {
 }
 
 fn b(wss: &str, tcp: &str) -> BrokerSpec {
-    BrokerSpec { wss: wss.into(), tcp: Some(tcp.into()), username: None, password: None }
+    BrokerSpec {
+        wss: wss.into(),
+        tcp: Some(tcp.into()),
+        username: None,
+        password: None,
+    }
 }
 
 impl Default for SignalConfig {
@@ -60,9 +65,18 @@ impl Default for SignalConfig {
                     password: Some("public".into()),
                 },
                 b("wss://broker.emqx.io:8084/mqtt", "broker.emqx.io:1883"),
-                b("wss://broker.hivemq.com:8884/mqtt", "broker.hivemq.com:1883"),
-                b("wss://test.mosquitto.org:8081/mqtt", "test.mosquitto.org:1883"),
-                b("wss://mqtt.eclipseprojects.io/mqtt", "mqtt.eclipseprojects.io:1883"),
+                b(
+                    "wss://broker.hivemq.com:8884/mqtt",
+                    "broker.hivemq.com:1883",
+                ),
+                b(
+                    "wss://test.mosquitto.org:8081/mqtt",
+                    "test.mosquitto.org:1883",
+                ),
+                b(
+                    "wss://mqtt.eclipseprojects.io/mqtt",
+                    "mqtt.eclipseprojects.io:1883",
+                ),
             ],
             worker_url: Some("https://zvonochek.zerewgwe.workers.dev".into()),
             nostr_relays: [

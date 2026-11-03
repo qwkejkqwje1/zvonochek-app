@@ -29,7 +29,10 @@ pub fn ct_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.bytes()
+        .zip(b.bytes())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 /// Мастер-сид устройства → секретный ключ iroh (seed Ed25519).
@@ -39,7 +42,11 @@ pub fn endpoint_secret(seed: &[u8; 32]) -> [u8; 32] {
 
 /// Общий секрет пары: X25519(мой секрет, его ID) → HKDF. Оба устройства получают одно и то же,
 /// третьи лица (даже знающие код приглашения) — нет. `None` — ID собеседника не точка кривой.
-pub fn pair_secret(my_secret: &[u8; 32], my_id: &[u8; 32], their_id: &[u8; 32]) -> Option<[u8; 32]> {
+pub fn pair_secret(
+    my_secret: &[u8; 32],
+    my_id: &[u8; 32],
+    their_id: &[u8; 32],
+) -> Option<[u8; 32]> {
     let h = Sha512::digest(my_secret);
     let mut scalar = [0u8; 32];
     scalar.copy_from_slice(&h[..32]);
@@ -48,7 +55,11 @@ pub fn pair_secret(my_secret: &[u8; 32], my_id: &[u8; 32], their_id: &[u8; 32]) 
     if shared.0 == [0u8; 32] {
         return None;
     }
-    let (a, b) = if my_id < their_id { (my_id, their_id) } else { (their_id, my_id) };
+    let (a, b) = if my_id < their_id {
+        (my_id, their_id)
+    } else {
+        (their_id, my_id)
+    };
     let mut info = b"zv4-pair".to_vec();
     info.extend_from_slice(a);
     info.extend_from_slice(b);
@@ -62,13 +73,19 @@ pub fn bind_proof(k_bind: &[u8; 32], from: &str, to: &str) -> String {
 
 /// Хеш секрета приглашения (сверка «знает код»).
 pub fn invite_tag(invite_secret: &str, from: &str, to: &str) -> String {
-    hmac_hex(invite_secret.as_bytes(), &[b"zv4-invite", from.as_bytes(), to.as_bytes()])
+    hmac_hex(
+        invite_secret.as_bytes(),
+        &[b"zv4-invite", from.as_bytes(), to.as_bytes()],
+    )
 }
 
 const EMOJI: [&str; 64] = [
-    "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐔", //
-    "🐧", "🐦", "🦆", "🦉", "🐺", "🐴", "🦄", "🐝", "🦋", "🐌", "🐞", "🐢", "🐙", "🦀", "🐠", "🐬", //
-    "🐳", "🐘", "🦒", "🌵", "🌲", "🌻", "🌹", "🍄", "🌙", "⭐", "🔥", "🌈", "⛄", "🍎", "🍌", "🍇", //
+    "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵",
+    "🐔", //
+    "🐧", "🐦", "🦆", "🦉", "🐺", "🐴", "🦄", "🐝", "🦋", "🐌", "🐞", "🐢", "🐙", "🦀", "🐠",
+    "🐬", //
+    "🐳", "🐘", "🦒", "🌵", "🌲", "🌻", "🌹", "🍄", "🌙", "⭐", "🔥", "🌈", "⛄", "🍎", "🍌",
+    "🍇", //
     "🍓", "🍒", "🍕", "🎂", "⚽", "🎸", "🚲", "🚀", "⏰", "🔑", "🎈", "📚", "💡", "🎁", "⚓", "🔔",
 ];
 
@@ -81,9 +98,14 @@ pub fn safety_code(a: &str, b: &str) -> (String, String) {
     h.update(y.as_bytes());
     let d = h.finalize();
     let bits = u64::from_be_bytes(d[..8].try_into().unwrap());
-    let emoji: Vec<&str> = (0..5).map(|i| EMOJI[((bits >> (58 - i * 6)) & 63) as usize]).collect();
+    let emoji: Vec<&str> = (0..5)
+        .map(|i| EMOJI[((bits >> (58 - i * 6)) & 63) as usize])
+        .collect();
     let num = u32::from_be_bytes(d[8..12].try_into().unwrap()) % 1_000_000;
-    (emoji.join(" "), format!("{:03} {:03}", num / 1000, num % 1000))
+    (
+        emoji.join(" "),
+        format!("{:03} {:03}", num / 1000, num % 1000),
+    )
 }
 
 #[cfg(test)]

@@ -131,11 +131,14 @@ fn msg_row(r: &rusqlite::Row) -> rusqlite::Result<Msg> {
     })
 }
 
-const MSG_COLS: &str = "id, chat, out, ts, rx, lc, kind, body, reply, file, st, edited, deleted, via, sender";
+const MSG_COLS: &str =
+    "id, chat, out, ts, rx, lc, kind, body, reply, file, st, edited, deleted, via, sender";
 
 /// Базы прежних версий: недостающие столбцы.
 fn migrate(c: &Connection) -> rusqlite::Result<()> {
-    let has = c.prepare("SELECT 1 FROM pragma_table_info('msgs') WHERE name = 'sender'")?.exists([])?;
+    let has = c
+        .prepare("SELECT 1 FROM pragma_table_info('msgs') WHERE name = 'sender'")?
+        .exists([])?;
     if !has {
         c.execute_batch("ALTER TABLE msgs ADD COLUMN sender TEXT NOT NULL DEFAULT ''")?;
     }
@@ -181,12 +184,17 @@ impl Db {
     /// Снимок базы в файл (для переноса профиля).
     pub fn snapshot(&self, path: &Path) -> anyhow::Result<()> {
         let _ = std::fs::remove_file(path);
-        self.c().execute("VACUUM INTO ?1", [path.display().to_string()])?;
+        self.c()
+            .execute("VACUUM INTO ?1", [path.display().to_string()])?;
         Ok(())
     }
 
     pub fn msgs_count(&self) -> u64 {
-        self.c().query_row("SELECT COUNT(*) FROM msgs WHERE deleted = 0", [], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
+        self.c()
+            .query_row("SELECT COUNT(*) FROM msgs WHERE deleted = 0", [], |r| {
+                r.get::<_, i64>(0)
+            })
+            .unwrap_or(0) as u64
     }
 
     fn c(&self) -> std::sync::MutexGuard<'_, Connection> {
@@ -224,7 +232,11 @@ impl Db {
 
     pub fn msg(&self, id: &str) -> Option<Msg> {
         self.c()
-            .query_row(&format!("SELECT {MSG_COLS} FROM msgs WHERE id = ?1"), [id], msg_row)
+            .query_row(
+                &format!("SELECT {MSG_COLS} FROM msgs WHERE id = ?1"),
+                [id],
+                msg_row,
+            )
             .optional()
             .ok()
             .flatten()
@@ -235,7 +247,11 @@ impl Db {
         let c = self.c();
         let pivot = before.and_then(|b| {
             c.query_row("SELECT lc, ts, id FROM msgs WHERE id = ?1", [b], |r| {
-                Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?))
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
             })
             .optional()
             .ok()
@@ -250,13 +266,17 @@ impl Db {
                          ORDER BY lc DESC, ts DESC, id DESC LIMIT ?5"
                     ))
                     .expect("sql");
-                q.query_map(params![chat, lc, ts, id, lim], msg_row).map(|r| r.flatten().collect()).unwrap_or_default()
+                q.query_map(params![chat, lc, ts, id, lim], msg_row)
+                    .map(|r| r.flatten().collect())
+                    .unwrap_or_default()
             }
             None => {
                 let mut q = c
                     .prepare(&format!("SELECT {MSG_COLS} FROM msgs WHERE chat = ?1 ORDER BY lc DESC, ts DESC, id DESC LIMIT ?2"))
                     .expect("sql");
-                q.query_map(params![chat, lim], msg_row).map(|r| r.flatten().collect()).unwrap_or_default()
+                q.query_map(params![chat, lim], msg_row)
+                    .map(|r| r.flatten().collect())
+                    .unwrap_or_default()
             }
         };
         let more = v.len() > limit;
@@ -275,7 +295,11 @@ impl Db {
 
     pub fn max_lc(&self, chat: &str) -> u64 {
         self.c()
-            .query_row("SELECT COALESCE(MAX(lc), 0) FROM msgs WHERE chat = ?1", [chat], |r| r.get::<_, i64>(0))
+            .query_row(
+                "SELECT COALESCE(MAX(lc), 0) FROM msgs WHERE chat = ?1",
+                [chat],
+                |r| r.get::<_, i64>(0),
+            )
             .unwrap_or(0) as u64
     }
 
@@ -283,7 +307,11 @@ impl Db {
     pub fn unread(&self) -> Vec<(String, u64)> {
         let c = self.c();
         let mut q = c.prepare("SELECT chat, COUNT(*) FROM msgs WHERE out = 0 AND st < 3 AND deleted = 0 GROUP BY chat").expect("sql");
-        q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))).map(|r| r.flatten().collect()).unwrap_or_default()
+        q.query_map([], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)? as u64))
+        })
+        .map(|r| r.flatten().collect())
+        .unwrap_or_default()
     }
 
     /// Поднять состояние исходящих (только вверх). Возвращает изменённые id.
@@ -292,7 +320,10 @@ impl Db {
         let mut changed = Vec::new();
         for id in ids {
             let n = c
-                .execute("UPDATE msgs SET st = ?1 WHERE id = ?2 AND chat = ?3 AND out = 1 AND st < ?1", params![st as i64, id, chat])
+                .execute(
+                    "UPDATE msgs SET st = ?1 WHERE id = ?2 AND chat = ?3 AND out = 1 AND st < ?1",
+                    params![st as i64, id, chat],
+                )
                 .unwrap_or(0);
             if n > 0 {
                 changed.push(id.clone());
@@ -304,21 +335,37 @@ impl Db {
     /// Собеседник прочитал всё до `upto` (наше сообщение) включительно.
     pub fn read_out_upto(&self, chat: &str, upto: &str) -> Vec<String> {
         let c = self.c();
-        let Ok(lc) = c.query_row("SELECT lc FROM msgs WHERE id = ?1 AND chat = ?2", params![upto, chat], |r| r.get::<_, i64>(0)) else {
+        let Ok(lc) = c.query_row(
+            "SELECT lc FROM msgs WHERE id = ?1 AND chat = ?2",
+            params![upto, chat],
+            |r| r.get::<_, i64>(0),
+        ) else {
             return Vec::new();
         };
         let ids: Vec<String> = {
-            let mut q = c.prepare("SELECT id FROM msgs WHERE chat = ?1 AND out = 1 AND st < 3 AND lc <= ?2").expect("sql");
-            q.query_map(params![chat, lc], |r| r.get::<_, String>(0)).map(|r| r.flatten().collect()).unwrap_or_default()
+            let mut q = c
+                .prepare("SELECT id FROM msgs WHERE chat = ?1 AND out = 1 AND st < 3 AND lc <= ?2")
+                .expect("sql");
+            q.query_map(params![chat, lc], |r| r.get::<_, String>(0))
+                .map(|r| r.flatten().collect())
+                .unwrap_or_default()
         };
-        let _ = c.execute("UPDATE msgs SET st = 3 WHERE chat = ?1 AND out = 1 AND st < 3 AND lc <= ?2", params![chat, lc]);
+        let _ = c.execute(
+            "UPDATE msgs SET st = 3 WHERE chat = ?1 AND out = 1 AND st < 3 AND lc <= ?2",
+            params![chat, lc],
+        );
         ids
     }
 
     /// Пометить входящие чата прочитанными; вернуть последнее входящее (для отметки собеседнику).
     pub fn read_in_all(&self, chat: &str) -> (u64, Option<String>) {
         let c = self.c();
-        let n = c.execute("UPDATE msgs SET st = 3 WHERE chat = ?1 AND out = 0 AND st < 3", [chat]).unwrap_or(0) as u64;
+        let n = c
+            .execute(
+                "UPDATE msgs SET st = 3 WHERE chat = ?1 AND out = 0 AND st < 3",
+                [chat],
+            )
+            .unwrap_or(0) as u64;
         let last = c
             .query_row("SELECT id FROM msgs WHERE chat = ?1 AND out = 0 ORDER BY lc DESC, ts DESC, id DESC LIMIT 1", [chat], |r| {
                 r.get::<_, String>(0)
@@ -331,7 +378,10 @@ impl Db {
 
     pub fn edit(&self, id: &str, body: &str, ts: u64) -> bool {
         self.c()
-            .execute("UPDATE msgs SET body = ?1, edited = ?2 WHERE id = ?3 AND deleted = 0", params![body, ts as i64, id])
+            .execute(
+                "UPDATE msgs SET body = ?1, edited = ?2 WHERE id = ?3 AND deleted = 0",
+                params![body, ts as i64, id],
+            )
             .unwrap_or(0)
             > 0
     }
@@ -339,12 +389,21 @@ impl Db {
     /// Удалено у всех: текст и файл стираются, место в ленте остаётся.
     /// Заменить вложение сообщения (заметка о групповом звонке: участники, окончание).
     pub fn set_msg_file(&self, id: &str, file: &Value) -> bool {
-        self.c().execute("UPDATE msgs SET file = ?1 WHERE id = ?2", params![file.to_string(), id]).unwrap_or(0) > 0
+        self.c()
+            .execute(
+                "UPDATE msgs SET file = ?1 WHERE id = ?2",
+                params![file.to_string(), id],
+            )
+            .unwrap_or(0)
+            > 0
     }
 
     pub fn mark_deleted(&self, id: &str) -> bool {
         self.c()
-            .execute("UPDATE msgs SET deleted = 1, body = '', file = NULL, reply = NULL WHERE id = ?1", [id])
+            .execute(
+                "UPDATE msgs SET deleted = 1, body = '', file = NULL, reply = NULL WHERE id = ?1",
+                [id],
+            )
             .unwrap_or(0)
             > 0
     }
@@ -353,7 +412,9 @@ impl Db {
     pub fn remove(&self, id: &str) -> bool {
         let c = self.c();
         let _ = c.execute("DELETE FROM files WHERE msg = ?1", [id]);
-        c.execute("DELETE FROM msgs WHERE id = ?1", [id]).unwrap_or(0) > 0
+        c.execute("DELETE FROM msgs WHERE id = ?1", [id])
+            .unwrap_or(0)
+            > 0
     }
 
     pub fn clear_chat(&self, chat: &str) {
@@ -364,7 +425,11 @@ impl Db {
 
     #[cfg(test)]
     pub fn count(&self, chat: &str) -> u64 {
-        self.c().query_row("SELECT COUNT(*) FROM msgs WHERE chat = ?1", [chat], |r| r.get::<_, i64>(0)).unwrap_or(0) as u64
+        self.c()
+            .query_row("SELECT COUNT(*) FROM msgs WHERE chat = ?1", [chat], |r| {
+                r.get::<_, i64>(0)
+            })
+            .unwrap_or(0) as u64
     }
 
     // ---------- очередь доставки ----------
@@ -377,20 +442,34 @@ impl Db {
     }
 
     pub fn out_del(&self, fid: &str, peer: &str) -> bool {
-        self.c().execute("DELETE FROM outbox WHERE fid = ?1 AND peer = ?2", params![fid, peer]).unwrap_or(0) > 0
+        self.c()
+            .execute(
+                "DELETE FROM outbox WHERE fid = ?1 AND peer = ?2",
+                params![fid, peer],
+            )
+            .unwrap_or(0)
+            > 0
     }
 
     /// Убрать устаревшие записи вида (например, прежнюю отметку о прочтении).
     pub fn out_del_kind(&self, peer: &str, kind: &str) {
-        let _ = self.c().execute("DELETE FROM outbox WHERE peer = ?1 AND kind = ?2", params![peer, kind]);
+        let _ = self.c().execute(
+            "DELETE FROM outbox WHERE peer = ?1 AND kind = ?2",
+            params![peer, kind],
+        );
     }
 
     pub fn out_del_peer(&self, peer: &str) {
-        let _ = self.c().execute("DELETE FROM outbox WHERE peer = ?1", [peer]);
+        let _ = self
+            .c()
+            .execute("DELETE FROM outbox WHERE peer = ?1", [peer]);
     }
 
     pub fn out_set_frame(&self, fid: &str, peer: &str, frame: &Value) {
-        let _ = self.c().execute("UPDATE outbox SET frame = ?1 WHERE fid = ?2 AND peer = ?3", params![frame.to_string(), fid, peer]);
+        let _ = self.c().execute(
+            "UPDATE outbox SET frame = ?1 WHERE fid = ?2 AND peer = ?3",
+            params![frame.to_string(), fid, peer],
+        );
     }
 
     pub fn out_get(&self, fid: &str, peer: &str) -> Option<OutEntry> {
@@ -415,12 +494,17 @@ impl Db {
     }
 
     pub fn out_mailed(&self, fid: &str, peer: &str) {
-        let _ = self.c().execute("UPDATE outbox SET mailed = 1 WHERE fid = ?1 AND peer = ?2", params![fid, peer]);
+        let _ = self.c().execute(
+            "UPDATE outbox SET mailed = 1 WHERE fid = ?1 AND peer = ?2",
+            params![fid, peer],
+        );
     }
 
     pub fn out_all(&self) -> Vec<OutEntry> {
         let c = self.c();
-        let mut q = c.prepare("SELECT fid, peer, kind, frame, created, mailed FROM outbox ORDER BY created").expect("sql");
+        let mut q = c
+            .prepare("SELECT fid, peer, kind, frame, created, mailed FROM outbox ORDER BY created")
+            .expect("sql");
         q.query_map([], |r| {
             Ok(OutEntry {
                 fid: r.get(0)?,
@@ -459,14 +543,32 @@ impl Db {
     }
 
     pub fn file(&self, fid: &str) -> Option<FileRec> {
-        self.c().query_row(&format!("SELECT {FILE_COLS} FROM files WHERE fid = ?1"), [fid], file_row).optional().ok().flatten()
+        self.c()
+            .query_row(
+                &format!("SELECT {FILE_COLS} FROM files WHERE fid = ?1"),
+                [fid],
+                file_row,
+            )
+            .optional()
+            .ok()
+            .flatten()
     }
 
     pub fn files_where_st(&self, sts: &[&str]) -> Vec<FileRec> {
         let c = self.c();
-        let list = sts.iter().map(|s| format!("'{s}'")).collect::<Vec<_>>().join(",");
-        let mut q = c.prepare(&format!("SELECT {FILE_COLS} FROM files WHERE st IN ({list})")).expect("sql");
-        q.query_map([], file_row).map(|r| r.flatten().collect()).unwrap_or_default()
+        let list = sts
+            .iter()
+            .map(|s| format!("'{s}'"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let mut q = c
+            .prepare(&format!(
+                "SELECT {FILE_COLS} FROM files WHERE st IN ({list})"
+            ))
+            .expect("sql");
+        q.query_map([], file_row)
+            .map(|r| r.flatten().collect())
+            .unwrap_or_default()
     }
 
     pub fn file_set(&self, fid: &str, st: &str, done: u64, path: Option<&str>, err: &str) {
@@ -490,18 +592,31 @@ impl Db {
 
     pub fn files_of_chat(&self, chat: &str) -> Vec<FileRec> {
         let c = self.c();
-        let mut q = c.prepare(&format!("SELECT {FILE_COLS} FROM files WHERE chat = ?1")).expect("sql");
-        q.query_map([chat], file_row).map(|r| r.flatten().collect()).unwrap_or_default()
+        let mut q = c
+            .prepare(&format!("SELECT {FILE_COLS} FROM files WHERE chat = ?1"))
+            .expect("sql");
+        q.query_map([chat], file_row)
+            .map(|r| r.flatten().collect())
+            .unwrap_or_default()
     }
 
     // ---------- мелочи ----------
 
     pub fn kv(&self, k: &str) -> Option<String> {
-        self.c().query_row("SELECT v FROM kv WHERE k = ?1", [k], |r| r.get::<_, String>(0)).optional().ok().flatten()
+        self.c()
+            .query_row("SELECT v FROM kv WHERE k = ?1", [k], |r| {
+                r.get::<_, String>(0)
+            })
+            .optional()
+            .ok()
+            .flatten()
     }
 
     pub fn kv_set(&self, k: &str, v: &str) {
-        let _ = self.c().execute("INSERT OR REPLACE INTO kv (k, v) VALUES (?1, ?2)", params![k, v]);
+        let _ = self.c().execute(
+            "INSERT OR REPLACE INTO kv (k, v) VALUES (?1, ?2)",
+            params![k, v],
+        );
     }
 }
 
@@ -535,9 +650,14 @@ mod tests {
         let p = d.path().join("old.db");
         {
             let c = Connection::open(&p).unwrap();
-            c.execute_batch(&SCHEMA.replace(",\n  sender TEXT NOT NULL DEFAULT ''", "")).unwrap();
+            c.execute_batch(&SCHEMA.replace(",\n  sender TEXT NOT NULL DEFAULT ''", ""))
+                .unwrap();
             c.execute("INSERT INTO msgs (id, chat, out, ts, rx, lc, kind) VALUES ('a', 'c', 0, 1, 1, 1, 'text')", []).unwrap();
-            let has = c.prepare("SELECT 1 FROM pragma_table_info('msgs') WHERE name = 'sender'").unwrap().exists([]).unwrap();
+            let has = c
+                .prepare("SELECT 1 FROM pragma_table_info('msgs') WHERE name = 'sender'")
+                .unwrap()
+                .exists([])
+                .unwrap();
             assert!(!has);
         }
         let db = Db::open(&p).unwrap();
@@ -556,16 +676,25 @@ mod tests {
         }
         assert!(!db.insert_msg(&m("m1", "c1", false, 1)));
         let (v, more) = db.history("c1", None, 3);
-        assert_eq!(v.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["m3", "m4", "m5"]);
+        assert_eq!(
+            v.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            ["m3", "m4", "m5"]
+        );
         assert!(more);
         let (v, more) = db.history("c1", Some("m3"), 10);
-        assert_eq!(v.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["m1", "m2"]);
+        assert_eq!(
+            v.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            ["m1", "m2"]
+        );
         assert!(!more);
         assert_eq!(db.unread(), vec![("c1".to_string(), 3)]);
         let (n, last) = db.read_in_all("c1");
         assert_eq!((n, last.as_deref()), (3, Some("m5")));
         assert!(db.unread().is_empty());
-        assert_eq!(db.raise_out("c1", &["m2".into(), "m4".into()], 2), vec!["m2", "m4"]);
+        assert_eq!(
+            db.raise_out("c1", &["m2".into(), "m4".into()], 2),
+            vec!["m2", "m4"]
+        );
         assert!(db.raise_out("c1", &["m2".into()], 1).is_empty());
         assert_eq!(db.read_out_upto("c1", "m2"), vec!["m2"]);
         assert_eq!(db.msg("m4").unwrap().st, 2);

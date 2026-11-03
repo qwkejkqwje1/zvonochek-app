@@ -50,9 +50,22 @@ impl NostrKey {
     }
 
     /// Событие любого вида: (id, кадр `["EVENT", {...}]`).
-    pub fn event_kind(&self, kind: u64, tags: serde_json::Value, content: &str, created_at: u64) -> (String, String) {
-        let ser = serde_json::to_string(&serde_json::json!([0, self.pubkey, created_at, kind, tags, content]))
-            .expect("json");
+    pub fn event_kind(
+        &self,
+        kind: u64,
+        tags: serde_json::Value,
+        content: &str,
+        created_at: u64,
+    ) -> (String, String) {
+        let ser = serde_json::to_string(&serde_json::json!([
+            0,
+            self.pubkey,
+            created_at,
+            kind,
+            tags,
+            content
+        ]))
+        .expect("json");
         let id: [u8; 32] = Sha256::digest(ser.as_bytes()).into();
         let mut aux = [0u8; 32];
         rand::fill(&mut aux);
@@ -66,7 +79,10 @@ impl NostrKey {
             "id": hex::encode(id),
             "sig": hex::encode(sig.to_bytes()),
         });
-        (hex::encode(id), serde_json::to_string(&serde_json::json!(["EVENT", ev])).expect("json"))
+        (
+            hex::encode(id),
+            serde_json::to_string(&serde_json::json!(["EVENT", ev])).expect("json"),
+        )
     }
 }
 
@@ -92,12 +108,21 @@ pub fn verify_event(ev: &serde_json::Value) -> bool {
     if hex::encode(digest) != id {
         return false;
     }
-    let (Ok(pkb), Ok(sigb)) = (hex::decode(pk), hex::decode(sig)) else { return false };
-    let (Ok(pkb), Ok(sigb)) = (<[u8; 32]>::try_from(pkb.as_slice()), <[u8; 64]>::try_from(sigb.as_slice())) else {
+    let (Ok(pkb), Ok(sigb)) = (hex::decode(pk), hex::decode(sig)) else {
         return false;
     };
-    let Ok(vk) = k256::schnorr::VerifyingKey::from_bytes(&pkb.into()) else { return false };
-    let Ok(sig) = k256::schnorr::Signature::from_bytes(&sigb) else { return false };
+    let (Ok(pkb), Ok(sigb)) = (
+        <[u8; 32]>::try_from(pkb.as_slice()),
+        <[u8; 64]>::try_from(sigb.as_slice()),
+    ) else {
+        return false;
+    };
+    let Ok(vk) = k256::schnorr::VerifyingKey::from_bytes(&pkb.into()) else {
+        return false;
+    };
+    let Ok(sig) = k256::schnorr::Signature::from_bytes(&sigb) else {
+        return false;
+    };
     vk.verify_raw(&digest, &sig).is_ok()
 }
 
@@ -110,7 +135,12 @@ struct NostrSpawner {
 }
 
 impl Spawner for NostrSpawner {
-    fn spawn(&mut self, id: u64, _renew: bool, events: mpsc::UnboundedSender<ConnEvent>) -> ConnHandle {
+    fn spawn(
+        &mut self,
+        id: u64,
+        _renew: bool,
+        events: mpsc::UnboundedSender<ConnEvent>,
+    ) -> ConnHandle {
         let (h, cmd, bytes, _rotate) = ConnHandle::new(id);
         let url = self.url.clone();
         let ntag = self.ntag.clone();
@@ -213,7 +243,13 @@ fn event_content(frame: &str, own_pk: &str) -> Option<String> {
 }
 
 /// Запустить канал к одному реле. Отправляемые пакеты — уже готовые кадры `["EVENT", …]`.
-pub(crate) fn spawn(url: &str, topic: &str, own_pk: Arc<str>, cfg: &SignalConfig, hub: ChanTx) -> ChanHandle {
+pub(crate) fn spawn(
+    url: &str,
+    topic: &str,
+    own_pk: Arc<str>,
+    cfg: &SignalConfig,
+    hub: ChanTx,
+) -> ChanHandle {
     let name = url.trim_start_matches("wss://").trim_end_matches('/');
     let (h, cmd_rx, shared) = ChanHandle::new(Kind::Nostr, name);
     let sp = NostrSpawner {
@@ -247,7 +283,13 @@ mod tests {
         let mut bad = v[1].clone();
         bad["content"] = "z1.other".into();
         assert!(!verify_event(&bad));
-        assert_eq!(event_content(&format!("[\"EVENT\",\"zv\",{}]", v[1]), "other").as_deref(), Some("z1.abc.def"));
-        assert_eq!(event_content(&format!("[\"EVENT\",\"zv\",{}]", v[1]), &k.pubkey), None);
+        assert_eq!(
+            event_content(&format!("[\"EVENT\",\"zv\",{}]", v[1]), "other").as_deref(),
+            Some("z1.abc.def")
+        );
+        assert_eq!(
+            event_content(&format!("[\"EVENT\",\"zv\",{}]", v[1]), &k.pubkey),
+            None
+        );
     }
 }

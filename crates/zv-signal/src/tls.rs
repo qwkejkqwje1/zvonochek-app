@@ -66,9 +66,11 @@ pub async fn ws_connect(
 ) -> anyhow::Result<Ws> {
     let mut req = url.into_client_request()?;
     if let Some(p) = subprotocol {
-        req.headers_mut().insert("Sec-WebSocket-Protocol", HeaderValue::from_str(p)?);
+        req.headers_mut()
+            .insert("Sec-WebSocket-Protocol", HeaderValue::from_str(p)?);
     }
-    req.headers_mut().insert("User-Agent", HeaderValue::from_str(user_agent)?);
+    req.headers_mut()
+        .insert("User-Agent", HeaderValue::from_str(user_agent)?);
     let fut = tokio_tungstenite::connect_async_tls_with_config(
         req,
         None,

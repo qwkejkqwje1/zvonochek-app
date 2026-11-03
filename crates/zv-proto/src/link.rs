@@ -25,11 +25,15 @@ impl Link {
 
 /// Проверка секрета так же, как в вебе: `/^[A-Za-z0-9_-]{22,}$/`.
 pub fn valid_secret(s: &str) -> bool {
-    s.len() >= 22 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    s.len() >= 22
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
 fn valid_d(s: &str) -> bool {
-    s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    s.len() == 32
+        && s.bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 /// Разбор ссылки, фрагмента (`#k=…`, `k=…`) или «голого» секрета.
@@ -42,7 +46,10 @@ pub fn parse_link(input: &str) -> Option<Link> {
         Some(i) => &s[i + 1..],
         None if s.contains('=') => s.rsplit('?').next().unwrap_or(s),
         None if valid_secret(s) => {
-            return Some(Link::Call { secret: s.to_string(), d: None });
+            return Some(Link::Call {
+                secret: s.to_string(),
+                d: None,
+            });
         }
         None => return None,
     };
@@ -72,7 +79,10 @@ pub fn parse_link(input: &str) -> Option<Link> {
         return Some(Link::Chat(c));
     }
     let secret = k.filter(|v| valid_secret(v))?;
-    Some(Link::Call { secret, d: d.filter(|v| valid_d(v)) })
+    Some(Link::Call {
+        secret,
+        d: d.filter(|v| valid_d(v)),
+    })
 }
 
 /// Новый секрет как в вебе: 32 случайных байта → base64url (43 символа).
@@ -99,7 +109,10 @@ mod tests {
 
     #[test]
     fn parses_variants() {
-        let want = Link::Call { secret: S.into(), d: None };
+        let want = Link::Call {
+            secret: S.into(),
+            d: None,
+        };
         assert_eq!(parse_link(&call_url(S)), Some(want.clone()));
         assert_eq!(parse_link(&app_url(S)), Some(want.clone()));
         assert_eq!(parse_link(&format!("#k={S}")), Some(want.clone()));
@@ -108,10 +121,19 @@ mod tests {
         let d = "0123456789abcdef0123456789abcdef";
         assert_eq!(
             parse_link(&format!("{WEB_BASE}#k={S}&d={d}")),
-            Some(Link::Call { secret: S.into(), d: Some(d.into()) })
+            Some(Link::Call {
+                secret: S.into(),
+                d: Some(d.into())
+            })
         );
-        assert_eq!(parse_link(&format!("{WEB_BASE}#chat=xyz")), Some(Link::Chat("xyz".into())));
-        assert_eq!(parse_link(&format!("{WEB_BASE}#link=a.b")), Some(Link::DeviceLink("a.b".into())));
+        assert_eq!(
+            parse_link(&format!("{WEB_BASE}#chat=xyz")),
+            Some(Link::Chat("xyz".into()))
+        );
+        assert_eq!(
+            parse_link(&format!("{WEB_BASE}#link=a.b")),
+            Some(Link::DeviceLink("a.b".into()))
+        );
     }
 
     #[test]
@@ -122,7 +144,10 @@ mod tests {
         // некорректный d просто игнорируется
         assert_eq!(
             parse_link(&format!("#k={S}&d=XYZ")),
-            Some(Link::Call { secret: S.into(), d: None })
+            Some(Link::Call {
+                secret: S.into(),
+                d: None
+            })
         );
     }
 

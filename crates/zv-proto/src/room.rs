@@ -16,7 +16,9 @@ pub struct Room {
 
 impl std::fmt::Debug for Room {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Room").field("topic", &self.topic).finish_non_exhaustive()
+        f.debug_struct("Room")
+            .field("topic", &self.topic)
+            .finish_non_exhaustive()
     }
 }
 
@@ -33,10 +35,16 @@ impl Room {
         }
         let hk = Hkdf::<Sha256>::new(Some(SALT), raw);
         let mut t = [0u8; 16];
-        hk.expand(b"topic", &mut t).map_err(|_| crate::Error::Crypto)?;
+        hk.expand(b"topic", &mut t)
+            .map_err(|_| crate::Error::Crypto)?;
         let mut key = [0u8; 32];
-        hk.expand(b"aes-256-gcm", &mut key).map_err(|_| crate::Error::Crypto)?;
-        Ok(Room { topic: hex::encode(t), key, ikm: raw.to_vec() })
+        hk.expand(b"aes-256-gcm", &mut key)
+            .map_err(|_| crate::Error::Crypto)?;
+        Ok(Room {
+            topic: hex::encode(t),
+            key,
+            ikm: raw.to_vec(),
+        })
     }
 
     /// Ключ AES-256-GCM сообщений комнаты.

@@ -48,9 +48,16 @@ fn signal_override() -> Option<zv_signal::SignalConfig> {
     c.ntfy_base = None;
     c.mqtt_tcp = false;
     for part in local.split(',') {
-        let Some((k, v)) = part.split_once('=') else { continue };
+        let Some((k, v)) = part.split_once('=') else {
+            continue;
+        };
         match k {
-            "mqtt" => c.brokers.push(zv_signal::BrokerSpec { wss: v.into(), tcp: None, username: None, password: None }),
+            "mqtt" => c.brokers.push(zv_signal::BrokerSpec {
+                wss: v.into(),
+                tcp: None,
+                username: None,
+                password: None,
+            }),
             "mqtttcp" => {
                 c.mqtt_tcp = true;
                 if let Some(b) = c.brokers.last_mut() {
@@ -68,13 +75,18 @@ fn signal_override() -> Option<zv_signal::SignalConfig> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt().with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into())).init();
+    tracing_subscriber::fmt()
+        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()))
+        .init();
     let port: u16 = arg("--port").and_then(|p| p.parse().ok()).unwrap_or(8790);
     let ui = PathBuf::from(arg("--ui").unwrap_or_else(|| "ui".into()));
     let data = PathBuf::from(arg("--data").unwrap_or_else(|| "/tmp/zvdev".into()));
     let web_version = std::fs::read_to_string(ui.join("web/WEB_VERSION"))
         .ok()
-        .and_then(|s| s.lines().find_map(|l| l.strip_prefix("ver=").and_then(|v| v.trim().parse().ok())))
+        .and_then(|s| {
+            s.lines()
+                .find_map(|l| l.strip_prefix("ver=").and_then(|v| v.trim().parse().ok()))
+        })
         .unwrap_or(0);
     if let Some(p) = arg("--mock-worker").and_then(|p| p.parse::<u16>().ok()) {
         let m = zv_signal::mock::MockWorker::spawn_on(p).await;
@@ -91,10 +103,18 @@ async fn main() -> anyhow::Result<()> {
         p2p_n0: !std::env::args().any(|a| a == "--p2p-local"),
         downloads_dir: Some(data.join("Downloads")),
     })?;
-    let app = Arc::new(App { core, ui, pick: Default::default(), opened: Default::default() });
+    let app = Arc::new(App {
+        core,
+        ui,
+        pick: Default::default(),
+        opened: Default::default(),
+    });
     let router = axum::Router::new()
         .route("/ipc", get(ipc))
-        .route("/", get(|| async { axum::response::Redirect::temporary("/shell/index.html") }))
+        .route(
+            "/",
+            get(|| async { axum::response::Redirect::temporary("/shell/index.html") }),
+        )
         .route("/{*path}", get(file))
         .with_state(app);
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
@@ -105,7 +125,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn ipc(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
-    ws.max_message_size(8 << 20).on_upgrade(move |s| client(app, s))
+    ws.max_message_size(8 << 20)
+        .on_upgrade(move |s| client(app, s))
 }
 
 async fn client(app: Arc<App>, ws: WebSocket) {
@@ -117,11 +138,16 @@ async fn client(app: Arc<App>, ws: WebSocket) {
         loop {
             match events.recv().await {
                 Ok(ev) => {
-                    if ev_tx.send(serde_json::to_string(&ev).unwrap_or_default()).is_err() {
+                    if ev_tx
+                        .send(serde_json::to_string(&ev).unwrap_or_default())
+                        .is_err()
+                    {
                         return;
                     }
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => tracing::warn!("ipc: пропущено {n} событий"),
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("ipc: пропущено {n} событий")
+                }
                 Err(_) => return,
             }
         }
@@ -137,11 +163,19 @@ async fn client(app: Arc<App>, ws: WebSocket) {
     let joined: Arc<std::sync::Mutex<std::collections::HashSet<String>>> = Default::default();
     while let Some(Ok(m)) = rx.next().await {
         let Message::Text(t) = m else { continue };
-        let Ok(req) = serde_json::from_str::<Value>(t.as_str()) else { continue };
+        let Ok(req) = serde_json::from_str::<Value>(t.as_str()) else {
+            continue;
+        };
         let id = req.get("id").cloned().unwrap_or(Value::Null);
-        let cmd = req.get("cmd").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let cmd = req
+            .get("cmd")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let args = req.get("args").cloned().unwrap_or(Value::Null);
-        let reply = |out: &tokio::sync::mpsc::UnboundedSender<String>, id: Value, r: Result<Value, String>| {
+        let reply = |out: &tokio::sync::mpsc::UnboundedSender<String>,
+                     id: Value,
+                     r: Result<Value, String>| {
             let resp = match r {
                 Ok(v) => json!({"id": id, "ok": true, "result": v}),
                 Err(e) => json!({"id": id, "ok": false, "error": e}),
@@ -269,7 +303,10 @@ fn mime(p: &str) -> &'static str {
 }
 
 async fn file(State(app): State<Arc<App>>, AxPath(path): AxPath<String>) -> Response {
-    if path.split('/').any(|seg| seg == ".." || seg.starts_with('.')) {
+    if path
+        .split('/')
+        .any(|seg| seg == ".." || seg.starts_with('.'))
+    {
         return StatusCode::NOT_FOUND.into_response();
     }
     let mut p = path.clone();
@@ -291,7 +328,9 @@ async fn file(State(app): State<Arc<App>>, AxPath(path): AxPath<String>) -> Resp
         bytes = html.into_bytes();
     }
     let mut r = Response::new(axum::body::Body::from(bytes));
-    r.headers_mut().insert(header::CONTENT_TYPE, HeaderValue::from_static(mime(&p)));
-    r.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    r.headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(mime(&p)));
+    r.headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     r
 }

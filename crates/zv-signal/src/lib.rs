@@ -18,8 +18,8 @@ mod rotator;
 pub mod tls;
 pub mod worker;
 
-pub use config::{BrokerSpec, Profile, SignalConfig};
 pub use chan::ChanInfo;
+pub use config::{BrokerSpec, Profile, SignalConfig};
 pub use hub::{HubEvent, HubStatus, RoomHub, SendOpts};
 
 use std::sync::Arc;

@@ -122,12 +122,18 @@ pub fn encode_code(id: &str, secret: &str, name: &str, addr: &Value, expires: u6
     if let Some(a) = addr.get("a").and_then(|v| v.as_array()) {
         o["a"] = json!(a.iter().take(4).collect::<Vec<_>>());
     }
-    format!("{CODE_PREFIX}{}", zv_proto::b64u::enc(o.to_string().as_bytes()))
+    format!(
+        "{CODE_PREFIX}{}",
+        zv_proto::b64u::enc(o.to_string().as_bytes())
+    )
 }
 
 pub fn decode_code(text: &str) -> Option<Value> {
     let t = text.trim();
-    let t = t.strip_prefix("zvonochek://contact?c=").or_else(|| t.strip_prefix("zvonochek://contact/?c=")).unwrap_or(t);
+    let t = t
+        .strip_prefix("zvonochek://contact?c=")
+        .or_else(|| t.strip_prefix("zvonochek://contact/?c="))
+        .unwrap_or(t);
     let body = t.strip_prefix(CODE_PREFIX)?;
     let raw = zv_proto::b64u::dec(body.trim()).ok()?;
     let v: Value = serde_json::from_slice(&raw).ok()?;
@@ -155,13 +161,21 @@ fn str_of<'a>(v: &'a Value, k: &str) -> &'a str {
 }
 
 fn clean_name(s: &str) -> String {
-    s.trim().chars().filter(|c| !c.is_control()).take(40).collect()
+    s.trim()
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(40)
+        .collect()
 }
 
 impl Inner {
-    fn my_name(&self) -> String {
+    pub(crate) fn my_name(&self) -> String {
         let n = self.lock().settings.name.clone();
-        if n.trim().is_empty() { "Без имени".into() } else { n }
+        if n.trim().is_empty() {
+            "Без имени".into()
+        } else {
+            n
+        }
     }
 
     /// Секрет моего ящика (создаётся при первом контакте).
@@ -219,8 +233,10 @@ impl Inner {
 
     /// Написать в чужую комнату (ящик контакта или приглашение): временная комната, пока не поднимется —
     /// очередь.
-    fn send_room(self: &Arc<Self>, secret: &str, envelope: Value) {
-        let Ok(room) = zv_proto::Room::derive(secret) else { return };
+    pub(crate) fn send_room(self: &Arc<Self>, secret: &str, envelope: Value) {
+        let Ok(room) = zv_proto::Room::derive(secret) else {
+            return;
+        };
         let topic = room.topic.clone();
         // своя комната (приглашение, которое мы слушаем) — шлём через неё
         let joined = self.lock().rooms.get(&topic).map(|r| r.hub.clone());
@@ -242,7 +258,15 @@ impl Inner {
         }
         let (tx, rx) = mpsc::unbounded_channel();
         let hub = RoomHub::spawn(room, cfg, Profile::Full, tx);
-        st.p2p.c.out_hubs.insert(topic.clone(), OutHub { hub, up: false, queue: vec![envelope], last_used: now });
+        st.p2p.c.out_hubs.insert(
+            topic.clone(),
+            OutHub {
+                hub,
+                up: false,
+                queue: vec![envelope],
+                last_used: now,
+            },
+        );
         drop(st);
         self.rt.spawn(out_pump(Arc::downgrade(self), topic, rx));
     }
@@ -254,8 +278,17 @@ impl Inner {
             sent = n.send_peer(peer, msg);
         }
         if room || !sent {
-            let inbox = self.lock().contacts.items.iter().find(|c| c.peer == peer).map(|c| c.inbox.clone());
-            if let (Some(inbox), Some(env)) = (inbox.filter(|s| !s.is_empty()), self.zv4_envelope(peer, msg)) {
+            let inbox = self
+                .lock()
+                .contacts
+                .items
+                .iter()
+                .find(|c| c.peer == peer)
+                .map(|c| c.inbox.clone());
+            if let (Some(inbox), Some(env)) = (
+                inbox.filter(|s| !s.is_empty()),
+                self.zv4_envelope(peer, msg),
+            ) {
                 self.send_room(&inbox, env);
                 sent = true;
             }
@@ -274,10 +307,15 @@ impl Inner {
                 self.send_contact(peer, msg, false);
             }
             Src::Room(topic) => {
-                let Some(env) = self.zv4_envelope(peer, msg) else { return };
+                let Some(env) = self.zv4_envelope(peer, msg) else {
+                    return;
+                };
                 let hub = {
                     let st = self.lock();
-                    st.rooms.get(topic).map(|r| r.hub.clone()).or_else(|| st.p2p.c.out_hubs.get(topic).map(|o| o.hub.clone()))
+                    st.rooms
+                        .get(topic)
+                        .map(|r| r.hub.clone())
+                        .or_else(|| st.p2p.c.out_hubs.get(topic).map(|o| o.hub.clone()))
                 };
                 if let Some(h) = hub {
                     h.send(env, SendOpts::default());
@@ -296,8 +334,12 @@ impl Inner {
         if f == node.id() || !zv_p2p::valid_id(&f) {
             return;
         }
-        let Some(room) = self.pair_room(&f) else { return };
-        let Some(inner) = room.open(str_of(msg, "p")) else { return };
+        let Some(room) = self.pair_room(&f) else {
+            return;
+        };
+        let Some(inner) = room.open(str_of(msg, "p")) else {
+            return;
+        };
         self.on_zv4(Src::Room(topic.to_string()), &f, inner);
     }
 
@@ -305,6 +347,13 @@ impl Inner {
     pub(crate) fn on_zv4(self: &Arc<Self>, src: Src, peer: &str, msg: Value) {
         let t = str_of(&msg, "t").to_string();
         let now = now_ms();
+        // кадр группы по прямой связи (подпись и состав проверяет groups.rs)
+        if t == "zvg" {
+            if matches!(src, Src::Link(_)) {
+                self.on_group_link(peer, &msg);
+            }
+            return;
+        }
         // чаты дедуплицирует база и подтверждает каждый повтор
         if t.starts_with("chat") {
             self.on_chat(src, peer, msg);
@@ -318,7 +367,13 @@ impl Inner {
             }
             st.p2p.c.seen.insert(key, now);
         }
-        let contact = self.lock().contacts.items.iter().find(|c| c.peer == peer).cloned();
+        let contact = self
+            .lock()
+            .contacts
+            .items
+            .iter()
+            .find(|c| c.peer == peer)
+            .cloned();
         match (t.as_str(), contact) {
             ("contact_req", _) => self.on_contact_req(&src, peer, &msg),
             ("contact_ok", _) => self.on_contact_ok(peer, &msg),
@@ -326,7 +381,10 @@ impl Inner {
                 let re = str_of(&msg, "re").to_string();
                 let had = self.lock().p2p.c.adds.remove(&re).is_some();
                 if had {
-                    self.emit("contact:add_failed", json!({"reason": str_of(&msg, "reason")}));
+                    self.emit(
+                        "contact:add_failed",
+                        json!({"reason": str_of(&msg, "reason")}),
+                    );
                 }
             }
             ("contact_offer", c) => self.on_contact_offer(&src, peer, &msg, c),
@@ -341,7 +399,13 @@ impl Inner {
             ("ring", Some(c)) => self.on_ring(&src, &c, &msg),
             ("ring_ack", Some(_)) => {
                 if let Some(topic) = self.call_by_cid(str_of(&msg, "cid"), true) {
-                    let first = self.lock().p2p.c.calls.get_mut(&topic).is_some_and(|c| !std::mem::replace(&mut c.acked, true));
+                    let first = self
+                        .lock()
+                        .p2p
+                        .c
+                        .calls
+                        .get_mut(&topic)
+                        .is_some_and(|c| !std::mem::replace(&mut c.acked, true));
                     if first {
                         self.emit("ring:ringing", json!({"roomId": topic}));
                     }
@@ -358,16 +422,25 @@ impl Inner {
             }
             ("ring_decline", Some(c)) => {
                 if let Some(topic) = self.call_by_cid(str_of(&msg, "cid"), true) {
-                    let reason = if str_of(&msg, "reason") == "dnd" { "dnd" } else { "declined" };
+                    let reason = if str_of(&msg, "reason") == "dnd" {
+                        "dnd"
+                    } else {
+                        "declined"
+                    };
                     let mut st = self.lock();
-                    let Some(call) = st.p2p.c.calls.get_mut(&topic) else { return };
+                    let Some(call) = st.p2p.c.calls.get_mut(&topic) else {
+                        return;
+                    };
                     if call.accepted || call.ended.is_some() {
                         return;
                     }
                     call.ended = Some(if reason == "dnd" { "dnd" } else { "declined" });
                     call.ended_at = now;
                     drop(st);
-                    self.emit("ring:ended", json!({"roomId": topic, "reason": reason, "name": c.name}));
+                    self.emit(
+                        "ring:ended",
+                        json!({"roomId": topic, "reason": reason, "name": c.name}),
+                    );
                 }
             }
             ("ring_cancel", Some(_)) => {
@@ -377,13 +450,22 @@ impl Inner {
                     self.end_incoming(&cid, "missed");
                 }
             }
-            (other, c) => tracing::debug!("zv4: {other} от {} (контакт: {})", &peer[..8.min(peer.len())], c.is_some()),
+            (other, c) => tracing::debug!(
+                "zv4: {other} от {} (контакт: {})",
+                &peer[..8.min(peer.len())],
+                c.is_some()
+            ),
         }
     }
 
     fn call_by_cid(&self, cid: &str, out: bool) -> Option<String> {
         let st = self.lock();
-        st.p2p.c.calls.iter().find(|(_, c)| c.cid == cid && c.out == out).map(|(t, _)| t.clone())
+        st.p2p
+            .c
+            .calls
+            .iter()
+            .find(|(_, c)| c.cid == cid && c.out == out)
+            .map(|(t, _)| t.clone())
     }
 
     // ---------- коды приглашения ----------
@@ -405,10 +487,17 @@ impl Inner {
         let inv = {
             let mut st = self.lock();
             let now = now_ms();
-            let valid = st.contacts.invite.as_ref().is_some_and(|i| i.expires > now + 3_600_000);
+            let valid = st
+                .contacts
+                .invite
+                .as_ref()
+                .is_some_and(|i| i.expires > now + 3_600_000);
             if renew || !valid {
-                st.contacts.invite =
-                    Some(Invite { secret: zv_proto::link::new_secret(), created: now, expires: now + INVITE_TTL_MS });
+                st.contacts.invite = Some(Invite {
+                    secret: zv_proto::link::new_secret(),
+                    created: now,
+                    expires: now + INVITE_TTL_MS,
+                });
                 self.save_contacts(&st);
             }
             st.contacts.invite.clone().ok_or("нет кода")?
@@ -418,7 +507,7 @@ impl Inner {
         Ok(self.invite_json(&inv))
     }
 
-    fn p2p_unavailable(&self) -> String {
+    pub(crate) fn p2p_unavailable(&self) -> String {
         if self.lock().settings.p2p {
             "Прямое соединение ещё запускается — попробуйте через пару секунд".into()
         } else {
@@ -435,12 +524,24 @@ impl Inner {
         if peer == node.id() {
             return Err("Это ваш собственный код".into());
         }
-        if code.get("x").and_then(|v| v.as_u64()).is_some_and(|x| x * 1000 < now_ms()) {
+        if code
+            .get("x")
+            .and_then(|v| v.as_u64())
+            .is_some_and(|x| x * 1000 < now_ms())
+        {
             return Err("Срок действия кода истёк — попросите новый".into());
         }
         let user_name = clean_name(args.get("name").and_then(|v| v.as_str()).unwrap_or(""));
-        let name = if user_name.is_empty() { clean_name(str_of(&code, "n")) } else { user_name };
-        let name = if name.is_empty() { "Контакт".to_string() } else { name };
+        let name = if user_name.is_empty() {
+            clean_name(str_of(&code, "n"))
+        } else {
+            user_name
+        };
+        let name = if name.is_empty() {
+            "Контакт".to_string()
+        } else {
+            name
+        };
         if let Some(c) = self.lock().contacts.items.iter().find(|c| c.peer == peer) {
             return Err(format!("Уже в контактах: {}", c.name));
         }
@@ -474,7 +575,9 @@ impl Inner {
                 Ok(link) => {
                     node.send(link, &r2);
                 }
-                Err(e) => tracing::info!("контакт по коду: P2P не вышел ({e}), остаётся комната приглашения"),
+                Err(e) => tracing::info!(
+                    "контакт по коду: P2P не вышел ({e}), остаётся комната приглашения"
+                ),
             }
             let _ = me;
         });
@@ -490,14 +593,22 @@ impl Inner {
         let inv = self.lock().contacts.invite.clone();
         let re = str_of(msg, "id").to_string();
         let Some(inv) = inv.filter(|i| i.expires > now_ms()) else {
-            self.reply(src, peer, &json!({"t": "contact_no", "id": rand_hex(8), "re": re, "reason": "expired"}));
+            self.reply(
+                src,
+                peer,
+                &json!({"t": "contact_no", "id": rand_hex(8), "re": re, "reason": "expired"}),
+            );
             return;
         };
         let want = zv_p2p::crypto::invite_tag(&inv.secret, peer, node.id());
         if !zv_p2p::crypto::ct_eq(&want, str_of(msg, "ik")) {
             tracing::info!("контакт: запрос с чужим кодом от {}", &peer[..8]);
             if matches!(src, Src::Room(_)) {
-                self.reply(src, peer, &json!({"t": "contact_no", "id": rand_hex(8), "re": re, "reason": "expired"}));
+                self.reply(
+                    src,
+                    peer,
+                    &json!({"t": "contact_no", "id": rand_hex(8), "re": re, "reason": "expired"}),
+                );
             }
             return;
         }
@@ -517,13 +628,25 @@ impl Inner {
             &json!({"t": "contact_ok", "id": rand_hex(8), "re": re, "name": self.my_name(), "inbox": self.my_inbox(), "addr": node.addr_json()}),
         );
         if fresh {
-            self.emit("contact:added", json!({"id": cid, "name": name, "via": "invite"}));
+            self.emit(
+                "contact:added",
+                json!({"id": cid, "name": name, "via": "invite"}),
+            );
         }
     }
 
     /// Создать или обновить контакт. → (id, имя, новый ли).
-    fn upsert_contact(self: &Arc<Self>, peer: &str, name: &str, their: &str, inbox: &str, hint: Option<Value>) -> (String, String, bool) {
-        let hint = hint.filter(|h| h.get("r").is_some_and(|r| r.is_string()) || h.get("a").is_some_and(|a| a.is_array()));
+    fn upsert_contact(
+        self: &Arc<Self>,
+        peer: &str,
+        name: &str,
+        their: &str,
+        inbox: &str,
+        hint: Option<Value>,
+    ) -> (String, String, bool) {
+        let hint = hint.filter(|h| {
+            h.get("r").is_some_and(|r| r.is_string()) || h.get("a").is_some_and(|a| a.is_array())
+        });
         let now = now_ms();
         let r = {
             let mut st = self.lock();
@@ -542,7 +665,11 @@ impl Inner {
             } else {
                 let c = Contact {
                     id: rand_hex(6),
-                    name: if name.is_empty() { "Контакт".into() } else { name.to_string() },
+                    name: if name.is_empty() {
+                        "Контакт".into()
+                    } else {
+                        name.to_string()
+                    },
                     peer: peer.to_string(),
                     their_name: their.to_string(),
                     inbox: inbox.to_string(),
@@ -586,7 +713,10 @@ impl Inner {
         {
             n.authorize(l);
         }
-        self.emit("contact:added", json!({"id": cid, "name": name, "via": "code"}));
+        self.emit(
+            "contact:added",
+            json!({"id": cid, "name": name, "via": "code"}),
+        );
     }
 
     // ---------- обмен контактами после звонка ----------
@@ -604,7 +734,11 @@ impl Inner {
         let name = clean_name(args.get("name").and_then(|v| v.as_str()).unwrap_or(""));
         let id = rand_hex(8);
         let msg = json!({"t": "contact_offer", "id": id, "name": self.my_name(), "inbox": self.my_inbox(), "addr": node.addr_json()});
-        self.lock().p2p.c.my_offers.insert(id.clone(), (peer.clone(), name.clone(), now_ms()));
+        self.lock()
+            .p2p
+            .c
+            .my_offers
+            .insert(id.clone(), (peer.clone(), name.clone(), now_ms()));
         let me = self.clone();
         let oid = id.clone();
         self.rt.spawn(async move {
@@ -615,14 +749,23 @@ impl Inner {
                 }
                 Err(e) => {
                     me.lock().p2p.c.my_offers.remove(&oid);
-                    me.emit("contact:offer_failed", json!({"peerId": peer, "error": format!("Собеседник не в сети ({e})")}));
+                    me.emit(
+                        "contact:offer_failed",
+                        json!({"peerId": peer, "error": format!("Собеседник не в сети ({e})")}),
+                    );
                 }
             }
         });
         Ok(json!({"pending": true, "offerId": id}))
     }
 
-    fn on_contact_offer(self: &Arc<Self>, src: &Src, peer: &str, msg: &Value, existing: Option<Contact>) {
+    fn on_contact_offer(
+        self: &Arc<Self>,
+        src: &Src,
+        peer: &str,
+        msg: &Value,
+        existing: Option<Contact>,
+    ) {
         let Some(node) = self.node() else { return };
         let Src::Link(link) = src else { return };
         let inbox = str_of(msg, "inbox").to_string();
@@ -634,14 +777,25 @@ impl Inner {
         if existing.is_some() {
             // уже контакт (например, у него контакт удалён) — просто обновить и подтвердить
             node.authorize(*link);
-            self.upsert_contact(peer, &their, &their, &inbox, hint_of(Some(&node), Some(src), msg));
+            self.upsert_contact(
+                peer,
+                &their,
+                &their,
+                &inbox,
+                hint_of(Some(&node), Some(src), msg),
+            );
             node.send(
                 *link,
                 &json!({"t": "contact_accept", "id": rand_hex(8), "re": id, "name": self.my_name(), "inbox": self.my_inbox(), "addr": node.addr_json()}),
             );
             return;
         }
-        let recent = self.lock().p2p.recent.get(peer).is_some_and(|(_, t)| now_ms().saturating_sub(*t) < crate::p2p::RECENT_MS);
+        let recent = self
+            .lock()
+            .p2p
+            .recent
+            .get(peer)
+            .is_some_and(|(_, t)| now_ms().saturating_sub(*t) < crate::p2p::RECENT_MS);
         if !recent {
             tracing::info!("контакт: предложение от незнакомого {}", &peer[..8]);
             return;
@@ -657,19 +811,44 @@ impl Inner {
             created: now_ms(),
         };
         self.lock().p2p.c.offers.insert(id.clone(), offer.clone());
-        self.emit("contact:offer", serde_json::to_value(&offer).unwrap_or_default());
+        self.emit(
+            "contact:offer",
+            serde_json::to_value(&offer).unwrap_or_default(),
+        );
     }
 
     pub(crate) fn contact_offer_answer(self: &Arc<Self>, args: &Value) -> Result<Value, String> {
         let id = s(args, "offerId")?;
-        let accept = args.get("accept").and_then(|v| v.as_bool()).unwrap_or(false);
-        let offer = self.lock().p2p.c.offers.remove(id).ok_or("Предложение уже неактуально")?;
+        let accept = args
+            .get("accept")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let offer = self
+            .lock()
+            .p2p
+            .c
+            .offers
+            .remove(id)
+            .ok_or("Предложение уже неактуально")?;
         let node = self.node().ok_or_else(|| self.p2p_unavailable())?;
         let reply = if accept {
             let name = clean_name(args.get("name").and_then(|v| v.as_str()).unwrap_or(""));
-            let name = if name.is_empty() { offer.name.clone() } else { name };
-            let (cid, name, _) = self.upsert_contact(&offer.peer, &name, &offer.name, &offer.inbox, offer.hint.clone());
-            self.emit("contact:added", json!({"id": cid, "name": name, "via": "offer"}));
+            let name = if name.is_empty() {
+                offer.name.clone()
+            } else {
+                name
+            };
+            let (cid, name, _) = self.upsert_contact(
+                &offer.peer,
+                &name,
+                &offer.name,
+                &offer.inbox,
+                offer.hint.clone(),
+            );
+            self.emit(
+                "contact:added",
+                json!({"id": cid, "name": name, "via": "offer"}),
+            );
             json!({"t": "contact_accept", "id": rand_hex(8), "re": offer.id, "name": self.my_name(), "inbox": self.my_inbox(), "addr": node.addr_json()})
         } else {
             json!({"t": "contact_decline", "id": rand_hex(8), "re": offer.id})
@@ -704,13 +883,28 @@ impl Inner {
         match mine {
             Some((_, name, _)) => {
                 let name = if name.is_empty() { their.clone() } else { name };
-                let (cid, name, _) = self.upsert_contact(peer, &name, &their, &inbox, hint_of(self.node().as_ref(), None, msg));
-                self.emit("contact:added", json!({"id": cid, "name": name, "via": "offer"}));
+                let (cid, name, _) = self.upsert_contact(
+                    peer,
+                    &name,
+                    &their,
+                    &inbox,
+                    hint_of(self.node().as_ref(), None, msg),
+                );
+                self.emit(
+                    "contact:added",
+                    json!({"id": cid, "name": name, "via": "offer"}),
+                );
             }
             None => {
                 // подтверждение для уже существующего контакта — только обновить ящик
                 if self.lock().contacts.items.iter().any(|c| c.peer == peer) {
-                    self.upsert_contact(peer, "", &their, &inbox, hint_of(self.node().as_ref(), None, msg));
+                    self.upsert_contact(
+                        peer,
+                        "",
+                        &their,
+                        &inbox,
+                        hint_of(self.node().as_ref(), None, msg),
+                    );
                 }
             }
         }
@@ -751,7 +945,12 @@ impl Inner {
     pub(crate) fn contact_update(&self, args: &Value) -> Result<Value, String> {
         let id = s(args, "id")?;
         let mut st = self.lock();
-        let c = st.contacts.items.iter_mut().find(|c| c.id == id).ok_or("нет такого контакта")?;
+        let c = st
+            .contacts
+            .items
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or("нет такого контакта")?;
         if let Some(n) = args.get("name").and_then(|v| v.as_str()) {
             let n = clean_name(n);
             if !n.is_empty() {
@@ -771,7 +970,12 @@ impl Inner {
         let id = s(args, "id")?;
         let peer = {
             let mut st = self.lock();
-            let peer = st.contacts.items.iter().find(|c| c.id == id).map(|c| c.peer.clone());
+            let peer = st
+                .contacts
+                .items
+                .iter()
+                .find(|c| c.id == id)
+                .map(|c| c.peer.clone());
             st.contacts.items.retain(|c| c.id != id);
             st.p2p.c.presence.remove(id);
             self.save_contacts(&st);
@@ -792,40 +996,86 @@ impl Inner {
         };
         let changed = {
             let mut st = self.lock();
-            let old = st.p2p.c.presence.get(cid).map(|p| (p.online, p.path.clone()));
-            st.p2p.c.presence.insert(cid.to_string(), Presence { online, at: now_ms(), path: path.clone(), checking: false });
+            let old = st
+                .p2p
+                .c
+                .presence
+                .get(cid)
+                .map(|p| (p.online, p.path.clone()));
+            st.p2p.c.presence.insert(
+                cid.to_string(),
+                Presence {
+                    online,
+                    at: now_ms(),
+                    path: path.clone(),
+                    checking: false,
+                },
+            );
             old != Some((online, path.clone()))
         };
         if changed {
-            self.emit("contacts:presence", json!({"id": cid, "online": online, "path": path}));
+            self.emit(
+                "contacts:presence",
+                json!({"id": cid, "online": online, "path": path}),
+            );
         }
     }
 
     /// Проверить, кто в сети (страница контактов открыта): живые линки — сразу, остальным — дозвон.
     pub(crate) fn contacts_presence(self: &Arc<Self>) -> Result<Value, String> {
-        let Some(node) = self.node() else { return Ok(Value::Null) };
-        let now = now_ms();
-        let todo: Vec<(String, String, Option<Value>)> = {
-            let mut st = self.lock();
-            let items: Vec<(String, String, Option<Value>)> =
-                st.contacts.items.iter().map(|c| (c.id.clone(), c.peer.clone(), c.hint.clone())).collect();
-            let mut todo = Vec::new();
-            for (cid, peer, hint) in items {
-                if node.link_for(&peer).is_some() {
-                    continue;
-                }
-                let fresh = st.p2p.c.presence.get(&cid).is_some_and(|p| p.checking || now.saturating_sub(p.at) < PRESENCE_TTL_MS);
-                if fresh {
-                    continue;
-                }
-                let prev = st.p2p.c.presence.get(&cid).map(|p| p.online).unwrap_or(false);
-                st.p2p.c.presence.insert(cid.clone(), Presence { online: prev, at: now, path: String::new(), checking: true });
-                todo.push((cid, peer, hint));
-            }
-            todo
+        let Some(node) = self.node() else {
+            return Ok(Value::Null);
         };
+        let now = now_ms();
+        let todo: Vec<(String, String, Option<Value>)> =
+            {
+                let mut st = self.lock();
+                let items: Vec<(String, String, Option<Value>)> = st
+                    .contacts
+                    .items
+                    .iter()
+                    .map(|c| (c.id.clone(), c.peer.clone(), c.hint.clone()))
+                    .collect();
+                let mut todo = Vec::new();
+                for (cid, peer, hint) in items {
+                    if node.link_for(&peer).is_some() {
+                        continue;
+                    }
+                    let fresh =
+                        st.p2p.c.presence.get(&cid).is_some_and(|p| {
+                            p.checking || now.saturating_sub(p.at) < PRESENCE_TTL_MS
+                        });
+                    if fresh {
+                        continue;
+                    }
+                    let prev = st
+                        .p2p
+                        .c
+                        .presence
+                        .get(&cid)
+                        .map(|p| p.online)
+                        .unwrap_or(false);
+                    st.p2p.c.presence.insert(
+                        cid.clone(),
+                        Presence {
+                            online: prev,
+                            at: now,
+                            path: String::new(),
+                            checking: true,
+                        },
+                    );
+                    todo.push((cid, peer, hint));
+                }
+                todo
+            };
         // отдельной переменной: временный guard в заголовке `for` жил бы до конца цикла
-        let all: Vec<(String, String)> = self.lock().contacts.items.iter().map(|c| (c.id.clone(), c.peer.clone())).collect();
+        let all: Vec<(String, String)> = self
+            .lock()
+            .contacts
+            .items
+            .iter()
+            .map(|c| (c.id.clone(), c.peer.clone()))
+            .collect();
         for (cid, peer) in all {
             if let Some(l) = node.link_for(&peer) {
                 self.presence_set(&cid, true, Some(l));
@@ -835,7 +1085,11 @@ impl Inner {
             let me = self.clone();
             let node = node.clone();
             self.rt.spawn(async move {
-                let r = tokio::time::timeout(Duration::from_secs(10), node.connect(&peer, hint.as_ref())).await;
+                let r = tokio::time::timeout(
+                    Duration::from_secs(10),
+                    node.connect(&peer, hint.as_ref()),
+                )
+                .await;
                 match r {
                     Ok(Ok(l)) => me.presence_set(&cid, true, Some(l)),
                     _ => me.presence_set(&cid, false, None),
@@ -853,12 +1107,21 @@ impl Inner {
         }
         let id = s(args, "id")?;
         let video = args.get("video").and_then(|v| v.as_bool()).unwrap_or(false);
-        let c = self.lock().contacts.items.iter().find(|c| c.id == id).cloned().ok_or("нет такого контакта")?;
+        let c = self
+            .lock()
+            .contacts
+            .items
+            .iter()
+            .find(|c| c.id == id)
+            .cloned()
+            .ok_or("нет такого контакта")?;
         if self.lock().rooms.values().any(|r| r.joined) {
             return Err("Сначала завершите текущий звонок".into());
         }
         let secret = zv_proto::link::new_secret();
-        let topic = zv_proto::Room::derive(&secret).map_err(|e| e.to_string())?.topic;
+        let topic = zv_proto::Room::derive(&secret)
+            .map_err(|e| e.to_string())?
+            .topic;
         let cid = rand_hex(8);
         let now = now_ms();
         self.lock().p2p.c.calls.insert(
@@ -884,19 +1147,25 @@ impl Inner {
             let me = self.clone();
             let (peer, hint, t2) = (c.peer.clone(), c.hint.clone(), topic.clone());
             self.rt.spawn(async move {
-                if node.link_for(&peer).is_none() && node.connect(&peer, hint.as_ref()).await.is_ok() {
+                if node.link_for(&peer).is_none()
+                    && node.connect(&peer, hint.as_ref()).await.is_ok()
+                {
                     me.ring_send(&t2, false);
                 }
             });
         }
-        Ok(json!({"secret": secret, "roomId": topic, "callId": cid, "name": c.name, "video": video}))
+        Ok(
+            json!({"secret": secret, "roomId": topic, "callId": cid, "name": c.name, "video": video}),
+        )
     }
 
     fn ring_send(self: &Arc<Self>, topic: &str, room: bool) {
         let (call, name) = {
             let mut st = self.lock();
             let name = st.settings.name.clone();
-            let Some(c) = st.p2p.c.calls.get_mut(topic) else { return };
+            let Some(c) = st.p2p.c.calls.get_mut(topic) else {
+                return;
+            };
             c.last_ring = now_ms();
             (c.clone(), name)
         };
@@ -907,7 +1176,9 @@ impl Inner {
     fn on_ring(self: &Arc<Self>, src: &Src, c: &Contact, msg: &Value) {
         let cid = str_of(msg, "cid").to_string();
         let k = str_of(msg, "k").to_string();
-        let Ok(room) = zv_proto::Room::derive(&k) else { return };
+        let Ok(room) = zv_proto::Room::derive(&k) else {
+            return;
+        };
         let now = now_ms();
         let video = msg.get("video").and_then(|v| v.as_bool()).unwrap_or(false);
         let mut st = self.lock();
@@ -949,6 +1220,7 @@ impl Inner {
                 contact_id: Some(c.id.clone()),
                 peer_id: Some(c.peer.clone()),
                 video,
+                group_id: None,
             };
             self.push_history(&mut st, e);
             if let Some(call) = st.p2p.c.calls.get_mut(&room.topic) {
@@ -978,11 +1250,20 @@ impl Inner {
             contact_id: Some(c.id.clone()),
             video,
             secret: Some(k),
+            group_id: None,
+            group_name: None,
         };
         st.incoming.insert(cid.clone(), inc.clone());
         drop(st);
-        self.emit("call:incoming", serde_json::to_value(&inc).unwrap_or_default());
-        self.reply(src, &c.peer, &json!({"t": "ring_ack", "id": rand_hex(8), "cid": cid}));
+        self.emit(
+            "call:incoming",
+            serde_json::to_value(&inc).unwrap_or_default(),
+        );
+        self.reply(
+            src,
+            &c.peer,
+            &json!({"t": "ring_ack", "id": rand_hex(8), "cid": cid}),
+        );
     }
 
     /// Ответили на входящий от контакта: сообщить звонящему (по всем путям).
@@ -992,9 +1273,16 @@ impl Inner {
             if let Some(c) = st.p2p.c.calls.get_mut(&inc.room_id) {
                 c.accepted = true;
             }
-            st.p2p.c.pending_answer.insert(inc.room_id.clone(), inc.clone());
+            st.p2p
+                .c
+                .pending_answer
+                .insert(inc.room_id.clone(), inc.clone());
         }
-        self.send_contact(&inc.from, &json!({"t": "ring_accept", "id": rand_hex(8), "cid": inc.call_id}), true);
+        self.send_contact(
+            &inc.from,
+            &json!({"t": "ring_accept", "id": rand_hex(8), "cid": inc.call_id}),
+            true,
+        );
     }
 
     pub(crate) fn ring_declined(self: &Arc<Self>, inc: &Incoming) {
@@ -1005,20 +1293,32 @@ impl Inner {
                 c.ended_at = now_ms();
             }
         }
-        self.send_contact(&inc.from, &json!({"t": "ring_decline", "id": rand_hex(8), "cid": inc.call_id}), true);
+        self.send_contact(
+            &inc.from,
+            &json!({"t": "ring_decline", "id": rand_hex(8), "cid": inc.call_id}),
+            true,
+        );
     }
 
     /// Контактный звонок: привязать комнату звонка к линку сразу (не дожидаясь `hello` с `zv`).
     pub(crate) fn bind_call(self: &Arc<Self>, topic: &str) {
         let Some(node) = self.node() else { return };
-        let Some(call) = self.lock().p2p.c.calls.get(topic).cloned() else { return };
+        let Some(call) = self.lock().p2p.c.calls.get(topic).cloned() else {
+            return;
+        };
         if !self.joined(topic) {
             return;
         }
         let me = self.clone();
         let topic = topic.to_string();
         self.rt.spawn(async move {
-            let hint = me.lock().contacts.items.iter().find(|c| c.peer == call.peer).and_then(|c| c.hint.clone());
+            let hint = me
+                .lock()
+                .contacts
+                .items
+                .iter()
+                .find(|c| c.peer == call.peer)
+                .and_then(|c| c.hint.clone());
             if let Ok(l) = node.connect(&call.peer, hint.as_ref()).await {
                 me.send_bind(l, &topic);
             }
@@ -1029,23 +1329,42 @@ impl Inner {
     /// Состояние вызова контакта по секрету комнаты (окно звонка открылось позже событий `ring:*`).
     pub(crate) fn contact_call_state(&self, args: &Value) -> Result<Value, String> {
         let secret = s(args, "secret")?;
-        let topic = zv_proto::Room::derive(secret).map_err(|e| e.to_string())?.topic;
+        let topic = zv_proto::Room::derive(secret)
+            .map_err(|e| e.to_string())?
+            .topic;
         let st = self.lock();
-        let Some(c) = st.p2p.c.calls.get(&topic) else { return Ok(Value::Null) };
-        let name = st.contacts.items.iter().find(|x| x.id == c.contact_id).map(|x| x.name.clone()).unwrap_or_default();
+        let Some(c) = st.p2p.c.calls.get(&topic) else {
+            return Ok(Value::Null);
+        };
+        let name = st
+            .contacts
+            .items
+            .iter()
+            .find(|x| x.id == c.contact_id)
+            .map(|x| x.name.clone())
+            .unwrap_or_default();
         let state = match (c.ended, c.accepted, c.acked) {
             (Some(_), _, _) => "ended",
             (None, true, _) => "accepted",
             (None, false, true) => "ringing",
             _ => "calling",
         };
-        Ok(json!({"roomId": topic, "out": c.out, "state": state, "reason": c.ended, "name": name, "video": c.video}))
+        Ok(
+            json!({"roomId": topic, "out": c.out, "state": state, "reason": c.ended, "name": name, "video": c.video}),
+        )
     }
 
-    pub(crate) fn contact_call_left(self: &Arc<Self>, topic: &str) -> Option<(&'static str, String, bool)> {
+    pub(crate) fn contact_call_left(
+        self: &Arc<Self>,
+        topic: &str,
+    ) -> Option<(&'static str, String, bool)> {
         let call = self.lock().p2p.c.calls.remove(topic)?;
         if call.out && !call.accepted && call.ended.is_none() {
-            self.send_contact(&call.peer, &json!({"t": "ring_cancel", "id": rand_hex(8), "cid": call.cid}), true);
+            self.send_contact(
+                &call.peer,
+                &json!({"t": "ring_cancel", "id": rand_hex(8), "cid": call.cid}),
+                true,
+            );
         }
         let res = match (call.out, call.ended) {
             (true, Some("declined" | "dnd")) => "declined",
@@ -1069,12 +1388,21 @@ impl Inner {
                     continue;
                 }
                 if now.saturating_sub(c.started) > RING_TIMEOUT_MS {
-                    let name = st.contacts.items.iter().find(|x| x.id == c.contact_id).map(|x| x.name.clone()).unwrap_or_default();
+                    let name = st
+                        .contacts
+                        .items
+                        .iter()
+                        .find(|x| x.id == c.contact_id)
+                        .map(|x| x.name.clone())
+                        .unwrap_or_default();
                     t.push((topic.clone(), name));
                 } else if now.saturating_sub(c.last_ring) >= RING_EVERY_MS {
                     // через ящик — каждые 3 с первые 15 с, потом каждые 6 с
                     let age = now.saturating_sub(c.started);
-                    r.push((topic.clone(), age < 15_000 || (age / RING_EVERY_MS).is_multiple_of(2)));
+                    r.push((
+                        topic.clone(),
+                        age < 15_000 || (age / RING_EVERY_MS).is_multiple_of(2),
+                    ));
                 }
             }
             (r, t)
@@ -1092,8 +1420,15 @@ impl Inner {
                 })
             };
             if let Some((peer, cid)) = peer_cid {
-                self.send_contact(&peer, &json!({"t": "ring_cancel", "id": rand_hex(8), "cid": cid}), true);
-                self.emit("ring:ended", json!({"roomId": topic, "reason": "noanswer", "name": name}));
+                self.send_contact(
+                    &peer,
+                    &json!({"t": "ring_cancel", "id": rand_hex(8), "cid": cid}),
+                    true,
+                );
+                self.emit(
+                    "ring:ended",
+                    json!({"roomId": topic, "reason": "noanswer", "name": name}),
+                );
             }
         }
         // добавление по коду: повтор через комнату приглашения и таймаут
@@ -1129,11 +1464,14 @@ impl Inner {
             let mut st = self.lock();
             let c = &mut st.p2p.c;
             c.seen.retain(|_, t| now.saturating_sub(*t) < SEEN_TTL_MS);
-            c.offers.retain(|_, o| now.saturating_sub(o.created) < OFFER_TTL_MS);
-            c.my_offers.retain(|_, o| now.saturating_sub(o.2) < OFFER_TTL_MS);
+            c.offers
+                .retain(|_, o| now.saturating_sub(o.created) < OFFER_TTL_MS);
+            c.my_offers
+                .retain(|_, o| now.saturating_sub(o.2) < OFFER_TTL_MS);
             // завершённые — через 2 мин; зависшие (окно звонка так и не открылось) — через 12 ч
             c.calls.retain(|_, x| {
-                (x.ended.is_none() || now.saturating_sub(x.ended_at) < 120_000) && now.saturating_sub(x.started) < 12 * 3_600_000
+                (x.ended.is_none() || now.saturating_sub(x.ended_at) < 120_000)
+                    && now.saturating_sub(x.started) < 12 * 3_600_000
             });
             c.out_hubs.retain(|t, o| {
                 let keep = now.saturating_sub(o.last_used) < OUT_HUB_IDLE_MS;
@@ -1150,12 +1488,21 @@ impl Inner {
 
     pub(crate) fn contact_offers(&self) -> Value {
         let st = self.lock();
-        Value::Array(st.p2p.c.offers.values().map(|o| serde_json::to_value(o).unwrap_or_default()).collect())
+        Value::Array(
+            st.p2p
+                .c
+                .offers
+                .values()
+                .map(|o| serde_json::to_value(o).unwrap_or_default())
+                .collect(),
+        )
     }
 
     pub(crate) fn contact_parse(&self, text: &str) -> Value {
         match decode_code(text) {
-            Some(c) => json!({"kind": "contact", "name": str_of(&c, "n"), "expires": c.get("x").and_then(|v| v.as_u64()).map(|x| x * 1000)}),
+            Some(c) => {
+                json!({"kind": "contact", "name": str_of(&c, "n"), "expires": c.get("x").and_then(|v| v.as_u64()).map(|x| x * 1000)})
+            }
             None => json!({"kind": "none"}),
         }
     }

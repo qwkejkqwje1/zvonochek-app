@@ -40,21 +40,30 @@ pub struct AppState {
 }
 
 fn web_version() -> u32 {
-    WEB_VERSION_FILE.lines().find_map(|l| l.strip_prefix("ver=").and_then(|v| v.trim().parse().ok())).unwrap_or(0)
+    WEB_VERSION_FILE
+        .lines()
+        .find_map(|l| l.strip_prefix("ver=").and_then(|v| v.trim().parse().ok()))
+        .unwrap_or(0)
 }
 
 fn platform() -> String {
-    let arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    let arch = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        "x64"
+    };
     format!("{}-{arch}", std::env::consts::OS)
 }
 
-static LOG_GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> = std::sync::OnceLock::new();
+static LOG_GUARD: std::sync::OnceLock<tracing_appender::non_blocking::WorkerGuard> =
+    std::sync::OnceLock::new();
 
 fn init_logging(dir: &std::path::Path) {
     use tracing_subscriber::prelude::*;
     let _ = std::fs::create_dir_all(dir);
-    let filter = tracing_subscriber::EnvFilter::try_from_env("ZV_LOG")
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,zv_signal=info,tao=warn,wry=warn"));
+    let filter = tracing_subscriber::EnvFilter::try_from_env("ZV_LOG").unwrap_or_else(|_| {
+        tracing_subscriber::EnvFilter::new("info,zv_signal=info,tao=warn,wry=warn")
+    });
     let file = tracing_appender::rolling::Builder::new()
         .rotation(tracing_appender::rolling::Rotation::DAILY)
         .filename_prefix("zvonochek")
@@ -67,12 +76,18 @@ fn init_logging(dir: &std::path::Path) {
             let (nb, guard) = tracing_appender::non_blocking(f);
             let _ = LOG_GUARD.set(guard);
             let _ = registry
-                .with(tracing_subscriber::fmt::layer().with_ansi(false).with_writer(nb))
+                .with(
+                    tracing_subscriber::fmt::layer()
+                        .with_ansi(false)
+                        .with_writer(nb),
+                )
                 .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
                 .try_init();
         }
         Err(_) => {
-            let _ = registry.with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr)).try_init();
+            let _ = registry
+                .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+                .try_init();
         }
     }
 }
@@ -87,9 +102,17 @@ pub fn handle_url(app: &AppHandle, url: &str) {
         }
         *last = (url.to_string(), std::time::Instant::now());
     }
-    let parsed = st.core.dispatch_sync("link_parse", &json!({"text": url})).and_then(|r| r.ok()).unwrap_or(Value::Null);
+    let parsed = st
+        .core
+        .dispatch_sync("link_parse", &json!({"text": url}))
+        .and_then(|r| r.ok())
+        .unwrap_or(Value::Null);
     let web_url = match parsed.get("kind").and_then(|v| v.as_str()) {
-        Some("call") => parsed.get("url").and_then(|v| v.as_str()).unwrap_or(url).to_string(),
+        Some("call") => parsed
+            .get("url")
+            .and_then(|v| v.as_str())
+            .unwrap_or(url)
+            .to_string(),
         // код приглашения в контакты — оболочка откроет «Добавить по коду»
         Some("contact") => url.to_string(),
         _ => {
@@ -99,7 +122,13 @@ pub fn handle_url(app: &AppHandle, url: &str) {
     };
     wins::show_main(app);
     if st.main_ready.load(Ordering::SeqCst) {
-        let _ = app.emit("zv", CoreEvent { event: "host:deeplink".into(), payload: json!({"url": web_url}) });
+        let _ = app.emit(
+            "zv",
+            CoreEvent {
+                event: "host:deeplink".into(),
+                payload: json!({"url": web_url}),
+            },
+        );
     } else {
         *st.pending_url.lock().unwrap() = Some(web_url);
     }
@@ -130,22 +159,50 @@ async fn forward_events(app: AppHandle) {
         match ev.event.as_str() {
             "call:incoming" | "call:update" => {
                 let p = &ev.payload;
-                let id = p.get("callId").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let name = p.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let link = p.get("linkName").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let id = p
+                    .get("callId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let name = p
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let link = p
+                    .get("linkName")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 st.incoming_names.lock().unwrap().insert(id, (name, link));
                 if ev.event == "call:incoming" {
                     wins::show_incoming(&app);
                 }
             }
             "call:ended" => {
-                let id = ev.payload.get("callId").and_then(|v| v.as_str()).unwrap_or("");
-                let reason = ev.payload.get("reason").and_then(|v| v.as_str()).unwrap_or("");
+                let id = ev
+                    .payload
+                    .get("callId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let reason = ev
+                    .payload
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 let info = st.incoming_names.lock().unwrap().remove(id);
                 if reason == "missed" {
                     let (name, link) = info.unwrap_or_default();
-                    let who = if name.is_empty() { "Собеседник".to_string() } else { name };
-                    let text = if link.is_empty() { format!("{who} — контакт") } else { format!("{who} — по ссылке «{link}»") };
+                    let who = if name.is_empty() {
+                        "Собеседник".to_string()
+                    } else {
+                        name
+                    };
+                    let text = if link.is_empty() {
+                        format!("{who} — контакт")
+                    } else {
+                        format!("{who} — по ссылке «{link}»")
+                    };
                     host::notify(&app, "Пропущенный звонок", &text);
                 }
                 let empty = st
@@ -169,9 +226,13 @@ async fn forward_events(app: AppHandle) {
             "chat:msg" => {
                 let p = &ev.payload;
                 let m = &p["msg"];
-                let incoming = p["new"].as_bool() == Some(true) && m["out"].as_bool() == Some(false);
+                let incoming =
+                    p["new"].as_bool() == Some(true) && m["out"].as_bool() == Some(false);
                 if incoming && p["notify"].as_bool() == Some(true) && !st.core.settings().dnd {
-                    let name = p["name"].as_str().filter(|n| !n.is_empty()).unwrap_or("Новое сообщение");
+                    let name = p["name"]
+                        .as_str()
+                        .filter(|n| !n.is_empty())
+                        .unwrap_or("Новое сообщение");
                     host::notify(&app, name, &chat_preview(m));
                     wins::flash_main(&app);
                 }
@@ -184,12 +245,28 @@ async fn forward_events(app: AppHandle) {
                 }
             }
             "contact:offer" => {
-                let name = ev.payload.get("name").and_then(|v| v.as_str()).unwrap_or("Собеседник");
-                host::notify(&app, "Предложение контакта", &format!("{name} предлагает обменяться контактами"));
+                let name = ev
+                    .payload
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Собеседник");
+                host::notify(
+                    &app,
+                    "Предложение контакта",
+                    &format!("{name} предлагает обменяться контактами"),
+                );
             }
             "contact:added" if ev.payload.get("via").and_then(|v| v.as_str()) == Some("invite") => {
-                let name = ev.payload.get("name").and_then(|v| v.as_str()).unwrap_or("Собеседник");
-                host::notify(&app, "Новый контакт", &format!("{name} добавил(а) вас в контакты по коду приглашения"));
+                let name = ev
+                    .payload
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Собеседник");
+                host::notify(
+                    &app,
+                    "Новый контакт",
+                    &format!("{name} добавил(а) вас в контакты по коду приглашения"),
+                );
             }
             _ => {}
         }
@@ -202,13 +279,25 @@ fn chat_preview(m: &Value) -> String {
     let text = if m["kind"].as_str() == Some("file") {
         let name = m["file"]["name"].as_str().unwrap_or("файл");
         let mime = m["file"]["mime"].as_str().unwrap_or("");
-        let icon = if mime.starts_with("image/") { "🖼" } else { "📎" };
-        if body.is_empty() { format!("{icon} {name}") } else { format!("{icon} {body}") }
+        let icon = if mime.starts_with("image/") {
+            "🖼"
+        } else {
+            "📎"
+        };
+        if body.is_empty() {
+            format!("{icon} {name}")
+        } else {
+            format!("{icon} {body}")
+        }
     } else {
         body.to_string()
     };
     let one: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if one.chars().count() > 140 { format!("{}…", one.chars().take(140).collect::<String>()) } else { one }
+    if one.chars().count() > 140 {
+        format!("{}…", one.chars().take(140).collect::<String>())
+    } else {
+        one
+    }
 }
 
 pub fn quit(app: &AppHandle) {
@@ -234,9 +323,16 @@ async fn zv(
 
 /// Быстрые команды по порядку вызова (отправка сигналов звонка).
 #[tauri::command]
-fn zv_sync(state: tauri::State<'_, AppState>, cmd: String, args: Option<Value>) -> Result<Value, String> {
+fn zv_sync(
+    state: tauri::State<'_, AppState>,
+    cmd: String,
+    args: Option<Value>,
+) -> Result<Value, String> {
     let args = args.unwrap_or(Value::Null);
-    state.core.dispatch_sync(&cmd, &args).unwrap_or_else(|| Err(format!("{cmd}: асинхронная команда")))
+    state
+        .core
+        .dispatch_sync(&cmd, &args)
+        .unwrap_or_else(|| Err(format!("{cmd}: асинхронная команда")))
 }
 
 fn main() {
@@ -250,7 +346,10 @@ fn main() {
             handle_argv(app, &argv);
         }))
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--hidden"])))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -269,9 +368,17 @@ fn main() {
         .setup(move |app| {
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
-            let log_dir = app.path().app_log_dir().unwrap_or_else(|_| data_dir.join("logs"));
+            let log_dir = app
+                .path()
+                .app_log_dir()
+                .unwrap_or_else(|_| data_dir.join("logs"));
             init_logging(&log_dir);
-            tracing::info!("ZVONochek {} ({}) — данные в {}", env!("CARGO_PKG_VERSION"), platform(), data_dir.display());
+            tracing::info!(
+                "ZVONochek {} ({}) — данные в {}",
+                env!("CARGO_PKG_VERSION"),
+                platform(),
+                data_dir.display()
+            );
             let opts = CoreOptions {
                 data_dir: data_dir.clone(),
                 app_version: app.package_info().version.to_string(),
@@ -325,7 +432,9 @@ fn main() {
         })
         .on_window_event(wins::on_window_event);
 
-    let app = builder.build(tauri::generate_context!()).expect("не удалось запустить ZVONochek");
+    let app = builder
+        .build(tauri::generate_context!())
+        .expect("не удалось запустить ZVONochek");
     app.run(|app, ev| match ev {
         RunEvent::ExitRequested { code, api, .. } => {
             // последнее окно закрылось — остаёмся в трее; выходим только по явной команде

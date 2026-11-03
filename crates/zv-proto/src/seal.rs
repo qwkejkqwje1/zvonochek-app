@@ -45,7 +45,13 @@ pub fn seal_bytes(key: &[u8; 32], topic: &str, json: &[u8], no_zip: bool) -> Str
     let cipher = Aes256Gcm::new(key.into());
     let aad = format!("{topic}{tag}");
     let ct = cipher
-        .encrypt(&Nonce::from(iv), Payload { msg: &pt, aad: aad.as_bytes() })
+        .encrypt(
+            &Nonce::from(iv),
+            Payload {
+                msg: &pt,
+                aad: aad.as_bytes(),
+            },
+        )
         .expect("aes-gcm encrypt");
     format!("{tag}.{}.{}", crate::b64u::enc(&iv), crate::b64u::enc(&ct))
 }
@@ -75,7 +81,13 @@ pub fn open_bytes(key: &[u8; 32], topic: &str, sealed: &str) -> Option<Vec<u8>> 
     let cipher = Aes256Gcm::new(key.into());
     let aad = format!("{topic}{tag}");
     let pt = cipher
-        .decrypt(&Nonce::from(iv), Payload { msg: &ct, aad: aad.as_bytes() })
+        .decrypt(
+            &Nonce::from(iv),
+            Payload {
+                msg: &ct,
+                aad: aad.as_bytes(),
+            },
+        )
         .ok()?;
     if tag == "z2" {
         let mut out = Vec::new();

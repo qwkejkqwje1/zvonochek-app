@@ -24,9 +24,14 @@ pub struct MockWorker {
 impl MockWorker {
     /// Запустить на 127.0.0.1 (порт `port`, 0 — любой свободный).
     pub async fn spawn_on(port: u16) -> MockWorker {
-        let l = TcpListener::bind(("127.0.0.1", port)).await.expect("mock worker bind");
+        let l = TcpListener::bind(("127.0.0.1", port))
+            .await
+            .expect("mock worker bind");
         let url = format!("http://{}", l.local_addr().unwrap());
-        let me = MockWorker { url, rooms: Arc::default() };
+        let me = MockWorker {
+            url,
+            rooms: Arc::default(),
+        };
         let m = me.clone();
         tokio::spawn(async move {
             while let Ok((s, _)) = l.accept().await {
@@ -45,7 +50,12 @@ impl MockWorker {
 
     /// Сколько предметов лежит в комнате (тесты).
     pub fn count(&self, chat_id: &str) -> usize {
-        self.rooms.lock().unwrap().get(chat_id).map(|r| r.msgs.len()).unwrap_or(0)
+        self.rooms
+            .lock()
+            .unwrap()
+            .get(chat_id)
+            .map(|r| r.msgs.len())
+            .unwrap_or(0)
     }
 
     async fn serve(&self, mut s: TcpStream) -> anyhow::Result<()> {
@@ -74,7 +84,10 @@ impl MockWorker {
                 headers.insert(k.trim().to_ascii_lowercase(), v.trim().to_string());
             }
         }
-        let len: usize = headers.get("content-length").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let len: usize = headers
+            .get("content-length")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
         while buf.len() < head_end + len {
             let n = s.read(&mut tmp).await?;
             if n == 0 {
@@ -82,7 +95,8 @@ impl MockWorker {
             }
             buf.extend_from_slice(&tmp[..n]);
         }
-        let body: Value = serde_json::from_slice(&buf[head_end..(head_end + len).min(buf.len())]).unwrap_or(Value::Null);
+        let body: Value = serde_json::from_slice(&buf[head_end..(head_end + len).min(buf.len())])
+            .unwrap_or(Value::Null);
         let token = headers.get("x-access-token").cloned().unwrap_or_default();
         let (code, resp) = self.route(&method, &target, &token, &body);
         let text = resp.to_string();
@@ -122,7 +136,9 @@ impl MockWorker {
         }
         match (op, method) {
             ("msg", "POST") => {
-                let Some(blob) = body.get("blob").and_then(|b| b.as_str()) else { return (400, json!({"error": "bad blob"})) };
+                let Some(blob) = body.get("blob").and_then(|b| b.as_str()) else {
+                    return (400, json!({"error": "bad blob"}));
+                };
                 match zv_proto::b64u::dec(blob) {
                     Ok(raw) if raw.len() == crate::mailbox::ITEM_BYTES => {
                         let h = hex::encode(Sha256::digest(&raw));
@@ -130,7 +146,8 @@ impl MockWorker {
                             return (200, json!({"ok": true, "seq": m.0, "dup": true}));
                         }
                         let seq = room.msgs.last().map(|m| m.0).unwrap_or(0) + 1;
-                        room.msgs.push((seq, blob.to_string(), h, zv_proto::ids::now_ms()));
+                        room.msgs
+                            .push((seq, blob.to_string(), h, zv_proto::ids::now_ms()));
                         (201, json!({"ok": true, "seq": seq}))
                     }
                     Ok(_) => (400, json!({"error": "bad blob size"})),
@@ -138,14 +155,28 @@ impl MockWorker {
                 }
             }
             ("fetch", "GET") => {
-                let after: u64 = query.split('&').find_map(|kv| kv.strip_prefix("after=")).and_then(|v| v.parse().ok()).unwrap_or(0);
-                let rows: Vec<Value> =
-                    room.msgs.iter().filter(|m| m.0 > after).take(500).map(|m| json!({"seq": m.0, "blob": m.1, "ts": m.3})).collect();
+                let after: u64 = query
+                    .split('&')
+                    .find_map(|kv| kv.strip_prefix("after="))
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(0);
+                let rows: Vec<Value> = room
+                    .msgs
+                    .iter()
+                    .filter(|m| m.0 > after)
+                    .take(500)
+                    .map(|m| json!({"seq": m.0, "blob": m.1, "ts": m.3}))
+                    .collect();
                 let last = rows.last().and_then(|r| r["seq"].as_u64()).unwrap_or(after);
                 (200, json!({"messages": rows, "lastSeq": last}))
             }
             ("ack", "POST") => {
-                for s in body.get("seqs").and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+                for s in body
+                    .get("seqs")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default()
+                {
                     if let Some(n) = s.as_u64() {
                         room.acked.insert(n);
                     }

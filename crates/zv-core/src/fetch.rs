@@ -9,7 +9,9 @@ const MAX_BODY: usize = 4 * 1024 * 1024;
 
 /// Разрешённые адреса: Worker из настроек, любые `*.workers.dev`, TURN Metered; в разработке — localhost.
 pub fn allowed(url: &url::Url, worker_host: Option<&str>, dev: bool) -> bool {
-    let Some(host) = url.host_str() else { return false };
+    let Some(host) = url.host_str() else {
+        return false;
+    };
     if dev && (host == "127.0.0.1" || host == "localhost") {
         return true;
     }
@@ -22,19 +24,35 @@ pub fn allowed(url: &url::Url, worker_host: Option<&str>, dev: bool) -> bool {
         || host == "metered.live"
 }
 
-pub async fn http_fetch(args: &Value, worker_host: Option<&str>, dev: bool) -> Result<Value, String> {
+pub async fn http_fetch(
+    args: &Value,
+    worker_host: Option<&str>,
+    dev: bool,
+) -> Result<Value, String> {
     let url_s = args.get("url").and_then(|v| v.as_str()).ok_or("url")?;
     let url = url::Url::parse(url_s).map_err(|e| e.to_string())?;
     if !allowed(&url, worker_host, dev) {
-        return Err(format!("адрес не разрешён: {}", url.host_str().unwrap_or("")));
+        return Err(format!(
+            "адрес не разрешён: {}",
+            url.host_str().unwrap_or("")
+        ));
     }
-    let method = args.get("method").and_then(|v| v.as_str()).unwrap_or("GET").to_uppercase();
+    let method = args
+        .get("method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("GET")
+        .to_uppercase();
     let method = reqwest::Method::from_bytes(method.as_bytes()).map_err(|e| e.to_string())?;
-    let mut req = zv_signal::tls::http().request(method, url.clone()).timeout(Duration::from_secs(20));
+    let mut req = zv_signal::tls::http()
+        .request(method, url.clone())
+        .timeout(Duration::from_secs(20));
     if let Some(h) = args.get("headers").and_then(|v| v.as_object()) {
         for (k, v) in h {
             let kl = k.to_ascii_lowercase();
-            if matches!(kl.as_str(), "origin" | "host" | "cookie" | "referer" | "content-length" | "connection") {
+            if matches!(
+                kl.as_str(),
+                "origin" | "host" | "cookie" | "referer" | "content-length" | "connection"
+            ) {
                 continue;
             }
             if let Some(s) = v.as_str() {
@@ -43,7 +61,9 @@ pub async fn http_fetch(args: &Value, worker_host: Option<&str>, dev: bool) -> R
         }
     }
     if let Some(b) = args.get("bodyB64").and_then(|v| v.as_str()) {
-        let bytes = base64::engine::general_purpose::STANDARD.decode(b).map_err(|e| e.to_string())?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b)
+            .map_err(|e| e.to_string())?;
         req = req.body(bytes);
     } else if let Some(b) = args.get("body").and_then(|v| v.as_str()) {
         req = req.body(b.to_string());
@@ -63,7 +83,9 @@ pub async fn http_fetch(args: &Value, worker_host: Option<&str>, dev: bool) -> R
     let mut out = json!({"status": status, "headers": headers, "url": url_s});
     match std::str::from_utf8(&bytes) {
         Ok(s) => out["body"] = Value::String(s.to_string()),
-        Err(_) => out["bodyB64"] = Value::String(base64::engine::general_purpose::STANDARD.encode(&bytes)),
+        Err(_) => {
+            out["bodyB64"] = Value::String(base64::engine::general_purpose::STANDARD.encode(&bytes))
+        }
     }
     Ok(out)
 }
@@ -74,11 +96,27 @@ mod tests {
     #[test]
     fn allowlist() {
         let u = |s: &str| url::Url::parse(s).unwrap();
-        assert!(allowed(&u("https://zvonochek.zerewgwe.workers.dev/turn"), None, false));
-        assert!(allowed(&u("https://x.metered.live/api/v1/turn/credentials"), None, false));
+        assert!(allowed(
+            &u("https://zvonochek.zerewgwe.workers.dev/turn"),
+            None,
+            false
+        ));
+        assert!(allowed(
+            &u("https://x.metered.live/api/v1/turn/credentials"),
+            None,
+            false
+        ));
         assert!(!allowed(&u("https://evil.example/"), None, false));
-        assert!(!allowed(&u("http://zvonochek.zerewgwe.workers.dev/turn"), None, false));
-        assert!(allowed(&u("https://my.example/turn"), Some("my.example"), false));
+        assert!(!allowed(
+            &u("http://zvonochek.zerewgwe.workers.dev/turn"),
+            None,
+            false
+        ));
+        assert!(allowed(
+            &u("https://my.example/turn"),
+            Some("my.example"),
+            false
+        ));
         assert!(!allowed(&u("http://127.0.0.1:8787/turn"), None, false));
         assert!(allowed(&u("http://127.0.0.1:8787/turn"), None, true));
     }

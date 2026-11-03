@@ -13,7 +13,10 @@ const MAGIC: &[u8] = b"ZVP1";
 
 impl JsonFile {
     pub fn new(dir: &Path, name: &str, protected: bool) -> JsonFile {
-        JsonFile { path: dir.join(name), protected }
+        JsonFile {
+            path: dir.join(name),
+            protected,
+        }
     }
 
     pub fn load<T: DeserializeOwned + Default>(&self) -> T {
@@ -35,7 +38,11 @@ impl JsonFile {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.into()),
         };
-        let json = if raw.starts_with(MAGIC) { crate::protect::open(&raw[MAGIC.len()..])? } else { raw };
+        let json = if raw.starts_with(MAGIC) {
+            crate::protect::open(&raw[MAGIC.len()..])?
+        } else {
+            raw
+        };
         Ok(Some(serde_json::from_slice(&json)?))
     }
 

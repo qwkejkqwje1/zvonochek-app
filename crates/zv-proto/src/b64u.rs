@@ -31,7 +31,8 @@ pub fn dec(s: &str) -> crate::Result<Vec<u8>> {
         })
         .filter(|c| *c != '=')
         .collect();
-    DEC.decode(norm.as_bytes()).map_err(|_| crate::Error::BadBase64)
+    DEC.decode(norm.as_bytes())
+        .map_err(|_| crate::Error::BadBase64)
 }
 
 #[cfg(test)]

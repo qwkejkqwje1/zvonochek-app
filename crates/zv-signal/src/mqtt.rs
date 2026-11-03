@@ -49,7 +49,12 @@ fn packet(header: u8, body: &[u8]) -> Vec<u8> {
     out
 }
 
-pub fn encode_connect(client_id: &str, user: Option<&str>, pass: Option<&str>, keepalive: u16) -> Vec<u8> {
+pub fn encode_connect(
+    client_id: &str,
+    user: Option<&str>,
+    pass: Option<&str>,
+    keepalive: u16,
+) -> Vec<u8> {
     let mut b = Vec::new();
     put_str(&mut b, b"MQTT");
     b.push(4); // 3.1.1
@@ -214,8 +219,13 @@ struct Session {
 
 async fn handshake(mut io: Io, spec: &BrokerSpec, topic: &str) -> anyhow::Result<(Io, Vec<u8>)> {
     let cid = format!("zv_{}", zv_proto::ids::rand_hex(5));
-    io.write(encode_connect(&cid, spec.username.as_deref(), spec.password.as_deref(), KEEPALIVE_S))
-        .await?;
+    io.write(encode_connect(
+        &cid,
+        spec.username.as_deref(),
+        spec.password.as_deref(),
+        KEEPALIVE_S,
+    ))
+    .await?;
     let mut buf = Vec::new();
     loop {
         if let Some((h, body)) = take_packet(&mut buf)? {
@@ -246,7 +256,11 @@ async fn connect_tcp(addr: String, spec: BrokerSpec, topic: String) -> anyhow::R
     let (io, buf) = tokio::time::timeout(CONNECT_TIMEOUT, fut)
         .await
         .map_err(|_| anyhow::anyhow!("tcp timeout"))??;
-    Ok(Session { io, buf, connect_ms: t0.elapsed().as_millis() as u32 })
+    Ok(Session {
+        io,
+        buf,
+        connect_ms: t0.elapsed().as_millis() as u32,
+    })
 }
 
 async fn connect_wss(spec: BrokerSpec, topic: String, ua: String) -> anyhow::Result<Session> {
@@ -258,14 +272,32 @@ async fn connect_wss(spec: BrokerSpec, topic: String, ua: String) -> anyhow::Res
     let (io, buf) = tokio::time::timeout(CONNECT_TIMEOUT, fut)
         .await
         .map_err(|_| anyhow::anyhow!("wss timeout"))??;
-    Ok(Session { io, buf, connect_ms: t0.elapsed().as_millis() as u32 })
+    Ok(Session {
+        io,
+        buf,
+        connect_ms: t0.elapsed().as_millis() as u32,
+    })
 }
 
-async fn connect_any(spec: &BrokerSpec, topic: &str, tcp: bool, ua: &str) -> anyhow::Result<Session> {
-    let mut tries: Vec<std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Session>> + Send>>> = Vec::new();
-    tries.push(Box::pin(connect_wss(spec.clone(), topic.to_string(), ua.to_string())));
+async fn connect_any(
+    spec: &BrokerSpec,
+    topic: &str,
+    tcp: bool,
+    ua: &str,
+) -> anyhow::Result<Session> {
+    let mut tries: Vec<std::pin::Pin<Box<dyn Future<Output = anyhow::Result<Session>> + Send>>> =
+        Vec::new();
+    tries.push(Box::pin(connect_wss(
+        spec.clone(),
+        topic.to_string(),
+        ua.to_string(),
+    )));
     if tcp && let Some(addr) = &spec.tcp {
-        tries.push(Box::pin(connect_tcp(addr.clone(), spec.clone(), topic.to_string())));
+        tries.push(Box::pin(connect_tcp(
+            addr.clone(),
+            spec.clone(),
+            topic.to_string(),
+        )));
     }
     let (s, _rest) = futures_util::future::select_ok(tries).await?;
     Ok(s)
@@ -399,7 +431,12 @@ struct MqttSpawner {
 }
 
 impl Spawner for MqttSpawner {
-    fn spawn(&mut self, id: u64, _renew: bool, events: mpsc::UnboundedSender<ConnEvent>) -> ConnHandle {
+    fn spawn(
+        &mut self,
+        id: u64,
+        _renew: bool,
+        events: mpsc::UnboundedSender<ConnEvent>,
+    ) -> ConnHandle {
         let (h, cmd, bytes, rotate) = ConnHandle::new(id);
         let ctx = ConnCtx {
             id,

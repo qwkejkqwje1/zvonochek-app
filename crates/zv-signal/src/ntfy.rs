@@ -33,7 +33,10 @@ pub fn subscribe_url(base: &str, topic: &str, now_s: u64) -> String {
 
 pub(crate) fn spawn(base: &str, room_topic: &str, cfg: &SignalConfig, hub: ChanTx) -> ChanHandle {
     let base = base.trim_end_matches('/').to_string();
-    let host = url::Url::parse(&base).ok().and_then(|u| u.host_str().map(str::to_string)).unwrap_or_default();
+    let host = url::Url::parse(&base)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_string))
+        .unwrap_or_default();
     let (h, mut cmd_rx, shared) = ChanHandle::new(Kind::Ntfy, &host);
     let topic = zv_proto::topics::ntfy_signaling_topic(room_topic);
     let ua = cfg.user_agent.clone();
@@ -142,9 +145,16 @@ fn post(url: &str, data: Arc<str>, shared: &Arc<crate::chan::Shared>) {
     let url = url.to_string();
     let shared = shared.clone();
     tokio::spawn(async move {
-        let r = crate::tls::http().post(url).body(data.to_string()).timeout(Duration::from_secs(10)).send().await;
+        let r = crate::tls::http()
+            .post(url)
+            .body(data.to_string())
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await;
         match r {
-            Ok(resp) if !resp.status().is_success() => shared.error(format!("POST HTTP {}", resp.status())),
+            Ok(resp) if !resp.status().is_success() => {
+                shared.error(format!("POST HTTP {}", resp.status()))
+            }
             Err(e) => shared.error(format!("POST: {e}")),
             _ => {}
         }
@@ -156,8 +166,15 @@ mod tests {
     use super::*;
     #[test]
     fn frames_and_urls() {
-        assert_eq!(parse_frame(r#"{"id":"x","time":1,"event":"message","topic":"t","message":"z1.a.b"}"#).as_deref(), Some("z1.a.b"));
+        assert_eq!(
+            parse_frame(r#"{"id":"x","time":1,"event":"message","topic":"t","message":"z1.a.b"}"#)
+                .as_deref(),
+            Some("z1.a.b")
+        );
         assert_eq!(parse_frame(r#"{"event":"keepalive"}"#), None);
-        assert_eq!(subscribe_url("https://ntfy.sh/", "zv1-abc", 1000), "wss://ntfy.sh/zv1-abc/ws?since=970");
+        assert_eq!(
+            subscribe_url("https://ntfy.sh/", "zv1-abc", 1000),
+            "wss://ntfy.sh/zv1-abc/ws?since=970"
+        );
     }
 }
