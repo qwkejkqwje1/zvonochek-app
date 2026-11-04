@@ -19,6 +19,8 @@ zv-signal = { path = "../zv-signal" }
 zv-p2p = { path = "../zv-p2p" }
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 blake3 = "1.8.7"
+futures-util = "0.3.34"
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots", "url"] }
 argon2 = "0.6.0"
 chacha20poly1305 = "0.11.0"
 ed25519-dalek = "3.0.0"

@@ -18,6 +18,7 @@ pub mod store;
 mod tunnel;
 pub mod update;
 pub mod vault;
+mod wsproxy;
 
 pub use contacts::{decode_code as decode_contact_code, encode_code as encode_contact_code};
 
@@ -94,6 +95,8 @@ struct Inner {
     p2p_gen: AtomicU64,
     /// Туннели звонков через P2P-линк (отдельная блокировка: каждый пакет медиа).
     tun: Mutex<tunnel::TunState>,
+    /// Прокси WebSocket встроенного веб-клиента (веб-чаты), см. wsproxy.rs.
+    ws: Mutex<wsproxy::WsState>,
 }
 
 struct State {
@@ -249,6 +252,7 @@ impl Core {
             p2p_starting: std::sync::atomic::AtomicBool::new(false),
             p2p_gen: AtomicU64::new(0),
             tun: Mutex::new(Default::default()),
+            ws: Mutex::new(Default::default()),
         });
         let core = Core { inner };
         core.inner.files_after_start();
@@ -368,6 +372,9 @@ impl Core {
                 "protected": protect::ENABLED,
             })),
             "settings_get" => ok(i.lock().settings.clone()),
+            "ws_open" => i.ws_open(&args),
+            "ws_send" => i.ws_send(&args),
+            "ws_close" => i.ws_close(&args),
             "vault_status" => i.vault_status(),
             "vault_remove_password" => i.vault_remove_password(),
             "vault_remember" => i.vault_remember(&args),
@@ -1617,6 +1624,96 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(p["kind"], "call");
+    }
+
+    /// Прокси WebSocket (веб-чаты): эхо-сервер без Origin, текст и двоичные кадры, закрытие.
+    #[tokio::test]
+    async fn ws_proxy_echo() {
+        use futures_util::{SinkExt, StreamExt};
+        let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = l.local_addr().unwrap().port();
+        let origin = Arc::new(Mutex::new(None::<String>));
+        let o2 = origin.clone();
+        tokio::spawn(async move {
+            let (s, _) = l.accept().await.unwrap();
+            let cb = |req: &tokio_tungstenite::tungstenite::handshake::server::Request,
+                      resp: tokio_tungstenite::tungstenite::handshake::server::Response| {
+                *o2.lock().unwrap() = req
+                    .headers()
+                    .get("origin")
+                    .map(|v| v.to_str().unwrap_or("").to_string());
+                Ok(resp)
+            };
+            let mut ws = tokio_tungstenite::accept_hdr_async(s, cb).await.unwrap();
+            while let Some(Ok(m)) = ws.next().await {
+                if m.is_text() || m.is_binary() {
+                    ws.send(m).await.unwrap();
+                } else if m.is_close() {
+                    break;
+                }
+            }
+        });
+        let d = tempfile::tempdir().unwrap();
+        let core = Core::start(opts(d.path())).unwrap();
+        let mut ev = core.subscribe();
+        let url = format!("ws://127.0.0.1:{port}/chat/x/listen");
+        let id = "test-sock-1";
+        core.dispatch("ws_open", json!({"id": id, "url": url}))
+            .await
+            .unwrap();
+        // чужой адрес и повтор id — отказ
+        assert!(
+            core.dispatch(
+                "ws_open",
+                json!({"id": "test-sock-2", "url": "wss://evil.example/"})
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            core.dispatch("ws_open", json!({"id": id, "url": url}))
+                .await
+                .is_err()
+        );
+        async fn next_ws(ev: &mut broadcast::Receiver<CoreEvent>, id: &str) -> CoreEvent {
+            loop {
+                let e = tokio::time::timeout(Duration::from_secs(10), ev.recv())
+                    .await
+                    .expect("нет события")
+                    .unwrap();
+                if e.event.starts_with("ws:") {
+                    assert_eq!(e.payload["id"], id);
+                    return e;
+                }
+            }
+        }
+        assert_eq!(next_ws(&mut ev, id).await.event, "ws:open");
+        core.dispatch("ws_send", json!({"id": id, "text": "привет"}))
+            .await
+            .unwrap();
+        core.dispatch("ws_send", json!({"id": id, "b64": "AAEC"}))
+            .await
+            .unwrap();
+        let m = next_ws(&mut ev, id).await;
+        assert_eq!(
+            (m.event.as_str(), m.payload["text"].as_str()),
+            ("ws:msg", Some("привет"))
+        );
+        let m = next_ws(&mut ev, id).await;
+        assert_eq!(m.payload["b64"], "AAEC");
+        assert_eq!(*origin.lock().unwrap(), None, "Origin не должен уходить");
+        core.dispatch("ws_close", json!({"id": id, "code": 1000}))
+            .await
+            .unwrap();
+        let c = next_ws(&mut ev, id).await;
+        assert_eq!(c.event, "ws:close");
+        assert_eq!(c.payload["code"], 1000);
+        assert!(
+            core.dispatch("ws_send", json!({"id": id, "text": "x"}))
+                .await
+                .is_err(),
+            "после закрытия сокета нет"
+        );
     }
 
     /// Ключ данных профиля: секретные файлы зашифрованы им, старый формат перешифровывается,
