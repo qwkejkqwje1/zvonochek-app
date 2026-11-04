@@ -47,15 +47,43 @@ const watch = (page, tag) => {
   page.on('pageerror', (e) => console.log(`   [${tag}] pageerror: ${e.message}`));
   return page;
 };
+const nicks = new Map();
+const vis = (p, sel) => p.evaluate((s) => {
+  const e = document.querySelector(s);
+  return !!e && e.offsetParent !== null && !e.closest('.hidden');
+}, sel);
+const state = (p) =>
+  p.evaluate(() => {
+    const d = (s) => {
+      const e = document.querySelector(s);
+      return e ? `${s}:${e.offsetParent !== null ? 'видно' : 'скрыто'}${e.disabled ? ',выкл' : ''}` : `${s}:нет`;
+    };
+    const ov = [...document.querySelectorAll('.modal:not(.hidden), .overlay:not(.hidden), dialog[open], .sheet:not(.hidden)')]
+      .filter((e) => e.offsetParent !== null)
+      .map((e) => (e.id || e.className) + ': ' + e.innerText.slice(0, 80).replace(/\s+/g, ' '));
+    return [d('#chatNickBox'), d('#chatInput'), d('#chatSend'), ...ov].join(' | ');
+  });
 const enter = async (p, nick) => {
+  nicks.set(p, nick);
   await p.waitForSelector('#chatroom:not(.hidden)', { timeout: 30000 });
-  const nb = await p.$('#chatNickBox:not(.hidden)');
-  if (nb) {
+  for (let i = 0; i < 100 && !(await vis(p, '#chatNickBox')) && !(await vis(p, '#chatInput')); i++) await p.waitForTimeout(200);
+  if (await vis(p, '#chatNickBox')) {
     await p.fill('#chatNickInput', nick);
     await p.click('#chatNickSave');
   }
+  for (let i = 0; i < 100 && !(await vis(p, '#chatInput')); i++) await p.waitForTimeout(200);
+  if (!(await vis(p, '#chatInput'))) throw new Error('нет поля ввода: ' + (await state(p)));
 };
 const send = async (p, text) => {
+  // окно ника может появиться и после поля ввода (когда комната инициализировалась)
+  for (let i = 0; i < 50 && !(await vis(p, '#chatInput')); i++) {
+    if (await vis(p, '#chatNickBox')) {
+      await p.fill('#chatNickInput', nicks.get(p) || 'Гость');
+      await p.click('#chatNickSave');
+    }
+    await p.waitForTimeout(200);
+  }
+  if (!(await vis(p, '#chatInput'))) throw new Error('нет поля ввода: ' + (await state(p)));
   await p.fill('#chatInput', text);
   await p.click('#chatSend');
 };
@@ -78,6 +106,11 @@ await step('сайт: свой чат по ссылке', async () => {
 });
 await step('оболочка: ссылка #chat= → окно «Чаты сайта»', async () => {
   await shell.goto(`${HOST}/shell/index.html`, { waitUntil: 'load' });
+  // первый запуск — окно знакомства
+  if (await shell.waitForSelector('.dialog', { timeout: 8000 }).catch(() => null)) {
+    await shell.keyboard.press('Escape');
+    await shell.waitForSelector('.dialog', { state: 'detached' });
+  }
   await shell.fill('#dialInput', WEB + '#chat=' + seed);
   await shell.waitForFunction(() => document.querySelector('#dialHint').textContent.includes('Чаты сайта'));
   const [p] = await Promise.all([appCtx.waitForEvent('page'), shell.click('#dialBtn')]);

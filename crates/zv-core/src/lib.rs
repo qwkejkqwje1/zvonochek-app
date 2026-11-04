@@ -1637,6 +1637,7 @@ mod tests {
         let o2 = origin.clone();
         tokio::spawn(async move {
             let (s, _) = l.accept().await.unwrap();
+            #[allow(clippy::result_large_err)]
             let cb = |req: &tokio_tungstenite::tungstenite::handshake::server::Request,
                       resp: tokio_tungstenite::tungstenite::handshake::server::Response| {
                 *o2.lock().unwrap() = req
