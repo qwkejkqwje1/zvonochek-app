@@ -1,7 +1,8 @@
-// Туннель звонка (ADR-0008): приложение ↔ приложение (два zv-devhost, P2P iroh локально, сигналы — заглушка
-// Worker). Сценарий 1 — ZV_TUNNEL_ONLY=1: ядра убирают из SDP собеседника все кандидаты, кроме туннеля, —
+// Туннель звонка (ADR-0008): приложение ↔ приложение (два zv-devhost, P2P iroh локально; сигналы — обычные
+// каналы веба, нужен интернет). Сценарий 1 — ZV_TUNNEL_ONLY=1: ядра убирают из SDP собеседника все кандидаты, кроме туннеля, —
 // звонок обязан соединиться через туннель (пакеты идут в обе стороны). Сценарий 2 — обычный: туннель есть,
 // но браузеры выбирают прямой путь (локальная сеть); звонок соединяется, после завершения туннель закрыт.
+// Плюс «только туннель» поверх libp2p (ZV_P2P_ONLY=libp2p): датаграмм нет — пакеты кадрами потока.
 //   node tests/e2e/devhost-tunnel.mjs [путь к zv-devhost] [каталог ui]
 import { launch } from './pw.mjs';
 import { spawn } from 'node:child_process';
@@ -14,7 +15,6 @@ const BIN = process.argv[2] || '/data/zv4-target/debug/zv-devhost';
 const UI = process.argv[3] || new URL('../../ui', import.meta.url).pathname;
 const PA = 8801;
 const PB = 8802;
-const PW = 8803;
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zvtun-'));
 let failed = 0;
 const step = async (name, fn) => {
@@ -45,12 +45,14 @@ async function waitHttp(port) {
 }
 const browser = await launch();
 
-async function scenario(title, only) {
+let run = 0;
+async function scenario(title, only, extraEnv = {}) {
   console.log(`— ${title}`);
-  const env = { ZV_TUNNEL_ONLY: only ? '1' : '0' };
-  const ha = startHost(`a${only ? 1 : 0}`, PA, ['--mock-worker', String(PW), '--local', `worker=http://127.0.0.1:${PW}`], env);
+  const env = { ZV_TUNNEL_ONLY: only ? '1' : '0', ...extraEnv };
+  run++;
+  const ha = startHost(`a${run}`, PA, [], env);
   await waitHttp(PA);
-  const hb = startHost(`b${only ? 1 : 0}`, PB, ['--local', `worker=http://127.0.0.1:${PW}`], env);
+  const hb = startHost(`b${run}`, PB, [], env);
   await waitHttp(PB);
   const secret = crypto.randomBytes(16).toString('base64url');
   const mk = async (tag, port, name) => {
@@ -81,6 +83,8 @@ async function scenario(title, only) {
     if (ta.length !== 1 || tb.length !== 1) throw new Error('нет туннеля у обоих');
     if (only) {
       for (const t of [...ta, ...tb]) if (t.rx < 100 || t.tx < 100) throw new Error('мало пакетов через туннель');
+      // без датаграмм (libp2p) — всё кадрами потока
+      if (extraEnv.ZV_P2P_ONLY === 'libp2p' && ta[0].txFrames < 100) throw new Error('ожидались кадры tun');
       const q = await a.page.innerText('#quality');
       if (/Мост|TURN/i.test(q)) throw new Error('путь не туннель: ' + q);
     }
@@ -98,7 +102,8 @@ async function scenario(title, only) {
   await new Promise((r) => setTimeout(r, 800));
 }
 
-await scenario('только туннель (ZV_TUNNEL_ONLY=1)', true);
+await scenario('только туннель (ZV_TUNNEL_ONLY=1), iroh — датаграммы', true);
+await scenario('только туннель, линк libp2p — кадры потока', true, { ZV_P2P_ONLY: 'libp2p' });
 await scenario('обычный звонок (туннель как запасной путь)', false);
 await browser.close();
 console.log(failed ? `ОШИБОК: ${failed} (журналы: ${tmp})` : 'всё прошло');
