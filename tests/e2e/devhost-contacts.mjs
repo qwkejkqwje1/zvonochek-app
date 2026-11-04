@@ -1,6 +1,6 @@
 // Контакты между двумя zv-devhost (два ядра, P2P через iroh): приглашение → контакт у обоих → «в сети» →
 // код безопасности → аудиозвонок контакту (ответ, соединение, завершение) → отклонение видеозвонка →
-// «не беспокоить» → переименование → удаление → звонок по ссылке → «В контакты» из истории → P2P выкл/вкл.
+// «не беспокоить» → переименование → удаление → звонок по ссылке → «В контакты» из истории → P2P выкл/вкл → libp2p выкл/вкл.
 //   node tests/e2e/devhost-contacts.mjs [http://127.0.0.1:8790] [http://127.0.0.1:8791]
 // Оба хоста — со свежими каталогами данных.
 import { launch } from './pw.mjs';
@@ -254,6 +254,31 @@ await step('P2P выкл → предупреждение → «Включить
   await A.page.click('#ctP2p .btn.primary');
   await A.page.waitForSelector('#ctP2p.hidden', { state: 'attached', timeout: 15000 });
   await A.page.waitForSelector('#ctList .item .pres.ok', { timeout: 30000 });
+});
+
+await step('libp2p выкл → контакт в сети через iroh → вкл → снова два пути', async () => {
+  const lp = (on) =>
+    A.page.waitForFunction(
+      async (on) => {
+        const d = await window.__zvIpc.call('diag_snapshot', {});
+        const p = d.p2p || {};
+        if (!p.running || !!p.libp2p !== on) return false;
+        return !on || (p.links || []).some((l) => (l.paths || []).length > 1);
+      },
+      on,
+      { timeout: 40000, polling: 500 }
+    );
+  await go(A, 'settings');
+  await A.page.click('#setLibp2p + span');
+  await lp(false);
+  await go(A, 'contacts');
+  await A.page.waitForSelector('#ctList .item .pres.ok', { timeout: 30000 });
+  await go(A, 'settings');
+  if (await A.page.isChecked('#setLibp2p')) throw new Error('переключатель не выключился');
+  await A.page.click('#setLibp2p + span');
+  await go(A, 'contacts');
+  await A.page.waitForSelector('#ctList .item .pres.ok', { timeout: 30000 });
+  await lp(true);
 });
 
 await step('диагностика: карточка P2P', async () => {
