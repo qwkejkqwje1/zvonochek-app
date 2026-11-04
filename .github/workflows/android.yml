@@ -116,6 +116,7 @@ jobs:
             --input "$FILE" --jq .browser_download_url
           # строка про APK в тексте релиза — только когда APK действительно лежит в релизе
           BODY=$(gh api "repos/$REPO/releases/$ID" --jq .body)
+          # tag_name — обязательно: PATCH черновика без него делает релиз «untagged-…» (ссылки latest.json → 404)
           case "$BODY" in *_android.apk*) ;; *)
-            gh api -X PATCH "repos/$REPO/releases/$ID" -f body="$(printf '%s\n\nAndroid 7.0+: %s (arm64 и armv7).' "$BODY" "$FILE")" > /dev/null;;
+            gh api -X PATCH "repos/$REPO/releases/$ID" -f tag_name="$TAG" -f body="$(printf '%s\n\nAndroid 7.0+: %s (arm64 и armv7).' "$BODY" "$FILE")" > /dev/null;;
           esac

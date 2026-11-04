@@ -110,7 +110,9 @@ Android: JDK 21, Android SDK (platform 37) и NDK, `rustup target add aarch64-li
 2. Поднять версию в `Cargo.toml` (workspace) и `app/tauri.conf.json`, дописать раздел версии в `CHANGELOG.md` (он же —
    «что нового» в окне обновления).
 3. `git tag v4.0.1 && git push --tags` → Actions соберёт черновик релиза (exe x64 + ARM64, подписанный `latest.json`,
-   APK) → опубликовать: с этого момента приложения увидят новую версию.
+   APK) → опубликовать: с этого момента приложения увидят новую версию. Правя черновик через API, всегда передавать
+   `tag_name` (иначе релиз станет `untagged-…` и ссылки из `latest.json` дадут 404); после публикации адрес релиза —
+   `…/releases/tag/vX.Y.Z`.
 
 ## Лицензия
 
