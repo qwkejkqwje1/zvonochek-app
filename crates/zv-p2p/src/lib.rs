@@ -179,6 +179,8 @@ struct Link {
     pending: Mutex<VecDeque<Bytes>>,
     /// Когда последний раз пробовали добавить путь iroh / libp2p.
     tried: Mutex<[u64; 2]>,
+    /// Неудачных попыток подряд (интервал повтора удваивается).
+    fails: Mutex<[u32; 2]>,
 }
 
 struct Inner {
@@ -303,6 +305,12 @@ impl Node {
         hello.insert("t".into(), json!("hello4"));
         hello.insert("proto".into(), json!(PROTO));
         hello.insert("mp".into(), json!(1));
+        // транспорты этой стороны: недостающий путь не дозваниваем, если у собеседника он выключен
+        let tr: Vec<&str> = [(ep.is_some(), "iroh"), (lp.is_some(), "libp2p")]
+            .into_iter()
+            .filter_map(|(on, n)| on.then_some(n))
+            .collect();
+        hello.insert("tr".into(), json!(tr));
         hello.insert("app".into(), json!(cfg.app_version));
         hello.insert("caps".into(), json!(cfg.caps));
         hello.insert("name".into(), json!(cfg.name));
@@ -747,6 +755,7 @@ impl Inner {
                         primary: AtomicU64::new(0),
                         pending: Mutex::new(VecDeque::new()),
                         tried: Mutex::new([0; 2]),
+                        fails: Mutex::new([0; 2]),
                     });
                     links.insert(id, l.clone());
                     (l, true)
@@ -1169,29 +1178,45 @@ impl Inner {
             return;
         }
         let have: Vec<usize> = lock(&l.paths).iter().map(|p| p.tr.kind()).collect();
-        let hint = hint
-            .cloned()
-            .or_else(|| lock(&l.remote).get("addr").cloned());
+        let (hint, theirs) = {
+            let r = lock(&l.remote);
+            (
+                hint.cloned().or_else(|| r.get("addr").cloned()),
+                r.get("tr").and_then(|v| v.as_array()).cloned(),
+            )
+        };
         let now = now_ms();
         let mut tried = lock(&l.tried);
+        let fails = *lock(&l.fails);
         for kind in [0usize, 1] {
+            let name = if kind == 0 { "iroh" } else { "libp2p" };
             let on = if kind == 0 {
                 self.ep.is_some()
             } else {
                 self.lp.is_some()
             };
-            if !on || have.contains(&kind) || now.saturating_sub(tried[kind]) < ENSURE_EVERY_MS {
+            let they = theirs
+                .as_ref()
+                .is_none_or(|a| a.iter().any(|v| v.as_str() == Some(name)));
+            // неудачи подряд — реже: 25 с, 50 с … до ~13 мин (поиск в DHT не бесплатный)
+            let every = ENSURE_EVERY_MS << fails[kind].min(5);
+            if !on || !they || have.contains(&kind) || now.saturating_sub(tried[kind]) < every {
                 continue;
             }
             tried[kind] = now;
-            let (me, peer, h) = (self.clone(), l.peer_s.clone(), hint.clone());
+            let (me, l2, peer, h) = (self.clone(), l.clone(), l.peer_s.clone(), hint.clone());
             tokio::spawn(async move {
-                if let Err(e) = me.dial(kind, &peer, h.as_ref()).await {
-                    tracing::debug!(
-                        "p2p: {}: путь {} не добавился: {e}",
-                        &peer[..8],
-                        if kind == 0 { "iroh" } else { "libp2p" }
-                    );
+                match me.dial(kind, &peer, h.as_ref()).await {
+                    Ok(_) => lock(&l2.fails)[kind] = 0,
+                    Err(e) => {
+                        let mut f = lock(&l2.fails);
+                        f[kind] = f[kind].saturating_add(1);
+                        tracing::debug!(
+                            "p2p: {}: путь {name} не добавился ({}): {e}",
+                            &peer[..8],
+                            f[kind]
+                        );
+                    }
                 }
             });
         }
