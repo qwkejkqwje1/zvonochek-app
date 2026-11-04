@@ -43,7 +43,7 @@ import {
   openCodeBlob,
   genP256KeyPair,
   deriveRoom,
-} from './crypto.js?v=41';
+} from './crypto.js?v=44';
 import {
   getPersonal,
   hasPersonal,
@@ -58,10 +58,10 @@ import {
   signWithKey,
   verifyChatSig,
   setOwnCert,
-} from './identity.js?v=41';
-import { kvGet, kvPut, kvDel, kvAll, kvPrefix, normalizeRoomRecord } from './store.js?v=41';
-import { getWorkerBase, setWorkerBase, DEFAULT_WORKER_URL } from './config.js?v=41';
-import { inboxRevoke } from './inbox.js?v=41';
+} from './identity.js?v=44';
+import { kvGet, kvPut, kvDel, kvAll, kvPrefix, normalizeRoomRecord } from './store.js?v=44';
+import { getWorkerBase, setWorkerBase, DEFAULT_WORKER_URL } from './config.js?v=44';
+import { inboxRevoke } from './inbox.js?v=44';
 import {
   commitLocal,
   mergeItems,
@@ -71,7 +71,7 @@ import {
   sameValue,
   shortDev,
   deviceLabelFromUA,
-} from './sync-core.js?v=41';
+} from './sync-core.js?v=44';
 
 const te = new TextEncoder();
 const td = new TextDecoder();

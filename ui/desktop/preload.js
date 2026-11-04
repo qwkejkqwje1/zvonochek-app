@@ -103,7 +103,6 @@
   window.__zvBoot = boot;
 
   try {
-    localStorage.zvOnboarded = '1';
     if (boot.name) localStorage.zvName = boot.name;
   } catch {}
 

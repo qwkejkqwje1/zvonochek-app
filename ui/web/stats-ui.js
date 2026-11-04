@@ -2,7 +2,7 @@
 // на вкладке «Звонки». Данные готовит callstats.js; здесь только DOM.
 // Все строки пользователя попадают в DOM через textContent.
 
-import { ROUTE_LABELS, ROUTE_SHORT, mosLabel, sparkPath, fmtDur, fmtDurWords, fmtDurShort, fmtKbps, plural } from './callstats.js?v=41';
+import { ROUTE_LABELS, ROUTE_SHORT, mosLabel, sparkPath, fmtDur, fmtDurWords, fmtDurShort, fmtKbps, plural } from './callstats.js?v=44';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

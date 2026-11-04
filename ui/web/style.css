@@ -19,7 +19,7 @@
   --line-2: rgba(255, 255, 255, 0.11);
   --text: #f5f7fa;
   --text-2: #aab8c5;
-  --text-3: #708499;
+  --text-3: #8497ab; /* v44: было #708499 — контраст 4,2:1, ниже нормы 4,5:1 для мелкого текста */
   --accent: #3390ec;
   --accent-press: #2b7fd6;
   --accent-ink: #6ab3f3;
@@ -365,7 +365,7 @@ select {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 34px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23708499' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238497ab' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
 }
@@ -870,6 +870,13 @@ input[type='range']::-moz-range-thumb {
   display: block;
   max-width: 220px;
   height: auto;
+}
+/* v43: SVG из qrcode.js (scalable) — без width/height, только viewBox. В
+   контейнере width: fit-content (с v36) у него нулевая ширина: вместо QR был
+   белый кружок из паддинга. Ширину задаём явно. */
+.qr svg,
+.greet-qr svg {
+  width: min(220px, 64vw);
 }
 .safety-emoji {
   margin: 14px 0 6px;

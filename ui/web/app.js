@@ -1,12 +1,12 @@
-import { CONFIG, getWorkerBase, setWorkerBase, normalizeWorkerUrl, DEFAULT_WORKER_URL } from './config.js?v=41';
-import { newSecret, deriveRoom, safetyCode, safetyCodeBridge, b64u, seal, open as openSealed, genP256KeyPair, sha256hex } from './crypto.js?v=41';
-import { hasPersonal, getPersonal, ensurePersonal, signWithDevice, signWithKey, personalLinkOf, fpOfPubRaw, getChatDeviceEcdh, rotatePersonal, encryptWithVault, decryptWithVault, adminSigner, resetIdentityCache } from './identity.js?v=41';
-import { inboxRegister, inboxRing, inboxRingState, inboxAck, inboxAnswer, inboxCancel, inboxMissed, inboxMissedAck, inboxRetire, InboxListener } from './inbox.js?v=41';
-import { kvGet, kvPut, kvAll, kvDel, wipeDatabase } from './store.js?v=41';
-import { Signaling } from './signaling.js?v=41';
-import { ROUTE_SHORT, readCounters, deriveSample, bridgeSample, CallRecorder, journalDigest, plural } from './callstats.js?v=41';
-import { renderLiveStats, renderCallsDashboard, renderCallsList, renderContactsList } from './stats-ui.js?v=41';
-import { anonName, randomAnonName } from './anon-names.js?v=41';
+import { CONFIG, getWorkerBase, setWorkerBase, normalizeWorkerUrl, DEFAULT_WORKER_URL } from './config.js?v=44';
+import { newSecret, deriveRoom, safetyCode, safetyCodeBridge, b64u, seal, open as openSealed, genP256KeyPair, sha256hex } from './crypto.js?v=44';
+import { hasPersonal, getPersonal, ensurePersonal, signWithDevice, signWithKey, personalLinkOf, fpOfPubRaw, getChatDeviceEcdh, rotatePersonal, encryptWithVault, decryptWithVault, adminSigner, resetIdentityCache } from './identity.js?v=44';
+import { inboxRegister, inboxRing, inboxRingState, inboxAck, inboxAnswer, inboxCancel, inboxMissed, inboxMissedAck, inboxRetire, InboxListener } from './inbox.js?v=44';
+import { kvGet, kvPut, kvAll, kvDel, wipeDatabase } from './store.js?v=44';
+import { Signaling } from './signaling.js?v=44';
+import { ROUTE_SHORT, readCounters, deriveSample, bridgeSample, CallRecorder, journalDigest, plural } from './callstats.js?v=44';
+import { renderLiveStats, renderCallsDashboard, renderCallsList, renderContactsList } from './stats-ui.js?v=44';
+import { anonName, randomAnonName } from './anon-names.js?v=44';
 import {
   startDevices,
   hasOtherDevices,
@@ -16,25 +16,32 @@ import {
   rotateWithDevices,
   openAdminLink,
   SYNC_SETTINGS,
-} from './devices.js?v=41';
-import { VQ_CHOICES, deviceClass, captureTier, tierConstraints, rxCap, parseCap, videoEncoding, QLEVELS, audioCodecOrder, videoCodecOrder, CLASS_TEXT, sdpFirstCodec, audioRoute, echoWanted } from './media-policy.js?v=41';
+} from './devices.js?v=44';
+import { VQ_CHOICES, deviceClass, captureTier, tierConstraints, rxCap, parseCap, videoEncoding, QLEVELS, audioCodecOrder, videoCodecOrder, CLASS_TEXT, sdpFirstCodec, audioRoute, echoWanted } from './media-policy.js?v=44';
+import { ensurePushSub, loadMissed, updatePushUI, initPushUi } from './push-ui.js?v=44';
+import { refreshPersonalUI, startInboxListener, initNumberAdmin } from './number-admin.js?v=44';
+import { callPeer, contactsLoad, openContactMenu, peerName, rememberPeer, renderContacts, shareBackOn, syncLocal, touchPeer, initContacts } from './contacts.js?v=44';
+import { adaptLoad, applyCodecPrefs, onViewChange, reapplyMediaLoad, sendRxCap, showBridgeSafety, showSafety, viewHidden, watchDeviceLoad, initMediaLoad } from './media-load.js?v=44';
+import { applyQuality, noteCodecs, startStats, initCallStatsUi } from './call-stats-ui.js?v=44';
+import { activateBridge, playBridgeVoice, playBridgeVoice2, stopBridge, upgradeBridge2, initBridge } from './bridge.js?v=44';
+import { applyMicProcessing, attachMicToEngine, attachRemoteToEngine, ensureAudioEngine, isProcTrack, paintEchoState, paintMicTest, recoverRemoteAudio, refreshAudioRoute, setEchoMode, stopMeterLoop, stopMicTest, syncAudioParams, toggleMicTest, initAudioEngine } from './audio-engine.js?v=44';
 
-export const APP_VERSION = 41;
+export const APP_VERSION = 44;
 export const APP_BUILD = '2026-11-01';
 // Версия разработки пишется из одного места: главная (бейдж и подпись),
 // экран подготовки, карточка подключения в начале звонка.
 for (const el of document.querySelectorAll('[data-ver]')) el.textContent = 'v' + APP_VERSION;
 for (const el of document.querySelectorAll('[data-build]')) el.textContent = APP_BUILD;
-const $ = (s, r = document) => r.querySelector(s);
-const setUse = (sel, name) => {
+export const $ = (s, r = document) => r.querySelector(s);
+export const setUse = (sel, name) => {
   const el = typeof sel === 'string' ? $(sel) : sel;
   if (el) el.setAttribute('href', '#' + name);
 };
-const setBtnIcon = (sel, name) => setUse((typeof sel === 'string' ? $(sel) : sel)?.querySelector('use'), name);
+export const setBtnIcon = (sel, name) => setUse((typeof sel === 'string' ? $(sel) : sel)?.querySelector('use'), name);
 
 // Регистрация Service Worker для быстрого старта и работы PWA
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js?v=41').catch(() => {});
+  navigator.serviceWorker.register('./sw.js?v=44').catch(() => {});
 }
 
 // Автообновление: если на сайте вышла новая версия, а браузер держит старую из кэша — перезагружаемся.
@@ -51,7 +58,7 @@ fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
 
 const randHex = (n) =>
   [...crypto.getRandomValues(new Uint8Array(n))].map((b) => b.toString(16).padStart(2, '0')).join('');
-const selfId = sessionStorage.zvId || (sessionStorage.zvId = randHex(8));
+export const selfId = sessionStorage.zvId || (sessionStorage.zvId = randHex(8));
 // Экземпляр участника. v41: новый на каждый вход в звонок (раньше — на загрузку
 // страницы). При быстром перезвоне без перезагрузки собеседник видел «того же»
 // участника и держал соединение от прошлого звонка (~20 с до сторожевого
@@ -115,7 +122,7 @@ try {
   }
 } catch {}
 
-const S = {
+export const S = {
   secret: null,
   room: null,
   sig: null,
@@ -264,7 +271,7 @@ const S = {
 };
 
 // ---------- Утилиты UI ----------
-function show(id) {
+export function show(id) {
   ['home', 'prejoin', 'call'].forEach((s) => $('#' + s).classList.toggle('hidden', s !== id));
   document.body.dataset.screen = id;
   if (id === 'home') {
@@ -303,7 +310,7 @@ function syncChatOpen() {
   if (call && chat) call.classList.toggle('chat-open', !chat.classList.contains('hidden'));
 }
 let toastT;
-function toast(t, ms = 3200) {
+export function toast(t, ms = 3200) {
   const e = $('#toast');
   if (!e) return;
   e.textContent = t;
@@ -311,7 +318,7 @@ function toast(t, ms = 3200) {
   clearTimeout(toastT);
   toastT = setTimeout(() => e.classList.add('hidden'), ms);
 }
-function openModal(tplId) {
+export function openModal(tplId) {
   const b = $('#modalBody');
   b.replaceChildren($(tplId).content.cloneNode(true));
   $('#modal').classList.remove('hidden');
@@ -342,14 +349,14 @@ const roomLink = () =>
   location.origin + location.pathname + '#k=' + S.secret +
   (S.personal && S.secret === S.personal.secret ? '&d=' + S.personal.fp : '');
 
-function renderQr(el, text) {
+export function renderQr(el, text) {
   if (typeof qrcode === 'undefined' || !el) return;
   const q = qrcode(0, 'M');
   q.addData(text);
   q.make();
   el.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
 }
-async function copy(text) {
+export async function copy(text) {
   try {
     await navigator.clipboard.writeText(text);
     toast('Ссылка скопирована');
@@ -357,7 +364,7 @@ async function copy(text) {
     toast('Не удалось скопировать');
   }
 }
-function beep(freq = 880, dur = 0.14) {
+export function beep(freq = 880, dur = 0.14) {
   try {
     const a = new (window.AudioContext || window.webkitAudioContext)();
     const o = a.createOscillator();
@@ -372,7 +379,7 @@ function beep(freq = 880, dur = 0.14) {
 }
 
 // ---------- Маршрутизация и Главный экран ----------
-function route() {
+export function route() {
   const params = new URLSearchParams(location.hash.slice(1));
   // v39: QR нового устройства, открытый камерой телефона: #link=<код>.<bind>.
   // Код — одноразовый доступ к запросу привязки: убираем его из адреса и
@@ -441,568 +448,11 @@ $('#btnBackHome').onclick = () => {
   show('home');
 };
 
-// ---------- Аудио-движок Discord (Web Audio API: 0-200% Gain, VAD, Compressor, Loopback) ----------
-function ensureAudioEngine() {
-  if (!S.audioCtx) {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return null;
-    S.audioCtx = new Ctx();
-  }
-  if (S.audioCtx.state === 'suspended') {
-    S.audioCtx.resume().catch(() => {});
-  }
-  if (!S.audioCtx.onstatechange) {
-    // iOS/Android усыпляют AudioContext при звонке на телефон, блокировке
-    // экрана и после долгой тишины. Весь входящий звук у нас идёт через этот
-    // граф (у <video id="remote"> громкость выставлена в 0), поэтому
-    // suspended == полная тишина при живом WebRTC-соединении.
-    S.audioCtx.onstatechange = () => {
-      log('AudioContext: ' + S.audioCtx.state);
-      if (S.audioCtx.state !== 'running') {
-        S.audioCtx.resume().catch(() => {});
-        updateRemoteAudibility();
-      } else {
-        updateRemoteAudibility();
-      }
-    };
-  }
-  if (!S.procDest) {
-    const ctx = S.audioCtx;
-    S.hpFilter = ctx.createBiquadFilter();
-    S.hpFilter.type = 'highpass';
-    S.hpFilter.frequency.value = S.audio.noise ? 85 : 20;
-
-    S.micGainNode = ctx.createGain();
-    S.micGainNode.gain.value = S.audio.micVol / 100;
-
-    S.micAnalyser = ctx.createAnalyser();
-    S.micAnalyser.fftSize = 512;
-    S.micAnalyser.smoothingTimeConstant = 0.55;
-
-    S.gateGainNode = ctx.createGain();
-    S.gateGainNode.gain.value = 1;
-
-    S.procDest = ctx.createMediaStreamDestination();
-
-    S.hpFilter.connect(S.micGainNode);
-    S.micGainNode.connect(S.micAnalyser);
-    S.micAnalyser.connect(S.gateGainNode);
-    S.gateGainNode.connect(S.procDest);
-
-    // Цепочка обработки входящего голоса собеседника (0-200% + компрессор четкости)
-    S.remoteCompNode = ctx.createDynamicsCompressor();
-    S.remoteCompNode.threshold.value = -26;
-    S.remoteCompNode.knee.value = 18;
-    S.remoteCompNode.ratio.value = S.audio.comp ? 3.5 : 1;
-    S.remoteCompNode.attack.value = 0.005;
-    S.remoteCompNode.release.value = 0.18;
-
-    S.remoteGainNode = ctx.createGain();
-    S.remoteGainNode.gain.value = S.deafened ? 0 : S.audio.peerVol / 100;
-
-    S.remoteAnalyser = ctx.createAnalyser();
-    S.remoteAnalyser.fftSize = 256;
-
-    S.remoteDest = ctx.createMediaStreamDestination();
-
-    S.remoteCompNode.connect(S.remoteGainNode);
-    S.remoteGainNode.connect(S.remoteAnalyser);
-    S.remoteAnalyser.connect(S.remoteDest);
-    // Также подключаем к системному выходу по умолчанию (если не выбран кастомный sinkId)
-    if (!VOLUME_LOCKED) S.remoteAnalyser.connect(ctx.destination);
-  }
-  startMeterLoop();
-  return S.audioCtx;
-}
-
-
-// Куда реально звучит собеседник: через WebAudio-граф (громкость 0-200%),
-// а если граф недоступен/уснул — напрямую через элемент <video id="remote">
-// (громкость до 100%). Раньше при уснувшем AudioContext звук пропадал
-// полностью и навсегда: элемент был заглушён, а граф молчал.
-// v40: на iOS volume медиаэлемента только для чтения (всегда 1), поэтому
-// «volume = 0» не глушил <video id="remote">: голос звучал дважды — из
-// элемента и из WebAudio-графа, с разной задержкой (эффект эха), а ползунок
-// громкости не работал. Глушим через muted, а на таких устройствах играем
-// только через элемент (граф остаётся для индикаторов, без выхода в динамик).
-const VOLUME_LOCKED = (() => {
-  try {
-    const a = document.createElement('audio');
-    a.volume = 0.5;
-    return a.volume !== 0.5;
-  } catch {
-    return false;
-  }
-})();
-function updateRemoteAudibility() {
-  const vid = $('#remote');
-  if (!vid) return;
-  const viaEngine = !VOLUME_LOCKED && !!(S.audioCtx && S.audioCtx.state === 'running' && S.remoteSource);
-  vid.muted = viaEngine || !!S.deafened;
-  if (!vid.muted) vid.volume = Math.min(1, S.audio.peerVol / 100);
-}
-
-// Видео собеседника. На вертикальном экране вертикальное видео близких
-// пропорций заполняет экран (cover, срезаются лишь края) — как в Telegram;
-// в остальных случаях (горизонтальная камера, демонстрация экрана, десктоп)
-// кадр показывается целиком. Двойной клик/тап переключает режим вручную.
-function fitRemoteVideo() {
-  const v = $('#remote');
-  if (!v || !v.videoWidth || !v.videoHeight) return;
-  if (v.dataset.fit) return v.classList.toggle('fill', v.dataset.fit === 'fill');
-  const ratio = v.videoWidth / v.videoHeight / (innerWidth / innerHeight);
-  const portrait = innerHeight > innerWidth && v.videoHeight > v.videoWidth;
-  v.classList.toggle('fill', portrait && ratio > 0.75 && ratio < 1.33);
-}
-{
-  const v = $('#remote');
-  v?.addEventListener('resize', fitRemoteVideo);
-  v?.addEventListener('loadedmetadata', fitRemoteVideo);
-  v?.addEventListener('dblclick', () => {
-    v.dataset.fit = v.classList.contains('fill') ? 'fit' : 'fill';
-    fitRemoteVideo();
-  });
-  addEventListener('resize', fitRemoteVideo);
-}
-
-// Попытка оживить входящий звук без пересоздания звонка.
-function recoverRemoteAudio(reason) {
-  const now = Date.now();
-  if (now - (S.lastAudioRecoverAt || 0) < 45000) return;
-  S.lastAudioRecoverAt = now;
-  log('Восстанавливаем входящий звук: ' + reason);
-  const ctx = ensureAudioEngine();
-  ctx?.resume?.().catch(() => {});
-  attachRemoteToEngine();
-  updateRemoteAudibility();
-  $('#remote')?.play().catch(() => {});
-}
-
-// v40: обработанный трек микрофона — единственный трек MediaStreamDestination
-// на всё время жизни страницы, его получают и звонок, и мост. До v40 его
-// останавливали stopLocal() (выход в лобби, «Назад», «Положить трубку») и
-// switchDevice() (смена микрофона), а attachMicToEngine() потом возвращал
-// ТОТ ЖЕ остановленный трек (readyState 'ended'): со второго звонка без
-// перезагрузки или после смены микрофона собеседнику уходило 0 байт звука.
-// Теперь трек не останавливаем (микрофон освобождает stop() сырого трека),
-// а если он всё-таки умер — пересоздаём destination.
-const isProcTrack = (t) => !!t && !!S.procDest && S.procDest.stream.getAudioTracks().includes(t);
-function liveProcTrack() {
-  if (!S.audioCtx || !S.gateGainNode || !S.procDest) return null;
-  let t = S.procDest.stream.getAudioTracks()[0];
-  if (!t || t.readyState === 'ended') {
-    try { S.gateGainNode.disconnect(S.procDest); } catch {}
-    S.procDest = S.audioCtx.createMediaStreamDestination();
-    S.gateGainNode.connect(S.procDest);
-    t = S.procDest.stream.getAudioTracks()[0];
-    log('Трек микрофона был остановлен — пересоздан');
-  }
-  return t || null;
-}
-
-function attachMicToEngine(rawTrack) {
-  S.rawAudioTrack = rawTrack;
-  const ctx = ensureAudioEngine();
-  if (!ctx || !rawTrack) return rawTrack;
-  try {
-    if (S.micSource) {
-      try { S.micSource.disconnect(); } catch {}
-    }
-    S.micSource = ctx.createMediaStreamSource(new MediaStream([rawTrack]));
-    S.micSource.connect(S.hpFilter);
-    const procTrack = liveProcTrack();
-    return procTrack || rawTrack;
-  } catch {
-    return rawTrack;
-  }
-}
-
-function attachRemoteToEngine() {
-  const ctx = ensureAudioEngine();
-  const audioTracks = S.remote.getAudioTracks();
-  if (!ctx || !audioTracks.length) return;
-  try {
-    if (S.remoteSource) {
-      try { S.remoteSource.disconnect(); } catch {}
-    }
-    S.remoteSource = ctx.createMediaStreamSource(new MediaStream(audioTracks));
-    S.remoteSource.connect(S.remoteCompNode);
-
-    const outEl = $('#remoteAudioOut');
-    if (outEl && S.dev.spk && 'setSinkId' in HTMLMediaElement.prototype) {
-      // Если выбран конкретный динамик через setSinkId — выводим через remoteAudioOut
-      try { S.remoteAnalyser.disconnect(ctx.destination); } catch {}
-      outEl.srcObject = S.remoteDest.stream;
-      outEl.setSinkId(S.dev.spk).catch(() => {});
-      outEl.play().catch(() => {});
-    } else if (!VOLUME_LOCKED) {
-      try { S.remoteAnalyser.connect(ctx.destination); } catch {}
-    }
-    // Приглушаем прямой звук из <video id="remote">, пока граф жив,
-    // чтобы громкость регулировалась через GainNode (0-200%)
-    updateRemoteAudibility();
-  } catch (e) {
-    console.warn('remote audio graph', e);
-  }
-}
-
-let persistTimer = 0;
-function persistSoon() {
-  if (persistTimer) return;
-  persistTimer = setTimeout(() => {
-    persistTimer = 0;
-    try {
-      localStorage.zvMicVol = String(S.audio.micVol);
-      localStorage.zvPeerVol = String(S.audio.peerVol);
-      localStorage.zvInputMode = S.audio.inputMode;
-      localStorage.zvVadGate = String(S.audio.vadGate);
-      localStorage.zvNoise = S.audio.noise ? '1' : '0';
-      localStorage.zvEchoMode = S.audio.echoMode;
-      localStorage.zvEcho = S.audio.echoMode === 'off' ? '0' : '1'; // для отката на v40
-      localStorage.zvAgc = S.audio.agc ? '1' : '0';
-      localStorage.zvComp = S.audio.comp ? '1' : '0';
-      localStorage.zvOpusTune = S.audio.opusTune ? '1' : '0';
-      localStorage.zvBitrate = String(S.audio.bitrate);
-      localStorage.zvNetMode = S.audio.netMode;
-      localStorage.zvRelay = S.audio.netMode === 'relay' ? '1' : '0';
-    } catch {}
-  }, 250);
-}
-
-function syncAudioParams() {
-  persistSoon();
-
-  if (S.hpFilter) S.hpFilter.frequency.value = S.audio.noise ? 85 : 20;
-  if (S.micGainNode) S.micGainNode.gain.value = S.audio.micVol / 100;
-  if (S.remoteCompNode) S.remoteCompNode.ratio.value = S.audio.comp ? 3.5 : 1;
-  if (S.remoteGainNode) S.remoteGainNode.gain.value = S.deafened ? 0 : S.audio.peerVol / 100;
-
-  updateRemoteAudibility();
-
-  // Обновляем подписи и ползунки во всех открытых панелях
-  const gatePct = Math.max(0, Math.min(100, ((S.audio.vadGate + 75) / 60) * 100));
-  for (const id of ['#pVadGateMark', '#qaVadGateMark', '#sVadGateMark']) {
-    const el = $(id);
-    if (el) el.style.left = gatePct + '%';
-  }
-  if ($('#pMicVol')) $('#pMicVol').value = S.audio.micVol;
-  if ($('#pMicVolTxt')) $('#pMicVolTxt').textContent = S.audio.micVol + '%';
-  if ($('#pPeerVol')) $('#pPeerVol').value = S.audio.peerVol;
-  if ($('#pPeerVolTxt')) $('#pPeerVolTxt').textContent = S.audio.peerVol + '%';
-  if ($('#qaPeerVol')) $('#qaPeerVol').value = S.audio.peerVol;
-  if ($('#qaPeerVolTxt')) $('#qaPeerVolTxt').textContent = S.audio.peerVol + '%';
-  if ($('#qaMicVol')) $('#qaMicVol').value = S.audio.micVol;
-  if ($('#qaMicVolTxt')) $('#qaMicVolTxt').textContent = S.audio.micVol + '%';
-  if ($('#quickVolLabel')) $('#quickVolLabel').textContent = S.deafened ? 'ВЫКЛ' : S.audio.peerVol + '%';
-  setBtnIcon('#btnQuickAudio', S.deafened ? 'i-volume-x' : 'i-volume');
-  if ($('#preInputModeText')) {
-    $('#preInputModeText').textContent =
-      S.audio.inputMode === 'ptt'
-        ? 'Рация (нажми и говори)'
-        : S.audio.inputMode === 'vad'
-        ? `По голосу (${S.audio.vadGate} дБ)`
-        : 'Открытый микрофон';
-  }
-  setUse('#preInputModeTag use', S.audio.inputMode === 'ptt' ? 'i-radio' : 'i-mic');
-  if ($('#preCodecTag')) {
-    $('#preCodecTag').textContent = S.audio.opusTune
-      ? `Opus ${S.audio.bitrate} kbps · FEC, без DTX`
-      : 'Opus · авто (настройки браузера)';
-  }
-  // Показываем кнопку PTT на экране звонка, если включен режим рации или активен мост
-  $('#cPtt')?.classList.toggle('hidden', S.audio.inputMode !== 'ptt' && !S.bridgeActive);
-}
-
-function stopMeterLoop() {
-  if (S.meterTimer) {
-    clearInterval(S.meterTimer);
-    S.meterTimer = null;
-  }
-}
-
-// v34: анти-перегрев — цикл анализатора работает в 3.5 раза реже (220 мс вместо 65 мс),
-// останавливается при выходе из звонка/лобби, не крутит FFT и перерисовку DOM при
-// заблокированном экране звонка (callLocked) или скрытой вкладке, если не нужен VAD/мост.
-function startMeterLoop() {
-  if (S.meterTimer) return;
-  const buf = new Float32Array(256);
-  const rBuf = new Uint8Array(64);
-  S.meterTimer = setInterval(() => {
-    // 0. Сторож AudioContext (раз в секунду будит контекст, если мобильная ОС усыпила его)
-    if (S.audioCtx && S.audioCtx.state !== 'running' && Date.now() - (S.ctxResumeAt || 0) > 1000) {
-      S.ctxResumeAt = Date.now();
-      S.audioCtx.resume().catch(() => {});
-      updateRemoteAudibility();
-    }
-    const hiddenOrLocked = document.hidden || S.callLocked;
-    const prejoinVis = !$('#prejoin')?.classList.contains('hidden');
-    const qaVis = !$('#quickAudioPop')?.classList.contains('hidden');
-    const modalVis = !$('#modal')?.classList.contains('hidden');
-    const barsVis = !hiddenOrLocked && (prejoinVis || qaVis || modalVis);
-    const needVadOrBridge = S.audio.inputMode !== 'open' || S.bridgeActive || S.testingMic;
-
-    // 1. Анализ локального микрофона
-    if (S.micAnalyser && S.rawAudioTrack && S.rawAudioTrack.readyState === 'live') {
-      if (!barsVis && !needVadOrBridge) {
-        // В режиме открытого микрофона во время звонка без открытых шкал не тратим CPU на FFT
-        S.isSpeaking = S.micOn && !S.deafened;
-        if (S.gateGainNode && S.audioCtx) {
-          S.gateGainNode.gain.setTargetAtTime(S.isSpeaking ? 1 : 0, S.audioCtx.currentTime, 0.07);
-        }
-      } else {
-        S.micAnalyser.getFloatTimeDomainData(buf);
-        let sum = 0;
-        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-        const rms = Math.sqrt(sum / buf.length);
-        const db = rms > 0.00001 ? Math.max(-75, Math.min(0, 20 * Math.log10(rms))) : -75;
-        const pct = Math.max(0, Math.min(100, ((db + 75) / 60) * 100));
-
-        if (barsVis) {
-          for (const id of ['#pVadBar', '#qaVadBar', '#sVadBar']) {
-            const el = $(id);
-            if (el) el.style.width = (S.micOn && !S.deafened ? pct : 0) + '%';
-          }
-          if (prejoinVis && $('#pDbVal')) {
-            $('#pDbVal').textContent = db <= -74 ? '-∞ дБ' : Math.round(db) + ' дБ';
-          }
-        }
-
-        const now = Date.now();
-        let pass = false;
-        if (!S.micOn || S.deafened) {
-          pass = false;
-        } else if (S.audio.inputMode === 'open') {
-          pass = true;
-          S.isSpeaking = db > -55;
-        } else if (S.audio.inputMode === 'ptt') {
-          pass = S.pttPressed;
-        } else {
-          if (db >= S.audio.vadGate) {
-            S.vadHoldUntil = now + 900;
-          } else if (db >= S.audio.vadGate - 7 && now < S.vadHoldUntil) {
-            S.vadHoldUntil = now + 300;
-          }
-          pass = now < S.vadHoldUntil;
-        }
-        if (S.audio.inputMode !== 'open') S.isSpeaking = pass;
-        if (S.gateGainNode && S.audioCtx) {
-          S.gateGainNode.gain.setTargetAtTime(pass ? 1 : 0, S.audioCtx.currentTime, 0.07);
-        }
-        if (!hiddenOrLocked) {
-          $('#cMic')?.classList.toggle('speaking', S.isSpeaking && S.micOn && !S.deafened);
-          if (prejoinVis) $('#preAvatarRing')?.classList.toggle('speaking', S.isSpeaking);
-        }
-      }
-    }
-
-    // 2. Индикация голоса собеседника (только когда аватар собеседника реально виден на экране!)
-    if (!hiddenOrLocked && !$('#remoteOff')?.classList.contains('hidden')) {
-      let peerTalking = Date.now() < S.bridgeSpeakingUntil;
-      if (!peerTalking && S.remoteAnalyser && S.pc?.connectionState === 'connected') {
-        S.remoteAnalyser.getByteFrequencyData(rBuf);
-        let rSum = 0;
-        for (let i = 0; i < rBuf.length; i++) rSum += rBuf[i];
-        if (rSum / rBuf.length > 14) peerTalking = true;
-      }
-      $('#peerAvatarRing')?.classList.toggle('speaking', peerTalking);
-      $('#voiceWave')?.classList.toggle('hidden', !peerTalking && !S.bridgeActive);
-    }
-  }, 220);
-}
-
-// v41: проверка микрофона — запись 5 секунд и воспроизведение (как эхо-тест
-// Skype и проверка звука в Google Meet). До v41 это была живая петля
-// «микрофон → динамик»: с эхоподавлением браузер принимал ваш же голос из
-// динамика за эхо и вырезал его, и проверка звучала заметно хуже, чем вас
-// слышит собеседник (в звонке AEC сравнивает микрофон с голосом собеседника,
-// а не с вашим). Без AEC на динамике петля могла засвистеть. Запись берётся
-// после всей обработки — ровно то, что уходит собеседнику.
-const MIC_TEST_MS = 5000;
-function toggleMicTest() {
-  if (S.testingMic) return stopMicTest();
-  const ctx = ensureAudioEngine();
-  if (!ctx || !S.gateGainNode) return;
-  if (!S.rawAudioTrack || S.rawAudioTrack.readyState !== 'live') return toast('Микрофон не включён');
-  if (typeof MediaRecorder === 'undefined') return toast('Этот браузер не умеет записывать звук — проверка недоступна');
-  const dest = ctx.createMediaStreamDestination();
-  let rec;
-  try {
-    S.gateGainNode.connect(dest);
-    rec = new MediaRecorder(dest.stream);
-  } catch {
-    try { S.gateGainNode.disconnect(dest); } catch {}
-    return toast('Проверка микрофона недоступна в этом браузере');
-  }
-  const t = { rec, dest, chunks: [], left: MIC_TEST_MS / 1000, timer: 0, tick: 0, audio: null, src: null, url: '' };
-  S.micTest = t;
-  S.testingMic = 'rec';
-  rec.ondataavailable = (e) => {
-    if (e.data && e.data.size) t.chunks.push(e.data);
-  };
-  rec.onstop = () => {
-    try { S.gateGainNode?.disconnect(dest); } catch {}
-    dest.stream.getTracks().forEach((x) => x.stop());
-    if (S.micTest !== t) return; // остановили вручную
-    playMicTest(t, new Blob(t.chunks, { type: rec.mimeType || t.chunks[0]?.type || 'audio/webm' }));
-  };
-  rec.start(250);
-  t.tick = setInterval(() => {
-    t.left = Math.max(1, t.left - 1);
-    paintMicTest();
-  }, 1000);
-  t.timer = setTimeout(() => {
-    clearInterval(t.tick);
-    try {
-      if (rec.state !== 'inactive') rec.stop();
-    } catch {}
-  }, MIC_TEST_MS);
-  toast('Скажите пару фраз — через 5 секунд запись прозвучит');
-  paintMicTest();
-}
-function playMicTest(t, blob) {
-  S.testingMic = 'play';
-  paintMicTest();
-  const done = () => {
-    if (S.micTest === t) stopMicTest();
-  };
-  // Запасной путь — через уже запущенный AudioContext (не нужен новый жест).
-  const viaCtx = async () => {
-    try {
-      const buf = await S.audioCtx.decodeAudioData(await blob.arrayBuffer());
-      if (S.micTest !== t) return;
-      const src = (t.src = S.audioCtx.createBufferSource());
-      src.buffer = buf;
-      src.connect(S.audioCtx.destination);
-      src.onended = done;
-      src.start();
-    } catch {
-      toast('Не удалось воспроизвести запись');
-      done();
-    }
-  };
-  try {
-    t.url = URL.createObjectURL(blob);
-    const a = (t.audio = new Audio(t.url));
-    if (S.dev.spk && a.setSinkId) a.setSinkId(S.dev.spk).catch(() => {});
-    a.onended = done;
-    a.play().catch(() => {
-      t.audio = null;
-      viaCtx();
-    });
-  } catch {
-    viaCtx();
-  }
-}
-function paintMicTest() {
-  const left = S.micTest?.left || 0;
-  const labels = {
-    '#pTestMic': ['Проверить микрофон', `Говорите… ${left}`, 'Слушайте…'],
-    '#sTestMic': ['Проверить', `Запись ${left}`, 'Слушайте'],
-  };
-  for (const [id, [idle, rec, play]] of Object.entries(labels)) {
-    const b = $(id);
-    if (!b) continue;
-    const on = !!S.testingMic;
-    b.classList.toggle('active-test', on);
-    b.setAttribute('aria-pressed', String(on));
-    const lbl = b.querySelector('.lbl');
-    if (lbl) lbl.textContent = S.testingMic === 'rec' ? rec : S.testingMic === 'play' ? play : idle;
-    setBtnIcon(b, on ? 'i-stop' : 'i-volume');
-  }
-}
-function stopMicTest() {
-  const t = S.micTest;
-  const was = S.testingMic;
-  S.micTest = null;
-  S.testingMic = false;
-  if (t) {
-    clearTimeout(t.timer);
-    clearInterval(t.tick);
-    try {
-      if (t.rec.state !== 'inactive') t.rec.stop();
-    } catch {}
-    try { S.gateGainNode?.disconnect(t.dest); } catch {}
-    try { t.audio?.pause(); } catch {}
-    try { t.src?.stop(); } catch {}
-    if (t.url) URL.revokeObjectURL(t.url);
-  }
-  if (was) paintMicTest();
-}
-
-// ---------- v41: эхоподавление «Авто» ----------
-// Куда идёт звук (наушники / динамик) — по названиям устройств; в «Авто»
-// AEC выключается в наушниках и включается на динамике. Маршрут
-// пересчитывается перед открытием микрофона, после первого разрешения
-// (до него названия скрыты), при смене микрофона/динамика и при
-// подключении/отключении наушников (devicechange).
-async function refreshAudioRoute({ useTrack = true } = {}) {
-  let route = 'unknown';
-  try {
-    const list = await navigator.mediaDevices.enumerateDevices();
-    const live = useTrack && S.rawAudioTrack?.readyState === 'live' ? S.rawAudioTrack.label || '' : '';
-    route = audioRoute(list, { micId: S.dev.mic, spkId: S.dev.spk, micLabel: live });
-  } catch {}
-  S.audio.route = route;
-  const want = echoWanted(S.audio.echoMode, route);
-  const changed = want !== S.audio.echo;
-  S.audio.echo = want;
-  paintEchoState();
-  return changed;
-}
-// Применить эхоподавление/шумодав/АРУ к живому микрофону. v40: Chrome молча
-// принимает applyConstraints для обработки, но на живом треке её не меняет
-// (getSettings остаётся прежним) — проверяем результат и при расхождении
-// переоткрываем микрофон (обработанный трек при этом не умирает).
-async function applyMicProcessing() {
-  if (!S.rawAudioTrack || S.rawAudioTrack.readyState !== 'live') return;
-  let applied = false;
-  try {
-    await S.rawAudioTrack.applyConstraints(audioC());
-    const st = S.rawAudioTrack.getSettings?.() || {};
-    const same = (v, want) => v === undefined || (v !== false) === want;
-    applied =
-      same(st.echoCancellation, S.audio.echo) &&
-      same(st.noiseSuppression, S.audio.noise) &&
-      same(st.autoGainControl, S.audio.agc);
-  } catch {}
-  if (!applied) await switchDevice('mic', S.dev.mic);
-}
-async function setEchoMode(mode) {
-  S.audio.echoMode = ['auto', 'on', 'off'].includes(mode) ? mode : 'auto';
-  await refreshAudioRoute();
-  syncAudioParams();
-  await applyMicProcessing();
-}
-const AUDIO_ROUTE_TEXT = { headset: 'наушники или гарнитура', speaker: 'звук из динамика', unknown: 'не удалось понять, наушники или динамик' };
-function paintEchoState() {
-  const qa = $('#qaEcho');
-  if (qa) qa.checked = !!S.audio.echo;
-  const el = $('#sEchoState');
-  if (!el) return;
-  const on = S.audio.echo ? 'включено' : 'выключено';
-  el.textContent =
-    S.audio.echoMode === 'auto'
-      ? `Сейчас: ${AUDIO_ROUTE_TEXT[S.audio.route] || AUDIO_ROUTE_TEXT.unknown} — эхоподавление ${on}.` +
-        (S.audio.route === 'unknown' ? ' Если вы в наушниках, выберите «Выключено» — голос будет чище.' : '')
-      : `Эхоподавление ${on} вручную.` +
-        (S.audio.echo ? '' : ' Без наушников собеседник может слышать себя эхом.');
-}
-{
-  let routeTimer = 0;
-  navigator.mediaDevices?.addEventListener?.('devicechange', () => {
-    clearTimeout(routeTimer);
-    routeTimer = setTimeout(async () => {
-      if (!(await refreshAudioRoute())) return;
-      syncAudioParams();
-      if (S.rawAudioTrack?.readyState !== 'live') return;
-      await applyMicProcessing();
-      toast(S.audio.echo ? 'Звук из динамика — эхоподавление включено' : 'Наушники — эхоподавление выключено, голос чище');
-    }, 800);
-  });
-}
+// Аудио-движок (Web Audio: громкость 0–200 %, VAD, компрессор, проверка микрофона) и эхоподавление «Авто» — audio-engine.js (v44)
+initAudioEngine();
 
 // ---------- Медиа и переключение устройств ----------
-const audioC = () => ({
+export const audioC = () => ({
   deviceId: S.dev.mic ? { ideal: S.dev.mic } : undefined,
   echoCancellation: S.audio.echo,
   noiseSuppression: S.audio.noise,
@@ -1013,7 +463,7 @@ const audioC = () => ({
 // 720p@30, слабый телефон 480p@24; ручной выбор в настройках — потолок.
 // Эко-режим (только вручную) — не выше 720p@24. Перегрузка процессора,
 // перегрев и низкий заряд снижают ступень сами (adaptLoad), сеть — adaptQuality.
-const loadOpts = () => ({
+export const loadOpts = () => ({
   eco: !!S.ecoMode,
   cpu: S.load.cpu,
   battLow: S.load.battLow,
@@ -1040,7 +490,7 @@ function stopLocal() {
     S.local.removeTrack(t);
   });
 }
-function localTrack(kind) {
+export function localTrack(kind) {
   return S.local.getTracks().find((t) => t.kind === kind) || null;
 }
 
@@ -1135,7 +585,7 @@ async function setSendTrack(kind, track) {
   }
 }
 
-async function switchDevice(kind, id) {
+export async function switchDevice(kind, id) {
   const micChanged = kind === 'mic' && id !== S.dev.mic;
   if (kind === 'mic') S.dev.mic = localStorage.zvMic = id;
   else S.dev.cam = localStorage.zvCam = id;
@@ -1210,6 +660,15 @@ async function toggleCam() {
   refreshLocalView();
   syncButtons();
   sendCtrl({ t: 'state', mic: S.micOn, cam: S.camOn || !!S.screenTrack });
+  if (S.camOn) bridgeVideoHint('Камера включена');
+}
+
+// v43: мост передаёт только голос. Видео (камера, экран) уже подключено к
+// WebRTC и само появится у собеседника, когда прямой путь или TURN встанет, —
+// говорим об этом, чтобы включённую камеру не принимали за поломку.
+function bridgeVideoHint(what) {
+  if (!S.bridgeActive || S.pc?.connectionState === 'connected') return;
+  toast(`${what}. Через мост идёт только голос — собеседник увидит видео, когда соединение станет прямым`, 6000);
 }
 
 async function toggleScreen() {
@@ -1232,6 +691,7 @@ async function toggleScreen() {
     $('#local').classList.add('screen');
     syncButtons();
     sendCtrl({ t: 'state', mic: S.micOn, cam: true });
+    bridgeVideoHint('Показ экрана включён');
   } catch (e) {
     console.warn(e);
   }
@@ -1435,7 +895,7 @@ window.addEventListener('keyup', (e) => {
 });
 
 // ---------- Экран подготовки (Лобби) ----------
-async function preJoin() {
+export async function preJoin() {
   show('prejoin');
   // v38: звонок из чата — имя в звонке = ник этого чата (не сохраняется
   // глобально: у разных чатов могут быть разные ники, анонимность).
@@ -1502,7 +962,7 @@ $('#btnQr').onclick = () => {
 $('#btnJoin').onclick = join;
 
 // ---------- Вход в звонок и загрузка ICE/STUN/TURN ----------
-async function fetchJson(url, ms = 4000) {
+export async function fetchJson(url, ms = 4000) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), ms);
   try {
@@ -1684,6 +1144,10 @@ async function join() {
   syncAudioParams();
   $('#cScreen').classList.toggle('hidden', !navigator.mediaDevices.getDisplayMedia);
   $('#remote').srcObject = S.remote;
+  if (!S.remoteFrameWatch) {
+    S.remoteFrameWatch = true;
+    watchRemoteFrames();
+  }
   if (S.dev.spk) $('#remote').setSinkId?.(S.dev.spk).catch(() => {});
 
   // v41: сообщения принимает только сигналинг текущего звонка — закрытый
@@ -1781,7 +1245,7 @@ function myAnon() {
   return n;
 }
 const myName = () => S.callNameOverride || localStorage.zvName || myAnon();
-const webCodecsBridgeSupported = () =>
+export const webCodecsBridgeSupported = () =>
   typeof AudioEncoder !== 'undefined' &&
   typeof AudioDecoder !== 'undefined' &&
   typeof MediaStreamTrackProcessor !== 'undefined';
@@ -1796,340 +1260,8 @@ function hello() {
   S.sig?.send({ type: 'hello', name: myName(), ver: APP_VERSION, bc: webCodecsBridgeSupported() ? 1 : 0, vc: S.hwPref || undefined, br: bridgeOnlyFlag() });
 }
 
-// ---------- Аварийный Аудио-Мост через Сигналинг (работает вообще без TURN и без UDP!) ----------
-function activateBridge(reason = 'Активирован аудио-мост через сигналинг') {
-  if (!S.peer || S.bridgeActive) return;
-  if (rosterCount() > 1) {
-    log('Мост недоступен в групповом звонке (3+ участника)');
-    return;
-  }
-  S.bridgeActive = true;
-  S.bridgeNextPlayTime = 0;
-  clearTimeout(S.bridgeAutoTimer);
-  log(reason);
-  toast('Включён мост без TURN: голос идёт через зашифрованный сигнал', 5000);
-  if (!S.bridgeCounted) {
-    S.bridgeCounted = true;
-    countRoute('bridge');
-  }
-  if (!S.callStart) {
-    S.callStart = Date.now();
-    beep(660, 0.16);
-    sysMsg(`Звонок начат · ваша версия ZVONochek v${APP_VERSION} · маршрут: мост без TURN`);
-  }
-  $('#bridgeBadge')?.classList.remove('hidden');
-  $('#cPtt')?.classList.remove('hidden');
-  showBridgeSafety();
-  startBridgeRecorder();
-  startStats();
-  updateStatus();
-}
-
-function stopBridge() {
-  stopBridge2();
-  if (S.bridgeDec) S.bridgeDec.nextPlay = 0;
-  clearTimeout(S.bridgeAutoTimer);
-  clearInterval(S.bridgeRecTimer);
-  S.bridgeRecTimer = null;
-  if (S.bridgeRecorder && S.bridgeRecorder.state !== 'inactive') {
-    try { S.bridgeRecorder.stop(); } catch {}
-  }
-  S.bridgeRecorder = null;
-  const wasActive = S.bridgeActive;
-  S.bridgeActive = false;
-  S.bridgeNextPlayTime = 0;
-  S.bridgeSpeakingUntil = 0;
-  $('#bridgeBadge')?.classList.add('hidden');
-  syncAudioParams();
-  // Код сверки зависел от режима моста — возвращаем код прямого P2P-соединения.
-  if (S.pc?.connectionState === 'connected') {
-    showSafety();
-    if (wasActive && !S.leaving) toast('Прямое P2P-соединение установлено — мост отключён');
-  }
-}
-
-function getSupportedAudioMime() {
-  if (typeof MediaRecorder === 'undefined') return '';
-  const types = [
-    'audio/webm;codecs=opus',
-    'audio/ogg;codecs=opus',
-    'audio/webm',
-    'audio/mp4',
-  ];
-  return types.find((t) => MediaRecorder.isTypeSupported(t)) || '';
-}
-
-// ---------- Мост 2.0: WebCodecs Opus (альтернативный метод, v14) ----------
-// Вместо кусков MediaRecorder по ~0,7 с кодируем звук настоящими Opus-кадрами
-// по 20 мс (AudioEncoder) и шлём пачками ~120 мс. Задержка моста падает в разы.
-// Работает только там, где есть WebCodecs + MediaStreamTrackProcessor
-// (Chromium). Собеседник без WebCodecs честно получает мост 1.0: формат
-// выбирается по флагу bc из hello/hi, а не по нашему желанию.
-function startBridgeRecorder() {
-  if (!S.bridgeCounted) {
-    S.bridgeCounted = true;
-    countRoute('bridge');
-  }
-  if (S.peer?.bridgeCodecs && webCodecsBridgeSupported() && startBridge2()) {
-    S.bridgeMode = 'webcodecs';
-    return;
-  }
-  S.bridgeMode = 'mediarecorder';
-  startBridgeRecorderV1();
-}
-
-function startBridge2() {
-  stopBridge2();
-  const track = liveProcTrack();
-  if (!track) return false;
-  const sampleRate = track.getSettings?.().sampleRate || 48000;
-  const st = { running: true, sampleRate, frames: [], flushTimer: null, enc: null, reader: null };
-  S.bridge2 = st;
-  try {
-    st.enc = new AudioEncoder({
-      output: (chunk) => {
-        try {
-          const buf = new ArrayBuffer(chunk.byteLength);
-          chunk.copyTo(buf);
-          st.frames.push(new Uint8Array(buf));
-        } catch {}
-      },
-      error: (e) => {
-        console.warn('bridge2 enc', e);
-        if (S.bridgeActive) {
-          stopBridge2();
-          S.bridgeMode = 'mediarecorder';
-          startBridgeRecorderV1();
-        }
-      },
-    });
-    st.enc.configure({ codec: 'opus', sampleRate, numberOfChannels: 1, bitrate: 24000 });
-    const processor = new MediaStreamTrackProcessor({ track });
-    st.reader = processor.readable.getReader();
-    st.flushTimer = setInterval(flushBridge2Frames, 120);
-    (async () => {
-      try {
-        while (st.running) {
-          const { value, done } = await st.reader.read();
-          if (done) break;
-          if (!value) continue;
-          // Кодируем только реальную речь: тишина не жжёт трафик сигналинга.
-          if (S.micOn && !S.deafened && S.isSpeaking && st.enc.state === 'configured') {
-            try { st.enc.encode(value); } catch {}
-          }
-          value.close();
-        }
-      } catch {}
-    })();
-    log('Мост 2.0 (WebCodecs Opus, кадры 20 мс) включён');
-    return true;
-  } catch (e) {
-    console.warn('bridge2 start', e);
-    stopBridge2();
-    return false;
-  }
-}
-
-function flushBridge2Frames() {
-  const st = S.bridge2;
-  if (!st || !st.frames.length || !S.peer) return;
-  const frames = st.frames.splice(0);
-  let total = 0;
-  for (const f of frames) total += 2 + f.length;
-  if (total < 10 || total > 60000) return;
-  const out = new Uint8Array(total);
-  const dv = new DataView(out.buffer);
-  let o = 0;
-  for (const f of frames) {
-    dv.setUint16(o, f.length);
-    o += 2;
-    out.set(f, o);
-    o += f.length;
-  }
-  S.sig?.send(
-    { type: 'voice2', to: S.peer.id, toInst: S.peer.inst, sr: st.sampleRate, b64: b64u.enc(out), _noZip: true },
-    { voice: true }
-  );
-}
-
-function stopBridge2() {
-  const st = S.bridge2;
-  if (!st) return;
-  st.running = false;
-  clearInterval(st.flushTimer);
-  try { st.reader?.cancel(); } catch {}
-  try { st.enc?.close(); } catch {}
-  if (S.bridge2 === st) S.bridge2 = null;
-}
-
-function ensureBridgeDecoder(sr) {
-  const ctx = ensureAudioEngine();
-  if (!ctx || typeof AudioDecoder === 'undefined') return null;
-  let d = S.bridgeDec;
-  if (d && d.sampleRate === sr && d.dec.state !== 'closed') return d;
-  if (d) {
-    try { d.dec.close(); } catch {}
-  }
-  d = S.bridgeDec = { sampleRate: sr, nextPlay: 0, ts: 0, dec: null };
-  d.dec = new AudioDecoder({
-    output: (data) => {
-      try { scheduleDecodedBridgeFrame(data); } catch {}
-      try { data.close(); } catch {}
-    },
-    error: (e) => console.warn('bridge2 dec', e),
-  });
-  d.dec.configure({ codec: 'opus', sampleRate: sr, numberOfChannels: 1 });
-  return d;
-}
-
-function scheduleDecodedBridgeFrame(data) {
-  const ctx = S.audioCtx;
-  if (!ctx || !S.bridgeDec) return;
-  const frames = data.numberOfFrames;
-  if (!frames) return;
-  const buf = ctx.createBuffer(1, frames, data.sampleRate);
-  const tmp = new Float32Array(frames);
-  try {
-    data.copyTo(tmp, { planeIndex: 0, format: 'f32-planar' });
-  } catch {
-    try { data.copyTo(tmp, { planeIndex: 0 }); } catch { return; }
-  }
-  buf.copyToChannel(tmp, 0);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(S.remoteCompNode || ctx.destination);
-  // Маленький джиттер-буфер: не копим отставание больше ~0,35 с.
-  if (S.bridgeDec.nextPlay - ctx.currentTime > 0.35) S.bridgeDec.nextPlay = 0;
-  const startAt = Math.max(ctx.currentTime + 0.04, S.bridgeDec.nextPlay || 0);
-  src.start(startAt);
-  S.bridgeDec.nextPlay = startAt + buf.duration;
-}
-
-async function playBridgeVoice2(m) {
-  if (S.deafened || !m.b64) return;
-  if (typeof AudioDecoder === 'undefined') return; // мы бы и не заявили bc=1
-  if (!S.bridgeActive && S.pc?.connectionState !== 'connected') {
-    activateBridge('Получен голос WebCodecs от собеседника по мосту 2.0');
-  }
-  S.bridgeSpeakingUntil = Date.now() + 400;
-  $('#peerAvatarRing')?.classList.add('speaking');
-  const d = ensureBridgeDecoder(m.sr || 48000);
-  if (!d) return;
-  const bytes = b64u.dec(m.b64);
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let o = 0;
-  while (o + 2 <= bytes.byteLength) {
-    const len = dv.getUint16(o);
-    o += 2;
-    if (len <= 0 || o + len > bytes.byteLength) break;
-    const pkt = bytes.slice(o, o + len);
-    o += len;
-    d.ts += 20000; // кадры по 20 мс
-    try {
-      d.dec.decode(new EncodedAudioChunk({ type: 'key', timestamp: d.ts, duration: 20000, data: pkt }));
-    } catch {}
-  }
-}
-
-function startBridgeRecorderV1() {
-  if (typeof MediaRecorder === 'undefined') return;
-  clearInterval(S.bridgeRecTimer);
-  const mime = getSupportedAudioMime();
-
-  // Каждые ~420 мс записываем и отправляем голосовой фрагмент, если пользователь говорит
-  const recordSlice = () => {
-    if (!S.bridgeActive || !S.joined || !S.peer) return;
-    // Если прямое P2P WebRTC-соединение уже поднялось и пользователь не форсировал режим моста — уступаем P2P
-    if (S.pc?.connectionState === 'connected' && S.audio.netMode !== 'bridge') {
-      stopBridge();
-      return;
-    }
-    if (!S.micOn || S.deafened || !S.isSpeaking) return;
-
-    const stream = (liveProcTrack() && S.procDest?.stream) || S.local;
-    if (!stream || !stream.getAudioTracks().length) return;
-    try {
-      const rec = new MediaRecorder(stream, {
-        ...(mime ? { mimeType: mime } : {}),
-        audioBitsPerSecond: 16000, // 16 Кбит/с, куски короче (400 мс) — меньше задержка моста 1.0
-      });
-      const chunks = [];
-      rec.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) chunks.push(ev.data);
-      };
-      rec.onstop = async () => {
-        if (!chunks.length || !S.bridgeActive || !S.peer) return;
-        const blob = new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' });
-        const buf = new Uint8Array(await blob.arrayBuffer());
-        if (buf.byteLength < 60 || buf.byteLength > 45000) return;
-        S.sig?.send(
-          {
-            type: 'voice',
-            to: S.peer.id,
-            toInst: S.peer.inst,
-            mime: blob.type,
-            b64: b64u.enc(buf),
-            _noZip: true,
-          },
-          { voice: true }
-        );
-      };
-      rec.start();
-      setTimeout(() => {
-        if (rec.state === 'recording') {
-          try { rec.stop(); } catch {}
-        }
-      }, 400);
-    } catch (e) {
-      console.warn('bridge recorder', e);
-    }
-  };
-
-  S.bridgeRecTimer = setInterval(recordSlice, 420);
-}
-
-async function playBridgeVoice(m) {
-  if (S.deafened || !m.b64) return;
-  // Если мы получили голосовой пакет по мосту, значит собеседник говорит через мост
-  if (!S.bridgeActive && S.pc?.connectionState !== 'connected') {
-    activateBridge('Получен голос от собеседника по каналу сигналинга');
-  }
-  S.bridgeSpeakingUntil = Date.now() + 750;
-  $('#peerAvatarRing')?.classList.add('speaking');
-  $('#voiceWave')?.classList.remove('hidden');
-
-  const bytes = b64u.dec(m.b64);
-  const ctx = ensureAudioEngine();
-  if (ctx && ctx.state === 'running') {
-    try {
-      const copyBuf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      const audioBuf = await ctx.decodeAudioData(copyBuf);
-      const src = ctx.createBufferSource();
-      src.buffer = audioBuf;
-      src.connect(S.remoteCompNode || ctx.destination);
-      // Не даём очереди расти: при лагах сети сбрасываем накопленное опережение.
-      if (S.bridgeNextPlayTime - ctx.currentTime > 0.6) S.bridgeNextPlayTime = 0;
-      const startAt = Math.max(ctx.currentTime + 0.03, S.bridgeNextPlayTime || 0);
-      src.start(startAt);
-      S.bridgeNextPlayTime = startAt + audioBuf.duration;
-      return;
-    } catch {}
-  }
-  // Фоллбэк для браузеров, где decodeAudioData не декодирует фрагмент контейнера напрямую
-  try {
-    const blob = new Blob([bytes], { type: m.mime || 'audio/webm' });
-    const url = URL.createObjectURL(blob);
-    const a = new Audio(url);
-    a.volume = Math.min(1, S.audio.peerVol / 100);
-    a.onended = () => URL.revokeObjectURL(url);
-    a.play().catch(() => URL.revokeObjectURL(url));
-  } catch {}
-}
-
-$('#btnForceBridge').onclick = () => {
-  if (!S.peer) return toast('Дождитесь подключения собеседника к комнате');
-  activateBridge('Мост без TURN включён вручную');
-};
+// Аварийный аудио-мост через сигналинг (1.0 MediaRecorder, 2.0 WebCodecs Opus) — bridge.js (v44)
+initBridge();
 
 // ---------- Обработка сигналинга и ускоренное рукопожатие ----------
 const stats = (() => {
@@ -2150,7 +1282,7 @@ const routeStats = (() => {
     return { direct: 0, relay: 0, bridge: 0 };
   }
 })();
-function countRoute(kind) {
+export function countRoute(kind) {
   routeStats[kind] = (routeStats[kind] || 0) + 1;
   try {
     localStorage.zvRoutes = JSON.stringify(routeStats);
@@ -2162,7 +1294,7 @@ const to = () => ({ to: S.peer.id, toInst: S.peer.inst, gen: S.gen });
 
 const MAX_REMOTE_PEERS = 5; // комната: я + основной собеседник + до 4 групповых (mesh)
 const groupVerWarned = new Set(); // inst участников, которым уже показали предупреждение о версии
-function rosterCount() {
+export function rosterCount() {
   const now = Date.now();
   let n = 0;
   for (const [k, v] of S.roster) {
@@ -2223,7 +1355,12 @@ async function onSignal(m) {
     case 'hello':
     case 'hi':
       if (!acceptPeer(m)) return;
-      if (S.peer && typeof m.bc === 'number') S.peer.bridgeCodecs = !!m.bc;
+      if (S.peer && typeof m.bc === 'number') {
+        const had = S.peer.bridgeCodecs;
+        S.peer.bridgeCodecs = !!m.bc;
+        // v42: мост уже идёт как 1.0, а собеседник умеет 2.0 — переключаемся.
+        if (!had && S.peer.bridgeCodecs && S.bridgeActive && S.bridgeMode === 'mediarecorder') upgradeBridge2();
+      }
       if (S.peer) S.peer.vc = m.vc === 'h264' ? 'h264' : '';
       if (m.type === 'hello') {
         S.sig?.send({ type: 'hi', to: m.from, toInst: m.inst, name: myName(), ver: APP_VERSION, bc: webCodecsBridgeSupported() ? 1 : 0, vc: S.hwPref || undefined, br: bridgeOnlyFlag() });
@@ -2325,7 +1462,10 @@ function acceptPeer(m) {
 }
 
 function setPeer(m) {
-  S.peer = { id: m.from, inst: m.inst, name: m.name || 'Собеседник', seen: Date.now(), vc: m.vc === 'h264' ? 'h264' : '' };
+  // v42: bc (умеет ли собеседник мост 2.0) берём сразу из того же hello/hi.
+  // В режиме «только мост» activateBridge() вызывается прямо отсюда — раньше,
+  // чем обработчик hello успевал записать bc, и мост всегда шёл как 1.0.
+  S.peer = { id: m.from, inst: m.inst, name: m.name || 'Собеседник', seen: Date.now(), vc: m.vc === 'h264' ? 'h264' : '', bridgeCodecs: m.bc === 1 };
   S.polite = selfId < m.from;
   S.peerBridgeOnly = m.br === 1;
   S.peerDialect = 'plain';
@@ -2432,9 +1572,11 @@ function createPC() {
   const pc = (S.pc = new RTCPeerConnection(mainPcConfig()));
   S.makingOffer = false;
   S.ignoreOffer = false;
+  S.renegPending = null;
   S.pendingCands = [];
   S.ackReceived = false;
   S.cands = { local: {}, remote: {} };
+  S.remoteCandSeen = new Set();
   S.route = '';
   S.method = '';
   S.pcRouteCounted = false;
@@ -2450,6 +1592,7 @@ function createPC() {
     }${S.audio.netMode === 'relay' && S.hasTurn ? ' (только TURN)' : ''}`
   );
   S.remote = new MediaStream();
+  S.remoteFrameAt = 0; // кадры прошлой попытки не считаются
   $('#remote').srcObject = S.remote;
   S.ctrl = pc.createDataChannel('ctrl', { negotiated: true, id: 0 });
   S.fileCh = pc.createDataChannel('file', { negotiated: true, id: 1 });
@@ -2470,6 +1613,19 @@ function createPC() {
 
   for (const t of S.local.getTracks()) pc.addTrack(t, S.local);
   if (S.screenTrack) pc.addTrack(S.screenTrack, S.local);
+  // v42: первый offer (его делает невежливая сторона) всегда несёт и аудио,
+  // и видео — без своего трека как recvonly. Камера собеседника встаёт в
+  // ответ сразу, без пересогласования посреди рукопожатия (это и ломало
+  // звонки с камерой только у одной стороны, в том числе со старыми v41).
+  // Вежливой стороне так делать нельзя: addTransceiver не сопоставляется
+  // с m-строками чужого offer и сам потребовал бы пересогласования.
+  if (!S.polite) {
+    for (const kind of ['audio', 'video']) {
+      if (!pc.getTransceivers().some((t) => t.receiver.track?.kind === kind)) {
+        try { pc.addTransceiver(kind, { direction: 'recvonly' }); } catch {}
+      }
+    }
+  }
 
   pc.ontrack = ({ track }) => {
     S.remote.addTrack(track);
@@ -2492,24 +1648,20 @@ function createPC() {
         if (e.name === 'NotAllowedError') $('#unmuteHint').classList.remove('hidden');
       });
   };
-  pc.onnegotiationneeded = async () => {
+  pc.onnegotiationneeded = () => {
     if (S.polite && !pc.currentRemoteDescription) {
       log('Ожидаем offer от собеседника');
       return;
     }
-    try {
-      S.makingOffer = true;
-      applyCodecPrefs(pc);
-      const offer = await pc.createOffer();
-      offer.sdp = tuneOpusSdp(offer.sdp);
-      await pc.setLocalDescription(offer);
-    } catch (e) {
-      log('Ошибка offer: ' + e.message);
+    // v42: вежливая сторона не начинает пересогласование, пока соединение не
+    // поднялось: её offer мог прийти раньше её же answer (каналы сигнала
+    // разные) и был бы отброшен как встречный. Догоняем по «connected».
+    if (S.polite && pc.connectionState !== 'connected') {
+      if (S.renegPending !== pc) log('Пересогласование (своя камера/экран) — после соединения');
+      S.renegPending = pc;
       return;
-    } finally {
-      S.makingOffer = false;
     }
-    sendDesc(pc);
+    makeOffer(pc);
   };
   pc.onicecandidate = ({ candidate }) => {
     if (pc !== S.pc) return;
@@ -2586,12 +1738,44 @@ function noteGDialect() {
 const descMsgType = () => (S.peerDialect === 'g' ? 'g_desc' : 'desc');
 const candMsgType = () => (S.peerDialect === 'g' ? 'g_cand' : 'cand');
 
+// v42: какое описание реально отправлять. Пока sendDesc ждёт сбор кандидатов,
+// может начаться пересогласование: новый offer затирает localDescription, но
+// answer всё равно обязан уйти — иначе собеседник навсегда застревает в
+// have-local-offer. Живой звонок v41: камера была только у «вежливой»
+// стороны, вместо answer дважды ушёл offer, 7 попыток, 0 RTP — только мост.
+function descToSend(pc, type) {
+  const ld = pc.localDescription;
+  if (ld && ld.type === type) return ld;
+  if (type === 'answer' && pc.currentLocalDescription?.type === 'answer') return pc.currentLocalDescription;
+  return null; // наш offer откатили (встречный offer) — он больше не нужен
+}
+
+async function makeOffer(pc) {
+  if (pc !== S.pc || pc.signalingState === 'closed') return;
+  try {
+    S.makingOffer = true;
+    applyCodecPrefs(pc);
+    const offer = await pc.createOffer();
+    offer.sdp = tuneOpusSdp(offer.sdp);
+    await pc.setLocalDescription(offer);
+  } catch (e) {
+    log('Ошибка offer: ' + e.message);
+    return;
+  } finally {
+    S.makingOffer = false;
+  }
+  sendDesc(pc);
+}
+
 async function sendDesc(pc) {
+  const type = pc.localDescription?.type;
+  if (!type) return;
   await waitGathering(pc, 450);
-  if (pc !== S.pc || !pc.localDescription) return;
+  const ld = pc === S.pc ? descToSend(pc, type) : null;
+  if (!ld) return;
   const desc = {
-    type: pc.localDescription.type,
-    sdp: tuneOpusSdp(pc.localDescription.sdp),
+    type: ld.type,
+    sdp: tuneOpusSdp(ld.sdp),
   };
   S.ackReceived = false;
   S.sig?.send({ type: descMsgType(), ...to(), desc });
@@ -2606,10 +1790,11 @@ async function sendDesc(pc) {
   // Если сбор кандидатов ещё продолжался — через 1.8 с досылаем консолидированный SDP со всеми STUN/TURN маршрутами
   if (pc.iceGatheringState !== 'complete') {
     await waitGathering(pc, 1800);
-    if (pc === S.pc && pc.localDescription && pc.connectionState !== 'connected') {
+    const full = pc === S.pc && pc.connectionState !== 'connected' ? descToSend(pc, type) : null;
+    if (full) {
       const fullDesc = {
-        type: pc.localDescription.type,
-        sdp: tuneOpusSdp(pc.localDescription.sdp),
+        type: full.type,
+        sdp: tuneOpusSdp(full.sdp),
       };
       if (sdpCands(fullDesc.sdp).length > sdpCands(desc.sdp).length) {
         S.sig?.send({ type: descMsgType(), ...to(), desc: fullDesc });
@@ -2624,9 +1809,8 @@ function scheduleResend(pc, desc, n) {
   S.resendTimer = setTimeout(() => {
     if (pc !== S.pc || pc.connectionState === 'connected' || S.ackReceived) return;
     if (desc.type === 'offer' && pc.signalingState !== 'have-local-offer') return;
-    const latestDesc = pc.localDescription
-      ? { type: pc.localDescription.type, sdp: tuneOpusSdp(pc.localDescription.sdp) }
-      : desc;
+    const ld = descToSend(pc, desc.type);
+    const latestDesc = ld ? { type: ld.type, sdp: tuneOpusSdp(ld.sdp) } : desc;
     log(`Повтор отправки ${latestDesc.type} (#${n})`);
     S.sig?.send({ type: descMsgType(), ...to(), desc: latestDesc });
     scheduleResend(pc, latestDesc, n + 1);
@@ -2680,10 +1864,7 @@ async function onDesc(desc, via) {
   }
   try {
     await pc.setRemoteDescription(desc);
-    for (const line of sdpCands(desc.sdp || '')) {
-      const t = / typ (\w+)/.exec(line)?.[1];
-      if (t) S.cands.remote[t] = (S.cands.remote[t] || 0) + 1;
-    }
+    for (const line of sdpCands(desc.sdp || '')) countRemoteCand(line);
     log(`Получен ${desc.type === 'offer' ? 'запрос (offer)' : 'ответ (answer)'} через ${viaName(via)}`);
     for (const c of S.pendingCands.splice(0)) await pc.addIceCandidate(c).catch(() => {});
     if (desc.type === 'offer') {
@@ -2704,10 +1885,23 @@ async function onDesc(desc, via) {
   }
 }
 
+// v43: один и тот же маршрут собеседника приходит и отдельным сообщением
+// (trickle), и внутри SDP, и в каждой повторной отправке — раньше каждый раз
+// считался заново («локальных 30» при ~16 настоящих). Считаем по адресу.
+function countRemoteCand(line) {
+  const p = String(line || '').replace(/^a=/, '').split(/\s+/);
+  const t = / typ (\w+)/.exec(line || '')?.[1];
+  if (!t || p.length < 6) return;
+  const key = `${p[2]}|${p[4]}|${p[5]}|${t}`.toLowerCase(); // протокол|адрес|порт|тип
+  if (!S.remoteCandSeen) S.remoteCandSeen = new Set();
+  if (S.remoteCandSeen.has(key)) return;
+  S.remoteCandSeen.add(key);
+  S.cands.remote[t] = (S.cands.remote[t] || 0) + 1;
+}
+
 async function onCand(c) {
   if (!c || !S.pc) return;
-  const t = / typ (\w+)/.exec(c.candidate || '')?.[1];
-  if (t) S.cands.remote[t] = (S.cands.remote[t] || 0) + 1;
+  countRemoteCand(c.candidate);
   if (!S.pc.remoteDescription) {
     S.pendingCands.push(c);
     return;
@@ -2752,6 +1946,13 @@ function onPcState(pc) {
     noteCodecs(pc);
     startStats(true);
     applyQuality();
+    if (S.renegPending === pc) {
+      S.renegPending = null;
+      if (pc.signalingState === 'stable') {
+        log('Соединение есть — досогласуем отложенное (камера/экран)');
+        makeOffer(pc);
+      }
+    }
   } else if (s === 'disconnected') {
     progress(80, 'Связь моргнула, восстанавливаем маршрут…');
     S.restartTimer = setTimeout(
@@ -2865,7 +2066,7 @@ const candText = (o) =>
         .join(', ')
     : 'нет';
 
-function log(t) {
+export function log(t) {
   const line = new Date().toLocaleTimeString('ru-RU') + '  ' + t;
   S.log.push(line);
   if (S.log.length > 350) S.log.shift();
@@ -2876,7 +2077,7 @@ function log(t) {
   }
 }
 
-function progress(pct, step) {
+export function progress(pct, step) {
   if ((S.pc?.connectionState === 'connected' || S.bridgeActive) && pct < 100) return;
   S.pct = pct;
   S.step = step;
@@ -2961,13 +2162,49 @@ function openDiag() {
 $('#btnDiag').onclick = openDiag;
 
 // ---------- Статус, Качество, Код безопасности ----------
-function updateRemoteView() {
-  const v = S.remote.getVideoTracks().find((t) => t.readyState === 'live' && !t.muted);
-  const camState = S.peer?.cam !== false;
-  $('#remoteOff').classList.toggle('hidden', !!(v && camState && S.pc?.connectionState === 'connected'));
+// v44: флагу muted входящей видеодорожки верить нельзя. Если оба включают
+// камеру одновременно, вежливая сторона откатывает свой offer (rollback), и
+// Chromium оставляет дорожку muted навсегда, хотя кадры идут и рисуются (до
+// v44 у одного из двоих видео собеседника пряталось под заглушкой с
+// аватаркой). Поэтому смотрим ещё и на реально показанные кадры элемента
+// #remote (requestVideoFrameCallback): кадр был меньше секунды назад —
+// видео есть.
+const REMOTE_FRAME_FRESH_MS = 1000;
+function remoteFramesFresh() {
+  return performance.now() - (S.remoteFrameAt || 0) < REMOTE_FRAME_FRESH_MS;
+}
+function watchRemoteFrames() {
+  const el = $('#remote');
+  if (!el || typeof el.requestVideoFrameCallback !== 'function') return;
+  const onFrame = () => {
+    const wasFresh = remoteFramesFresh();
+    S.remoteFrameAt = performance.now();
+    if (!wasFresh) updateRemoteView();
+    S.remoteFrameCb = el.requestVideoFrameCallback(onFrame);
+  };
+  const arm = () => {
+    if (S.remoteFrameCb != null) {
+      try { el.cancelVideoFrameCallback(S.remoteFrameCb); } catch {}
+    }
+    S.remoteFrameCb = el.requestVideoFrameCallback(onFrame);
+  };
+  el.addEventListener('playing', arm);
+  el.addEventListener('loadedmetadata', arm);
+  arm();
 }
 
-function updateStatus() {
+function updateRemoteView() {
+  const fresh = remoteFramesFresh();
+  const v = S.remote.getVideoTracks().find((t) => t.readyState === 'live' && (!t.muted || fresh));
+  const camState = S.peer?.cam !== false;
+  $('#remoteOff').classList.toggle('hidden', !!(v && camState && S.pc?.connectionState === 'connected'));
+  // Видео держится только на свежих кадрах — перепроверим, когда они устареют
+  // (собеседник выключил камеру, а дорожка так и осталась muted).
+  clearTimeout(S.remoteViewTimer);
+  if (v?.muted && fresh) S.remoteViewTimer = setTimeout(updateRemoteView, REMOTE_FRAME_FRESH_MS + 100);
+}
+
+export function updateStatus() {
   const st = $('#status');
   if (!st) return;
   const s = S.pc?.connectionState;
@@ -3005,7 +2242,7 @@ function updateStatus() {
       ? 'Голосовой звонок (камера выключена)'
       : 'Защищённое P2P-соединение активно'
     : S.bridgeActive
-    ? 'Голосовой мост через зашифрованный сигнал активен (без TURN/UDP)'
+    ? 'Голос идёт через мост. Видео появится, когда соединение станет прямым'
     : `Соединяемся с ${S.peer.name}…`;
 
   $('#conn').classList.toggle('hidden', isLive);
@@ -3052,369 +2289,14 @@ setInterval(() => {
   if (S.callLocked && $('#callLockTimer')) $('#callLockTimer').textContent = txt;
 }, 1000);
 
-// ---------- Статистика звонка (v36: callstats.js + панель «Качество связи») ----------
-const ROUTE_TEXT = { p2p: 'напрямую P2P', lan: 'напрямую (LAN)', turn: 'через TURN' };
+// Статистика звонка и панель «Качество связи» — call-stats-ui.js (v44)
+initCallStatsUi();
 
-function startStats(now) {
-  if (S.statsTimer) return;
-  S.statsTimer = setInterval(statsTick, 2000);
-  if (now) setTimeout(statsTick, 300);
-}
-
-async function statsTick() {
-  if (!S.callStart) return;
-  const rec = S.callRec || (S.callRec = new CallRecorder({ startedAt: S.callStart }));
-  const report = S.pc ? await S.pc.getStats().catch(() => null) : null;
-  const cur = report ? readCounters(report) : null;
-  if (!cur?.connected) {
-    // Мост через сигнал: метрик WebRTC нет, но время и маршрут пишем.
-    if (S.bridgeActive) {
-      S.lastSample = bridgeSample();
-      rec.push(S.lastSample);
-      renderStatsPanel();
-    }
-    return;
-  }
-  const smp = deriveSample(cur, S.prevCounters);
-  S.prevCounters = cur;
-  if (S.audioRed && smp.codec) smp.codec = 'red'; // getStats показывает вложенный Opus
-  const method = `${ROUTE_TEXT[smp.route]}, ${smp.proto}`;
-  if (method !== S.method) {
-    S.method = method;
-    log('Маршрут медиа: ' + method);
-    if (!S.pcRouteCounted) {
-      S.pcRouteCounted = true;
-      countRoute(smp.route === 'turn' ? 'relay' : 'direct');
-    }
-  }
-  progress(100, 'Соединено: ' + ROUTE_TEXT[smp.route]);
-  // «Тихая смерть» звука в долгих звонках: соединение живо, а входящие
-  // аудиобайты встали (уснул AudioContext / отвалился remote-трек).
-  // DTX выключен, поэтому даже в тишине пакеты идут — полная остановка
-  // на ~10 секунд это аномалия, пробуем оживить тракт сами.
-  const audioBytes = cur.audioBytesIn;
-  if (Date.now() - S.callStart > 45000 && audioBytes > 0) {
-    if (S.lastAudioBytes >= 0 && audioBytes === S.lastAudioBytes) S.audioStallN++;
-    else S.audioStallN = 0;
-    S.lastAudioBytes = audioBytes;
-    if (S.audioStallN >= 5) {
-      S.audioStallN = 0;
-      recoverRemoteAudio('нет входящих аудиобайт ~10 с при живом звонке');
-    }
-  }
-  adaptQuality(smp.videoOutLoss, smp.rtt ?? 0);
-  adaptLoad(smp);
-  rec.push(smp);
-  S.lastSample = smp;
-  const q = $('#quality');
-  q.classList.remove('good', 'mid', 'bad');
-  q.classList.add(smp.level, 'mono-pill');
-  if ($('#qualityText')) {
-    const loss = smp.loss >= 1 ? ` · ${smp.loss.toFixed(1)}%` : '';
-    $('#qualityText').textContent = `${ROUTE_SHORT[smp.route]} · ${smp.rtt ?? '—'} мс${loss}`;
-  }
-  setUse('#quality use', smp.level === 'bad' ? 'i-warning' : 'i-wifi');
-  q.classList.remove('hidden');
-  renderStatsPanel();
-  updateStatus();
-}
-
-function renderStatsPanel() {
-  const panel = $('#callStats');
-  if (!panel || panel.classList.contains('hidden')) return;
-  renderLiveStats($('#callStatsBody'), {
-    rec: S.callRec,
-    sample: S.lastSample,
-    callSec: S.callStart ? (Date.now() - S.callStart) / 1000 : 0,
-    delivery: S.sig?.deliveryStats?.() || null,
-    bridgeMode: S.bridgeActive ? S.bridgeMode : '',
-    media: mediaModeText(),
-  });
-}
-
-// v37: строка «Режим видео» в панели качества — почему видео такое, какое есть.
-function mediaModeText() {
-  const t = S.capTier;
-  if (!t) return '';
-  const parts = [`${S.vq === 'auto' ? 'Авто' : 'Вручную'} · ${CLASS_TEXT[S.devClass] || ''}`];
-  if (localTrack('video') && !S.screenTrack) parts.push(`камера ${t.h}p @ ${t.fps}${t.why.length ? ' (' + t.why.join(', ') + ')' : ''}`);
-  if (S.peerCap) parts.push(S.peerCap.h === 0 ? 'собеседник свернул — видео ему на паузе' : `собеседнику ≤${S.peerCap.h}p`);
-  if (viewHidden()) parts.push('у вас экран скрыт — входящее видео на паузе');
-  return parts.join(' · ');
-}
-
-function toggleStatsPanel() {
-  const panel = $('#callStats');
-  if (!panel) return;
-  panel.classList.toggle('hidden');
-  $('#quickAudioPop')?.classList.add('hidden');
-  renderStatsPanel();
-}
-$('#quality') && ($('#quality').onclick = toggleStatsPanel);
-$('#bridgeBadge') && ($('#bridgeBadge').onclick = toggleStatsPanel);
-
-// Сетевая лестница QLEVELS — в media-policy.js (по высоте кадра, а не по
-// множителю: одинаково работает для захвата 1080p, 720p и 480p).
-async function applyQuality() {
-  if (!S.pc) return;
-  const audioBps = (S.audio.bitrate || 48) * 1000;
-  for (const snd of S.pc.getSenders()) {
-    if (!snd.track) continue;
-    const p = snd.getParameters();
-    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-    if (snd.track.kind === 'audio') {
-      p.encodings[0].priority = 'high';
-      p.encodings[0].networkPriority = 'high';
-      // Не упираем звук в потолок, пока ручная настройка Opus выключена.
-      if (S.audio.opusTune) p.encodings[0].maxBitrate = audioBps;
-      else delete p.encodings[0].maxBitrate;
-    } else {
-      // v37: min(сетевая ступень, подсказка собеседника, эко). Собеседник со
-      // скрытым экраном просит h=0 — выключаем кодер совсем (active=false):
-      // не тратим ни процессор, ни его батарею, ни трафик.
-      const st = snd.track.getSettings?.() || {};
-      const e = videoEncoding(S.qLevel || 0, { w: st.width, h: st.height }, S.peerCap, {
-        eco: !!S.ecoMode,
-        srcFps: st.frameRate || S.capTier?.fps || 30,
-      });
-      p.encodings[0].active = e.active;
-      p.encodings[0].maxBitrate = e.maxBitrate;
-      p.encodings[0].scaleResolutionDownBy = e.scaleResolutionDownBy;
-      p.encodings[0].maxFramerate = e.maxFramerate;
-      S.encInfo = e;
-    }
-    try {
-      await snd.setParameters(p);
-    } catch {}
-  }
-}
-function adaptQuality(outLoss, rtt) {
-  S.qLevel = S.qLevel ?? 0;
-  S.qBad = S.qBad ?? 0;
-  S.qGood = S.qGood ?? 0;
-  if (outLoss > 6 || rtt > 700) {
-    S.qBad++;
-    S.qGood = 0;
-  } else if (outLoss < 2 && rtt < 350) {
-    S.qGood++;
-    S.qBad = 0;
-  }
-  if (S.qBad >= 2 && S.qLevel < QLEVELS.length - 1) {
-    S.qLevel++;
-    S.qBad = 0;
-    log(`Адаптация под сеть: снижаем видео (уровень ${S.qLevel})`);
-    applyQuality();
-  }
-  if (S.qGood >= 8 && S.qLevel > 0) {
-    S.qLevel--;
-    S.qGood = 0;
-    log(`Сеть стабильна: повышаем видео (уровень ${S.qLevel})`);
-    applyQuality();
-  }
-  if (S.qLevel === QLEVELS.length - 1 && S.qBad >= 3 && !S.qHinted) {
-    S.qHinted = true;
-    toast('Слабая сеть — выключите камеру для идеального звука', 6500);
-  }
-}
-
-// v37: какие кодеки реально согласованы (по answer) — в журнал и панель.
-function noteCodecs(pc) {
-  const ans = [pc.currentLocalDescription, pc.currentRemoteDescription].find((d) => d?.type === 'answer');
-  if (!ans) return;
-  const a = sdpFirstCodec(ans.sdp, 'audio');
-  const v = sdpFirstCodec(ans.sdp, 'video');
-  S.audioRed = a === 'red';
-  const key = a + '/' + v;
-  if (key === S.codecsLogged) return;
-  S.codecsLogged = key;
-  log(`Кодеки: голос ${S.audioRed ? 'Opus + RED (защита от потерь)' : a || '—'}, видео ${v ? v.toUpperCase() : '—'}`);
-}
-
-// ---------- v37: нагрузка устройства → ступени видео (против нагрева) ----------
-// Chrome сообщает qualityLimitationReason='cpu', когда кодер не успевает.
-// 3 тика подряд (≈6 с) — снижаем захват камеры на ступень (до трёх);
-// 90 с спокойствия — возвращаем одну. Если после возврата перегрузка
-// вернулась в течение 2 минут — ступень фиксируется до конца звонка:
-// телефон уже прогрет, качели «вверх-вниз» только мешают смотреть.
-function adaptLoad(smp) {
-  const L = S.load;
-  if (!smp?.videoOut || S.screenTrack) {
-    L.cpuHits = 0;
-    return;
-  }
-  if (smp.limitation === 'cpu') {
-    L.cpuHits++;
-    L.cpuCalm = 0;
-  } else {
-    L.cpuHits = 0;
-    L.cpuCalm++;
-  }
-  if (L.cpuHits >= 3 && L.cpu < 3) {
-    L.cpuHits = 0;
-    if (L.cpuBackAt && Date.now() - L.cpuBackAt < 120000) L.cpuLock = true;
-    L.cpu++;
-    log(`Процессор не успевает кодировать видео — снижаем захват (ступень ${L.cpu})`);
-    if (!L.cpuToast) {
-      L.cpuToast = true;
-      toast('Устройство перегружено — видео облегчено, чтобы не грелось', 5000);
-    }
-    reapplyMediaLoad();
-  } else if (L.cpu > 0 && !L.cpuLock && L.cpuCalm >= 45) {
-    L.cpuCalm = 0;
-    L.cpu--;
-    L.cpuBackAt = Date.now();
-    log(`Нагрузка спала — возвращаем ступень видео (${L.cpu})`);
-    reapplyMediaLoad();
-  }
-}
-
-// Пересчитать ступень захвата и подсказку собеседнику после любой смены
-// нагрузки (ЦП, перегрев, заряд, эко, ручной выбор качества).
-async function reapplyMediaLoad() {
-  const prev = S.capTier;
-  const t = (S.capTier = captureTier(S.vq, S.devClass, loadOpts()));
-  const v = localTrack('video');
-  if (v && !S.screenTrack && (!prev || prev.id !== t.id || prev.fps !== t.fps)) {
-    try {
-      await v.applyConstraints(tierConstraints(t));
-      log(`Камера: ${t.h}p @ ${t.fps} к/с${t.why.length ? ' (' + t.why.join(', ') + ')' : ''}`);
-    } catch {}
-  }
-  sendRxCap();
-  applyQuality();
-}
-
-// Подсказка собеседнику, какое видео нам нужно (DataChannel 'ctrl', тип
-// 'vcap'). Старые клиенты её просто игнорируют. h=0 — экран скрыт или звонок
-// заблокирован: собеседник выключает кодер (обе стороны не греются).
-const viewHidden = () => document.visibilityState === 'hidden' || !!S.callLocked;
-const myRxCap = () => rxCap(S.devClass, { ...loadOpts(), hidden: viewHidden() });
-function sendRxCap(force = false) {
-  if (S.ctrl?.readyState !== 'open') return; // уйдёт при открытии канала
-  const c = myRxCap();
-  const j = JSON.stringify(c);
-  if (!force && j === S.rxSent) return;
-  S.rxSent = j;
-  sendCtrl({ t: 'vcap', ...c });
-}
-// Скрытие — с задержкой 1,5 с (быстрое переключение приложений не дёргает
-// кодер собеседника), возврат — сразу.
-function onViewChange() {
-  clearTimeout(S.viewTimer);
-  if (viewHidden()) S.viewTimer = setTimeout(() => sendRxCap(), 1500);
-  else sendRxCap();
-}
-
-// Заряд и Compute Pressure — только как сигналы «облегчить». Оба API
-// необязательны: где их нет (Safari, Firefox), работает только ЦП-адаптация.
-function watchDeviceLoad() {
-  if (S.loadWatch) return;
-  S.loadWatch = true;
-  navigator
-    .getBattery?.()
-    .then((b) => {
-      const upd = () => {
-        const low = !b.charging && b.level <= 0.15;
-        if (low === S.load.battLow) return;
-        S.load.battLow = low;
-        if (S.joined) {
-          log(low ? 'Заряд ниже 15% — облегчаем видео (режим «Авто»)' : 'Заряд в норме — видео без ограничения по батарее');
-          reapplyMediaLoad();
-        }
-      };
-      b.addEventListener?.('levelchange', upd);
-      b.addEventListener?.('chargingchange', upd);
-      upd();
-    })
-    .catch(() => {});
-  if (typeof PressureObserver === 'function') {
-    try {
-      const po = new PressureObserver((recs) => {
-        const st = recs[recs.length - 1]?.state;
-        const p = st === 'critical' ? 2 : st === 'serious' ? 1 : 0;
-        if (p === S.load.pressure) return;
-        S.load.pressure = p;
-        if (S.joined) {
-          log(`Нагрузка процессора (Compute Pressure): ${st}`);
-          reapplyMediaLoad();
-        }
-      });
-      po.observe('cpu', { sampleInterval: 4000 })?.catch?.(() => {});
-    } catch {}
-  }
-}
-
-// ---------- v37: порядок кодеков (RED для голоса, аппаратный H.264) ----------
-// Применяется перед каждым offer/answer. RED — защита голоса от потерь
-// (настройка «Защита голоса от потерь», по умолчанию ВКЛ). H.264 первым —
-// только если на телефоне он аппаратный, а VP8 нет (или так попросил
-// собеседник): обе стороны выбирают одинаково, и кодек сходится.
-function applyCodecPrefs(pc) {
-  if (typeof RTCRtpTransceiver === 'undefined' || !RTCRtpTransceiver.prototype.setCodecPreferences) return;
-  const wantH264 = S.hwPref === 'h264' || S.peer?.vc === 'h264';
-  for (const tr of pc.getTransceivers()) {
-    if (tr.stopped) continue;
-    const kind = tr.receiver?.track?.kind;
-    const caps = kind && RTCRtpReceiver.getCapabilities?.(kind)?.codecs;
-    if (!caps) continue;
-    const order = kind === 'audio' ? audioCodecOrder(caps, S.red) : videoCodecOrder(caps, wantH264);
-    try {
-      if (order) {
-        tr.setCodecPreferences(order);
-        tr._zvPref = true;
-      } else if (tr._zvPref) {
-        tr.setCodecPreferences([]); // вернуть порядок браузера
-        tr._zvPref = false;
-      }
-    } catch {}
-  }
-}
-
-// Аппаратный ли H.264/VP8 на этом телефоне (MediaCapabilities, тип webrtc).
-// Отключить: localStorage.zvHwPref = '0'.
-async function detectHwVideo() {
-  try {
-    if (localStorage.zvHwPref === '0' || !S.isMobile || !navigator.mediaCapabilities?.encodingInfo) return;
-    const q = (contentType) =>
-      navigator.mediaCapabilities
-        .encodingInfo({ type: 'webrtc', video: { contentType, width: 1280, height: 720, bitrate: 1500000, framerate: 30 } })
-        .catch(() => null);
-    const [vp8, h264] = await Promise.all([q('video/VP8'), q('video/H264')]);
-    if (h264?.supported && h264.powerEfficient && !(vp8?.supported && vp8.powerEfficient)) S.hwPref = 'h264';
-  } catch {}
-}
-detectHwVideo();
-
-async function showSafety() {
-  const pc = S.pc;
-  const a = pc?.currentLocalDescription?.sdp,
-    b = pc?.currentRemoteDescription?.sdp;
-  if (!a || !b) return;
-  S.safety = await safetyCode(a, b);
-  const el = $('#safety');
-  const pill = $('#safetyPill');
-  if (pill) pill.textContent = S.safety.emoji;
-  el.classList.remove('hidden');
-}
-
-async function showBridgeSafety() {
-  if (!S.room || !S.peer) return;
-  S.safety = await safetyCodeBridge(S.room.topic, selfId, S.peer.id);
-  const el = $('#safety');
-  const pill = $('#safetyPill');
-  if (pill) pill.textContent = S.safety.emoji;
-  el.classList.remove('hidden');
-}
-
-$('#safety').onclick = () => {
-  if (!S.safety) return;
-  const b = openModal('#tplSafety');
-  $('#safetyEmoji', b).textContent = S.safety.emoji;
-  $('#safetyDigits', b).textContent = S.safety.digits;
-};
+// Нагрузка устройства → ступени видео, порядок кодеков, код сверки — media-load.js (v44)
+initMediaLoad();
 
 // ---------- Чат (DataChannel + автоматический фоллбэк через Сигналинг) и Файлы ----------
-function sendCtrl(o) {
+export function sendCtrl(o) {
   if (S.ctrl?.readyState === 'open') S.ctrl.send(JSON.stringify(o));
 }
 function onIncomingChat(text, nameOverride) {
@@ -3472,7 +2354,7 @@ function addMsg(who, text, me) {
   $('#msgs').scrollTop = 1e9;
   return d;
 }
-function sysMsg(text) {
+export function sysMsg(text) {
   hideChatEmpty();
   const d = document.createElement('div');
   d.className = 'm sys';
@@ -4042,7 +2924,7 @@ $('#unmuteHint').onclick = () => {
 };
 $('#cHang').onclick = hangup;
 
-async function hangup() {
+export async function hangup() {
   // v38: звонок из чата — по завершении назад в чат; чат узнаёт о выходе
   // (leave/end группового звонка).
   const endedSecret = S.secret;
@@ -4119,7 +3001,7 @@ let ringTimer = null;
 // воспринимаемую громкость без клиппинга; плюс вибрация в такт (Android).
 let ringVibTimer = null;
 let ringUnlock = null;
-function startRingtone() {
+export function startRingtone() {
   stopRingtone();
   const vib = () => {
     try {
@@ -4186,7 +3068,7 @@ function startRingtone() {
     cycle();
   } catch {}
 }
-function stopRingtone() {
+export function stopRingtone() {
   clearTimeout(ringTimer);
   ringTimer = null;
   clearInterval(ringVibTimer);
@@ -4211,7 +3093,7 @@ const JOURNAL_TTL_MS = 30 * 24 * 3600000;
 const newJournalKey = () => `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 /** Пишет запись журнала и сразу возвращает её ключ (запись — в фоне). */
-function journalAdd(dir, name, outcome, extra = null, key = newJournalKey()) {
+export function journalAdd(dir, name, outcome, extra = null, key = newJournalKey()) {
   const entry = { ts: Date.now(), dir, name: String(name || '').slice(0, 60), outcome, ...(extra || {}) };
   kvPut('calls', key, entry)
     .then(() => {
@@ -4239,7 +3121,7 @@ function finishCallRecord() {
   if (meta.fp) touchPeer(meta.fp, S.peer?.name).catch(() => {});
 }
 
-async function renderCalls() {
+export async function renderCalls() {
   let all = [];
   try {
     all = (await kvAll('calls')).filter((x) => x.value).sort((a, b) => b.value.ts - a.value.ts);
@@ -4264,1059 +3146,14 @@ async function renderCalls() {
   renderContacts().catch(() => {});
 }
 
-// ---------- v38: адресная книга (контакты и «обратные номера») ----------
-// identity/contacts: {v:1, items:{[fp]: {fp, name, secretEnc, saved, addedAt, lastAt}}}.
-// fp — отпечаток личности собеседника (d=… его личной ссылки), secretEnc —
-// секрет его ссылки под vault-ключом устройства (как секреты комнат).
-// Номера из журнала, не сохранённые в контакты, забываются через 30 дней
-// после последнего звонка — вместе с самим журналом. Контакты не уходят ни
-// на сервер, ни в резервную копию: это только локальная записная книжка.
-const PEER_TTL_MS = 30 * 24 * 3600000;
-let contactsCache = null;
-const validFp = (fp) => typeof fp === 'string' && /^[a-f0-9]{32}$/.test(fp);
-const validSecret = (k) => typeof k === 'string' && /^[A-Za-z0-9_-]{22,}$/.test(k);
-const shareBackOn = () => {
-  try {
-    return localStorage.zvShareBack !== '0';
-  } catch {
-    return true;
-  }
-};
-/** «Обратный номер» из payload звонка: {k, d}, только если d = отпечаток звонящего. */
-function backOf(payload, fromFp) {
-  const b = payload && payload.back;
-  if (!b || !validSecret(b.k) || !validFp(b.d)) return null;
-  if (fromFp && b.d !== fromFp) return null;
-  if (S.personal && b.d === S.personal.fp) return null;
-  return { k: b.k, d: b.d };
-}
-async function contactsLoad() {
-  if (contactsCache) return contactsCache;
-  let rec = null;
-  try {
-    rec = await kvGet('identity', 'contacts');
-  } catch {}
-  contactsCache = rec && rec.items && typeof rec.items === 'object' ? rec : { v: 1, items: {} };
-  const now = Date.now();
-  let changed = false;
-  for (const [fp, c] of Object.entries(contactsCache.items)) {
-    if (!c || (!c.saved && now - (c.lastAt || c.addedAt || 0) > PEER_TTL_MS)) {
-      delete contactsCache.items[fp];
-      changed = true;
-    }
-  }
-  if (changed) await contactsSave();
-  return contactsCache;
-}
-async function contactsSave() {
-  if (!contactsCache) return;
-  try {
-    await kvPut('identity', 'contacts', contactsCache);
-  } catch (e) {
-    console.warn('contacts', e);
-  }
-  syncLocal();
-}
-// v39: локальное изменение того, что едет на другие устройства профиля.
-function syncLocal() {
-  try {
-    window.dispatchEvent(new CustomEvent('zv-sync-local'));
-  } catch {}
-}
-// v39: контакты в синхронизации профиля (devices.js): секрет номера —
-// в зашифрованной комнате синхронизации, время последнего звонка — до дня
-// (чтобы каждый звонок не гонял синхронизацию).
-window.__zvAppSync = {
-  async contactsView() {
-    const book = await contactsLoad();
-    const out = {};
-    for (const [fp, c] of Object.entries(book.items)) {
-      if (!c || !validFp(fp) || !c.secretEnc) continue;
-      let secret;
-      try {
-        secret = await decryptWithVault(c.secretEnc);
-      } catch {
-        continue;
-      }
-      out['contact:' + fp] = {
-        name: c.name || '',
-        secret,
-        saved: !!c.saved,
-        addedAt: c.addedAt || 0,
-        day: Math.floor((c.lastAt || c.addedAt || 0) / 864e5),
-      };
-    }
-    return out;
-  },
-  async contactApply(fp, v) {
-    if (!validFp(fp)) return true;
-    const book = await contactsLoad();
-    if (v === null) {
-      if (book.items[fp]) {
-        delete book.items[fp];
-        await kvPut('identity', 'contacts', book).catch(() => {});
-        renderContacts().catch(() => {});
-      }
-      return true;
-    }
-    if (!v || !validSecret(v.secret)) return true;
-    if (S.personal && fp === S.personal.fp) return true;
-    const prev = book.items[fp];
-    let secretEnc = null;
-    if (prev?.secretEnc) {
-      try {
-        if ((await decryptWithVault(prev.secretEnc)) === v.secret) secretEnc = prev.secretEnc;
-      } catch {}
-    }
-    book.items[fp] = {
-      fp,
-      name: String(v.name || '').slice(0, 40),
-      secretEnc: secretEnc || (await encryptWithVault(v.secret)),
-      saved: !!v.saved,
-      addedAt: Number(v.addedAt) || 0,
-      lastAt: Math.max(prev?.lastAt || 0, (Number(v.day) || 0) * 864e5),
-    };
-    await kvPut('identity', 'contacts', book).catch(() => {});
-    renderContacts().catch(() => {});
-    return true;
-  },
-};
-/** Запомнить номер собеседника (save — сразу в контакты, с именем). */
-async function rememberPeer({ secret, fp, name = '', save = false }) {
-  if (!validSecret(secret) || !validFp(fp)) return null;
-  if (S.personal && fp === S.personal.fp) return null;
-  const book = await contactsLoad();
-  const prev = book.items[fp];
-  const now = Date.now();
-  const nm = String(name || '').trim().slice(0, 40);
-  book.items[fp] = {
-    fp,
-    name: save && nm ? nm : prev?.saved ? prev.name : nm || prev?.name || '',
-    secretEnc: await encryptWithVault(secret),
-    saved: !!(prev?.saved || save),
-    addedAt: prev?.addedAt || now,
-    lastAt: now,
-  };
-  await contactsSave();
-  renderContacts().catch(() => {});
-  return book.items[fp];
-}
-async function touchPeer(fp, name) {
-  const book = await contactsLoad();
-  const c = book.items[fp];
-  if (!c) return;
-  c.lastAt = Date.now();
-  const nm = String(name || '').trim().slice(0, 40);
-  if (!c.saved && nm) c.name = nm;
-  await contactsSave();
-  renderContacts().catch(() => {});
-}
-async function peerName(fp) {
-  if (!validFp(fp)) return '';
-  const c = (await contactsLoad()).items[fp];
-  return c?.saved ? c.name : '';
-}
-async function peerSecret(fp) {
-  const c = (await contactsLoad()).items[fp];
-  if (!c?.secretEnc) return null;
-  try {
-    return await decryptWithVault(c.secretEnc);
-  } catch {
-    return null;
-  }
-}
-async function callPeer(fp) {
-  if (!validFp(fp)) return;
-  if (S.joined) return toast('Сначала завершите текущий звонок');
-  const secret = await peerSecret(fp);
-  if (!validSecret(secret)) return toast('Номер не найден — попросите ссылку заново');
-  hideContactMenu();
-  S.autoCallPending = true;
-  const hash = 'k=' + secret + '&d=' + fp;
-  if (location.hash.slice(1) === hash) route();
-  else location.hash = hash;
-}
-async function renderContacts() {
-  const ul = $('#contactsList');
-  if (!ul) return;
-  const book = await contactsLoad();
-  const list = Object.values(book.items)
-    .filter((c) => c.saved)
-    .sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0) || String(a.name).localeCompare(String(b.name), 'ru'));
-  renderContactsList(ul, list, {
-    onCall: (c) => callPeer(c.fp),
-    onMenu: (c, el) => openContactMenu(c.fp, el, null),
-  });
-}
+// Адресная книга: контакты и «обратные номера» — contacts.js (v44)
+initContacts();
 
-// Меню контакта / записи журнала. Удаление — в два нажатия (как в чатах).
-let contactMenuFp = null;
-function hideContactMenu() {
-  $('#contactMenu')?.classList.add('hidden');
-  contactMenuFp = null;
-}
-async function openContactMenu(fp, anchor, entry) {
-  const menu = $('#contactMenu');
-  if (!menu || !validFp(fp)) return;
-  if (contactMenuFp === fp && !menu.classList.contains('hidden')) return hideContactMenu();
-  const c = (await contactsLoad()).items[fp];
-  if (!c) return toast('Номер этого звонка не сохранился (истёк срок или звонивший его не передал)');
-  contactMenuFp = fp;
-  const del = $('#contactActDel');
-  if (del) {
-    delete del.dataset.armed;
-    (del.querySelector('span') || del).textContent = c.saved ? 'Удалить контакт' : 'Забыть номер';
-  }
-  $('#contactActSave')?.classList.toggle('hidden', !!c.saved);
-  $('#contactActRename')?.classList.toggle('hidden', !c.saved);
-  menu.dataset.name = (entry && entry.name) || c.name || '';
-  menu.classList.remove('hidden');
-  const r = anchor.getBoundingClientRect();
-  const mw = menu.offsetWidth || 220;
-  const mh = menu.offsetHeight || 200;
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const top = r.bottom + mh + 8 > vh ? Math.max(8, r.top - mh - 4) : r.bottom + 4;
-  menu.style.top = top + 'px';
-  menu.style.left = Math.max(8, Math.min(vw - mw - 8, r.right - mw)) + 'px';
-}
-document.addEventListener(
-  'pointerdown',
-  (e) => {
-    const menu = $('#contactMenu');
-    if (!menu || menu.classList.contains('hidden')) return;
-    if (menu.contains(e.target) || e.target.closest?.('.call-li')) return;
-    hideContactMenu();
-  },
-  true
-);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') hideContactMenu();
-});
+// «Сменить номер» и «Стереть всё» — number-admin.js (v44)
+initNumberAdmin();
 
-// Редактор контакта: добавить по ссылке, сохранить номер из журнала, переименовать.
-let contactEditFp = null;
-function openContactEditor(fp = null, name = '') {
-  const box = $('#contactAddBox');
-  if (!box) return;
-  contactEditFp = fp;
-  box.classList.remove('hidden');
-  $('#contactAddLink')?.classList.toggle('hidden', !!fp);
-  const nm = $('#contactAddName');
-  if (nm) {
-    nm.value = name || '';
-    nm.focus();
-  }
-  if (!fp && $('#contactAddLink')) $('#contactAddLink').value = '';
-  const note = $('#contactAddNote');
-  if (note) note.textContent = '';
-}
-function closeContactEditor() {
-  $('#contactAddBox')?.classList.add('hidden');
-  contactEditFp = null;
-}
-$('#btnContactAdd') &&
-  ($('#btnContactAdd').onclick = () => {
-    if ($('#contactAddBox')?.classList.contains('hidden')) openContactEditor(null, '');
-    else closeContactEditor();
-  });
-$('#contactAddCancel') && ($('#contactAddCancel').onclick = closeContactEditor);
-$('#contactAddSave') &&
-  ($('#contactAddSave').onclick = async () => {
-    const note = $('#contactAddNote');
-    const say = (t) => {
-      if (note) note.textContent = t;
-    };
-    const name = ($('#contactAddName')?.value || '').trim().slice(0, 40);
-    if (!name) return say('Введите имя — его видите только вы.');
-    if (contactEditFp) {
-      const book = await contactsLoad();
-      const c = book.items[contactEditFp];
-      if (!c) return say('Номер не найден.');
-      c.name = name;
-      c.saved = true;
-      await contactsSave();
-      closeContactEditor();
-      renderCalls().catch(() => {});
-      return;
-    }
-    const raw = ($('#contactAddLink')?.value || '').trim();
-    const t = parseCallLink(raw);
-    if (!t || !t.fp) return say('Нужна личная ссылка целиком (с частью «&d=…»): её копируют во вкладке «Мой номер».');
-    if (S.personal && t.fp === S.personal.fp) return say('Это ваша собственная ссылка.');
-    await rememberPeer({ secret: t.secret, fp: t.fp, name, save: true });
-    closeContactEditor();
-    toast('Контакт сохранён');
-    renderCalls().catch(() => {});
-  });
-$('#contactActCall') &&
-  ($('#contactActCall').onclick = () => {
-    const fp = contactMenuFp;
-    hideContactMenu();
-    callPeer(fp);
-  });
-$('#contactActSave') &&
-  ($('#contactActSave').onclick = () => {
-    const fp = contactMenuFp;
-    const name = $('#contactMenu')?.dataset.name || '';
-    hideContactMenu();
-    openContactEditor(fp, name);
-  });
-$('#contactActRename') &&
-  ($('#contactActRename').onclick = async () => {
-    const fp = contactMenuFp;
-    hideContactMenu();
-    openContactEditor(fp, (await contactsLoad()).items[fp]?.name || '');
-  });
-$('#contactActCopy') &&
-  ($('#contactActCopy').onclick = async () => {
-    const fp = contactMenuFp;
-    hideContactMenu();
-    const secret = await peerSecret(fp);
-    if (!validSecret(secret)) return toast('Номер не найден');
-    const link = `${location.origin}${location.pathname}#k=${secret}&d=${fp}`;
-    try {
-      await navigator.clipboard.writeText(link);
-      toast('Ссылка скопирована');
-    } catch {
-      toast('Не удалось скопировать');
-    }
-  });
-$('#contactActDel') &&
-  ($('#contactActDel').onclick = async () => {
-    const btn = $('#contactActDel');
-    if (!btn.dataset.armed) {
-      btn.dataset.armed = '1';
-      (btn.querySelector('span') || btn).textContent = 'Точно удалить?';
-      return;
-    }
-    const fp = contactMenuFp;
-    hideContactMenu();
-    const book = await contactsLoad();
-    delete book.items[fp];
-    await contactsSave();
-    renderCalls().catch(() => {});
-  });
-
-// ---------- v38: «Сменить номер» и «Стереть всё» ----------
-// Отзыв Inbox, который не удалось выполнить сразу (нет сети), повторяется
-// при следующих запусках: иначе по старой ссылке ещё приходили бы пуши.
-const RETIRE_KEY = 'zvRetirePending';
-function pendingRetire() {
-  try {
-    const v = JSON.parse(localStorage.getItem(RETIRE_KEY) || '[]');
-    return Array.isArray(v) ? v.filter((t) => typeof t === 'string' && /^[a-z0-9-]{16,80}$/.test(t)) : [];
-  } catch {
-    return [];
-  }
-}
-function setPendingRetire(list) {
-  try {
-    if (list.length) localStorage.setItem(RETIRE_KEY, JSON.stringify([...new Set(list)].slice(0, 8)));
-    else localStorage.removeItem(RETIRE_KEY);
-  } catch {}
-}
-// v41: admin — подпись владельца номера (adminSigner(), снятый ДО смены
-// master-ключа). Если её не приняли (у старого topic другой владелец, или
-// сервер ещё v40), повторяем подписью устройства.
-async function retireTopics(topics, bundle, admin = null) {
-  const left = [];
-  for (const t of topics) {
-    let r = admin ? await inboxRetire(getWorkerBase(), t, bundle, admin).catch(() => null) : null;
-    if (!r || r.status !== 200) r = await inboxRetire(getWorkerBase(), t, bundle).catch(() => null);
-    // 403: устройства там уже нет (стёрт ранее / не регистрировался) — готово.
-    if (!r || (r.status !== 200 && r.status !== 403)) left.push(t);
-  }
-  return left;
-}
-let retryingRetire = false;
-async function retryPendingRetire() {
-  const list = pendingRetire();
-  if (!list.length || retryingRetire || !S.personal || !getWorkerBase()) return;
-  retryingRetire = true;
-  try {
-    setPendingRetire(await retireTopics(list, S.personal));
-  } finally {
-    retryingRetire = false;
-  }
-}
-function stopInboxListeners() {
-  try {
-    S.inboxListener?.close?.();
-  } catch {}
-  try {
-    S.inboxDialListener?.close?.();
-  } catch {}
-  S.inboxListener = null;
-  S.inboxDialListener = null;
-  S.chatDialTopic = null;
-}
-
-async function changeNumber(say, keep = []) {
-  const prev = S.personal || (await getPersonal());
-  if (!prev) throw new Error('номера ещё нет');
-  // v39: на подключённом устройстве master-ключа нет — номер меняет основное.
-  if (!(await adminSigner().catch(() => null))) {
-    throw new Error('сменить номер можно только на основном устройстве профиля (или после восстановления по фразе)');
-  }
-  if (hasOtherDevices()) {
-    return rotateWithDevices(() => changeNumberCore(prev, say), keep);
-  }
-  return changeNumberCore(prev, say);
-}
-async function changeNumberCore(prev, say) {
-  const oldTopics = [];
-  try {
-    oldTopics.push((await deriveRoom(prev.secret)).topic);
-  } catch {}
-  if (prev.masterPub) oldTopics.push(await chatDialTopic(prev.masterPub));
-  say('Удаляем старую резервную копию…');
-  let bk = null;
-  try {
-    bk = await window.__zvBackup?.deleteServer?.();
-  } catch {}
-  say('Создаём новый номер…');
-  stopInboxListeners();
-  // v41: подпись старого владельца — до смены master-ключа (после rotatePersonal
-  // его приватной части в хранилище уже нет, а сервер гасит номер только по ней
-  // или по подписи основного устройства).
-  const oldAdmin = await adminSigner().catch(() => null);
-  const { next } = await rotatePersonal();
-  S.personal = next;
-  S.personalRoom = await deriveRoom(next.secret);
-  S.inboxNotOwner = false;
-  say('Отключаем старую ссылку на сервере…');
-  const left = await retireTopics(oldTopics, next, oldAdmin);
-  setPendingRetire([...pendingRetire(), ...left]);
-  await refreshPersonalUI();
-  window.ZVChat?.identityChanged?.();
-  window.__zvBackup?.render?.()?.catch?.(() => {});
-  let msg = 'Готово: новый номер создан. Отправьте новую ссылку тем, кому доверяете.';
-  if (left.length) msg += ' Старая ссылка будет отключена на сервере, как только появится связь.';
-  if (bk?.had) msg += ' Резервную копию создайте заново — старая фраза больше не подходит.';
-  return msg;
-}
-
-async function wipeEverything(say, { backupToo = false, revoked = false, query = 'wiped=1' } = {}) {
-  say('Стираем…');
-  if (S.joined) await Promise.resolve(hangup()).catch(() => {});
-  const tasks = [];
-  const p = S.personal || (await getPersonal().catch(() => null));
-  // v39: у профиля есть другие устройства — номер живёт на них: этот
-  // аппарат только отвязывается (сервер входящих забывает его одного),
-  // а не гасит номер целиком. Отвязанное (revoked) — уже отвязано.
-  // v41: подключённое устройство номер не гасит (сервер это и не примет) —
-  // всегда только отвязывается, даже если список устройств ещё не пришёл.
-  const multi = !revoked && (hasOtherDevices() || !!p?.linked);
-  if (multi) {
-    tasks.push(unlinkSelf().catch(() => {}));
-  } else if (p && getWorkerBase() && !revoked) {
-    tasks.push(
-      (async () => {
-        const topics = [];
-        try {
-          topics.push((await deriveRoom(p.secret)).topic);
-        } catch {}
-        if (p.masterPub) topics.push(await chatDialTopic(p.masterPub));
-        const admin = await adminSigner().catch(() => null);
-        await retireTopics([...topics, ...pendingRetire()], p, admin);
-      })().catch(() => {})
-    );
-  }
-  if (backupToo) tasks.push(Promise.resolve(window.__zvBackup?.deleteServer?.()).catch(() => {}));
-  await Promise.race([Promise.allSettled(tasks), new Promise((r) => setTimeout(r, 6000))]);
-  stopInboxListeners();
-  try {
-    const reg = await navigator.serviceWorker?.getRegistration?.();
-    const sub = await reg?.pushManager?.getSubscription?.();
-    await sub?.unsubscribe?.();
-  } catch {}
-  await wipeDatabase();
-  await wipeOwnSiteData();
-  location.replace(location.pathname + '?' + query);
-}
-// v41: стираем только своё. Сайт на github.io делит origin с другими
-// проектами аккаунта (например, /TorrClient/): у них общие localStorage,
-// кэши и список service worker. Раньше «Стереть всё» делало
-// localStorage.clear(), удаляло все кэши и все регистрации SW origin —
-// и заодно чужие настройки (в т.ч. сохранённые логины TURN).
-// Ключи Звоночка начинаются с 'zv' (tests/static.test.mjs), кэши — с
-// 'zvonochek-', регистрации — со scope этой папки.
-async function wipeOwnSiteData() {
-  for (const store of [globalThis.localStorage, globalThis.sessionStorage]) {
-    try {
-      const own = [];
-      for (let i = 0; i < store.length; i++) {
-        const k = store.key(i);
-        if (k && k.startsWith('zv')) own.push(k);
-      }
-      for (const k of own) store.removeItem(k);
-    } catch {}
-  }
-  try {
-    for (const k of await caches.keys()) if (k.startsWith('zvonochek-')) await caches.delete(k);
-  } catch {}
-  try {
-    const scope = new URL('./', location.href).href;
-    for (const r of (await navigator.serviceWorker?.getRegistrations?.()) || []) {
-      if (r.scope.startsWith(scope)) await r.unregister();
-    }
-  } catch {}
-}
-
-let dangerKind = null;
-function openDanger(kind) {
-  const box = $('#dangerBox');
-  if (!box) return;
-  dangerKind = kind;
-  const title = $('#dangerTitle');
-  const text = $('#dangerText');
-  const go = $('#dangerGo');
-  const note = $('#dangerNote');
-  if (note) note.textContent = '';
-  $('#wipeBackupOpt')?.classList.toggle('hidden', kind !== 'wipe');
-  const wbt = $('#wipeBackupToo');
-  if (wbt) wbt.checked = false;
-  const keepBox = $('#dangerKeepBox');
-  if (keepBox) {
-    keepBox.replaceChildren();
-    keepBox.classList.add('hidden');
-  }
-  if (kind === 'number') {
-    title.textContent = 'Сменить номер?';
-    text.textContent =
-      'Будет создана новая личная ссылка — новый крипто-номер. По старой ссылке до вас больше не дозвониться: сервер удалит её вместе с push-подписками и пропущенными. Новую ссылку отправьте заново тем, кому доверяете. Чаты, контакты и журнал останутся. Резервную копию (17 слов) нужно будет создать заново.';
-    (go.querySelector('span') || go).textContent = 'Сменить номер';
-    // v39: другие устройства профиля — выбрать, какие получат новый номер
-    // (остальные отвязываются: как смена номера с потерянным телефоном).
-    const cands = hasOtherDevices() ? rotationCandidates() : [];
-    if (keepBox && cands.length) {
-      const head = document.createElement('p');
-      head.className = 'hint';
-      head.textContent = 'Новый номер получат отмеченные устройства. Снимите галочку с потерянного или чужого — оно будет отвязано.';
-      keepBox.append(head);
-      for (const c of cands) {
-        const lab = document.createElement('label');
-        lab.className = 'check';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = true;
-        cb.dataset.keepDev = c.dev;
-        lab.append(cb, ` ${c.label} · ключ …${c.dev.slice(-6)}`);
-        keepBox.append(lab);
-      }
-      keepBox.classList.remove('hidden');
-    }
-    if (isLinkedDevice() || dangerKind === 'number') {
-      adminSigner()
-        .then((a) => {
-          if (a || dangerKind !== 'number') return;
-          text.textContent =
-            'Номер профиля меняет основное устройство (на нём хранится master-ключ) или устройство, где введена фраза восстановления. Откройте «Мой номер» на основном устройстве.';
-          go.disabled = true;
-        })
-        .catch(() => {});
-    }
-  } else {
-    title.textContent = 'Стереть всё с этого устройства?';
-    text.textContent = hasOtherDevices()
-      ? 'С этого устройства будут удалены личность, чаты и их ключи, контакты, журнал, настройки и кэш; устройство отвяжется от профиля. Номер продолжит работать на других ваших устройствах.' +
-        (isLinkedDevice() ? '' : ' Это основное устройство: после стирания подключать новые устройства и менять номер можно будет только с фразой восстановления.')
-      : 'Будут удалены личность и номер, все чаты и их ключи, контакты, журнал звонков, настройки, кэш приложения и push-подписка; сервер забудет ваш номер. Отменить нельзя. Если резервная копия включена и вы оставите её на сервере, личность и список чатов можно вернуть фразой из 17 слов.';
-    (go.querySelector('span') || go).textContent = 'Стереть всё';
-  }
-  delete go.dataset.armed;
-  go.disabled = false;
-  box.classList.remove('hidden');
-  box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-}
-$('#btnChangeNumber') && ($('#btnChangeNumber').onclick = () => openDanger('number'));
-$('#btnWipeAll') && ($('#btnWipeAll').onclick = () => openDanger('wipe'));
-$('#dangerCancel') &&
-  ($('#dangerCancel').onclick = () => {
-    $('#dangerBox')?.classList.add('hidden');
-    dangerKind = null;
-  });
-$('#dangerGo') &&
-  ($('#dangerGo').onclick = async () => {
-    const go = $('#dangerGo');
-    const note = $('#dangerNote');
-    const say = (t) => {
-      if (note) note.textContent = t;
-    };
-    // Второе нажатие подтверждает: случайный тап ничего не сотрёт.
-    if (!go.dataset.armed) {
-      go.dataset.armed = '1';
-      (go.querySelector('span') || go).textContent = dangerKind === 'number' ? 'Точно сменить?' : 'Точно стереть?';
-      return;
-    }
-    go.disabled = true;
-    try {
-      if (dangerKind === 'number') {
-        const keep = [...document.querySelectorAll('#dangerKeepBox input[data-keep-dev]')]
-          .filter((x) => x.checked)
-          .map((x) => x.dataset.keepDev);
-        const msg = await changeNumber(say, keep);
-        say(msg);
-        toast('Номер сменён');
-        setTimeout(() => $('#dangerBox')?.classList.add('hidden'), 9000);
-      } else if (dangerKind === 'wipe') {
-        await wipeEverything(say, { backupToo: !!$('#wipeBackupToo')?.checked });
-      }
-    } catch (e) {
-      say('Не получилось: ' + (e?.message || e));
-      go.disabled = false;
-      delete go.dataset.armed;
-    }
-  });
-$('#shareBack') &&
-  ($('#shareBack').onchange = (e) => {
-    try {
-      localStorage.zvShareBack = e.target.checked ? '1' : '0';
-    } catch {}
-    syncLocal();
-  });
-
-async function refreshPersonalUI() {
-  if (!$('#personalBox')) return;
-  let has;
-  try {
-    has = await hasPersonal();
-  } catch (e) {
-    // v22: не молчим — владелец должен видеть, что хранилище недоступно.
-    const hm = $('#homeMsg');
-    if (hm) hm.textContent = 'Не удалось открыть локальное хранилище: ' + (e?.message || e);
-    return;
-  }
-  $('#personalNone')?.classList.toggle('hidden', has);
-  $('#personalMain')?.classList.toggle('hidden', !has);
-  if (!has) return;
-  const p = await getPersonal();
-  S.personal = p;
-  if (!S.personalRoom) S.personalRoom = await deriveRoom(p.secret);
-  const linkEl = $('#personalLink');
-  if (linkEl) linkEl.value = personalLinkOf(p);
-  startInboxListener();
-  loadMissed().catch(() => {});
-  updatePushUI();
-  ensurePushSub().catch(() => {});
-  const sb = $('#shareBack');
-  if (sb) sb.checked = shareBackOn();
-  retryPendingRetire().catch(() => {});
-  // v39: синхронизация с другими устройствами профиля (если они есть).
-  startDevices().catch((e) => console.warn('devices', e));
-}
-
-// v39: события синхронизации профиля (devices.js).
-window.addEventListener('zv-identity-changed', () => {
-  // Номер сменён на основном устройстве (или это устройство только что
-  // подключено): новый секрет, новый topic, новый сертификат.
-  stopInboxListeners();
-  resetIdentityCache();
-  S.personal = null;
-  S.personalRoom = null;
-  refreshPersonalUI().catch(() => {});
-  window.ZVChat?.identityChanged?.();
-  window.__zvBackup?.render?.()?.catch?.(() => {});
-});
-window.addEventListener('zv-device-revoked', (e) => {
-  // Это устройство отвязано (с основного или само): стираем данные
-  // профиля локально; номер на сервере не трогаем — он живёт на других.
-  const by = e?.detail?.by || '';
-  toast(by === 'self' ? 'Устройство отвязано — стираем данные' : 'Это устройство отвязано от профиля — стираем данные', 4000);
-  setTimeout(() => {
-    wipeEverything(() => {}, { revoked: true, query: 'unlinked=1' }).catch(() => {});
-  }, by === 'self' ? 200 : 1500);
-});
-window.addEventListener('zv-settings-synced', () => {
-  const sb = $('#shareBack');
-  if (sb) sb.checked = shareBackOn();
-  const nm = $('#name');
-  if (nm && !S.joined && !S.callNameOverride && document.activeElement !== nm) nm.value = localStorage.zvName || '';
-});
-window.addEventListener('zv-journal-synced', () => {
-  renderCalls();
-});
-window.addEventListener('zv-devices-changed', () => {
-  // Новое устройство в профиле — честное уведомление на всех остальных
-  // (урок фишинга через привязку: владелец должен заметить чужое).
-  devicesSeenCheck().catch(() => {});
-});
-let knownDevs = null;
-async function devicesSeenCheck() {
-  const st = window.ZVDevices?.state?.();
-  if (!st?.items) {
-    if (knownDevs === null) knownDevs = new Set();
-    return;
-  }
-  const now = Object.keys(st.items).filter((k) => k.startsWith('dev:') && st.items[k] && !st.items[k].del);
-  if (knownDevs === null) {
-    knownDevs = new Set(now);
-    return;
-  }
-  const me = S.personal?.devicePub || (await getPersonal().catch(() => null))?.devicePub || '';
-  for (const k of now) {
-    if (knownDevs.has(k)) continue;
-    knownDevs.add(k);
-    if (k === 'dev:' + me || st.items[k]?.v?.addedBy === me) continue;
-    const label = st.items[k]?.v?.label || 'Устройство';
-    toast(`К вашему профилю подключено устройство: ${label}. Если это не вы — «Мой номер» → «Мои устройства» → «Отвязать».`, 8000);
-  }
-}
-
-function inboxStateHandler(m) {
-  if (S.incoming && m.ringId === S.incoming.ringId && m.state !== 'ringing') {
-    closeIncoming();
-    toast(
-      m.state === 'accepted'
-        ? 'Звонок принят на другом устройстве'
-        : m.state === 'declined'
-          ? 'Звонок отклонён на другом устройстве'
-          : 'Входящий звонок завершён'
-    );
-  }
-}
-
-function startInboxListener() {
-  if (S.inboxListener || !getWorkerBase() || !S.personal || !S.personalRoom) return;
-  const p = S.personal;
-  const topic = S.personalRoom.topic;
-  S.inboxRegP = inboxRegister(getWorkerBase(), topic, p, S.pushSub).catch(() => {});
-  S.inboxListener = new InboxListener(getWorkerBase(), topic, p, {
-    onRing: (m) => handleIncomingRing(m).catch(() => {}),
-    onState: inboxStateHandler,
-    onStatus: (st) => {
-      const el = $('#personalStatus');
-      if (el) {
-        el.textContent =
-          st === 'online'
-            ? 'Вы доступны для входящих звонков по личной ссылке'
-            : 'Нет связи с сервером входящих — дозвон временно недоступен';
-      }
-    },
-  });
-  // v38: слушатель — после регистрации устройства (auth до /register сервер
-  // отклоняет; раньше такой сокет молча оставался глухим до перезагрузки).
-  const listener = S.inboxListener;
-  Promise.resolve(S.inboxRegP).then((r) => {
-    if (S.inboxListener !== listener) return;
-    // v41: сервер закрепил этот номер за другим master-ключом (тот, кто первым
-    // зарегистрировался по ссылке). Слушать бесполезно — звонки по этой ссылке
-    // сюда не придут; выход — сменить номер.
-    if (r?.status === 403 && r.data?.error === 'not owner') {
-      S.inboxNotOwner = true;
-      listener.close();
-      const el = $('#personalStatus');
-      if (el) {
-        el.textContent =
-          'Эта личная ссылка на сервере закреплена за другим ключом — ' +
-          (p.linked ? 'смените номер на основном устройстве профиля' : 'нажмите «Сменить номер (новая ссылка)» ниже');
-      }
-      return;
-    }
-    listener.connect();
-  });
-  // v28: второй, аддитивный слушатель дозвонa ИЗ ЧАТА. Его topic выводится
-  // из публичного masterPub владельца (chatDialTopic ниже), поэтому личная
-  // ссылка в чат не публикуется; payload запечатан ECDH-ключом пары
-  // «эфемерный ключ звонящего ↔ ECDH-ключ устройства из чата».
-  if (!S.inboxDialListener && p.masterPub) {
-    chatDialTopic(p.masterPub)
-      .then((dialTopic) => {
-        if (S.inboxDialListener) return;
-        S.chatDialTopic = dialTopic;
-        // v38: с push-подпиской (раньше null — дозвон из чата в закрытую
-        // вкладку не доходил никогда).
-        const regP = inboxRegister(getWorkerBase(), dialTopic, p, S.pushSub).catch(() => {});
-        const dl = new InboxListener(getWorkerBase(), dialTopic, p, {
-          onRing: (m) => handleChatDialRing(m).catch(() => {}),
-          onState: inboxStateHandler,
-        });
-        S.inboxDialListener = dl;
-        regP.then(() => {
-          if (S.inboxDialListener === dl) dl.connect();
-        });
-      })
-      .catch(() => {});
-  }
-}
-
-async function handleIncomingRing({ ringId, blob, fromFp }) {
-  if (S.incoming || S.joined || !S.personalRoom) return;
-  let payload = null;
-  try {
-    payload = await openSealed(S.personalRoom.key, blob, S.personalRoom.topic);
-  } catch {}
-  presentIncomingRing({ ringId, payload, fromFp, topic: S.personalRoom.topic, viaChat: false });
-}
-
-// v28: входящий дозвон из чата. blob — конверт 'ecd1.' + JSON {eph, blob}:
-// внутренний blob запечатан ECDH-ключом на ECDH-публичный ключ нашего
-// устройства из чата; вне чата такой ring не создать и не прочитать.
-async function handleChatDialRing({ ringId, blob, fromFp }) {
-  if (S.incoming || S.joined || !S.personal || !S.chatDialTopic) return;
-  try {
-    if (typeof blob !== 'string' || !(blob.startsWith('ecd1.') || blob.startsWith('ecd2.'))) return;
-    const env = JSON.parse(new TextDecoder().decode(b64u.dec(blob.slice(5))));
-    const mine = await getChatDeviceEcdh();
-    if (!mine?.ecdhPriv) return;
-    const key = await chatDialKey(mine.ecdhPriv, b64u.dec(env.eph), S.chatDialTopic);
-    let payload = null;
-    // v39: 'ecd2.' — завёртки на все устройства человека; наша — одна из них.
-    for (const w of blob.startsWith('ecd2.') ? (Array.isArray(env.wraps) ? env.wraps.slice(0, 5) : []) : [env.blob]) {
-      try {
-        payload = await openSealed(key, w, S.chatDialTopic);
-      } catch {
-        payload = null;
-      }
-      if (payload) break;
-    }
-    if (!payload) return;
-    presentIncomingRing({ ringId, payload, fromFp, topic: S.chatDialTopic, viaChat: true });
-  } catch {}
-}
-
-function presentIncomingRing({ ringId, payload, fromFp, topic, viaChat }) {
-  if (S.incoming || S.joined) return;
-  // v38: без имени — анонимное из отпечатка звонящего (стабильно для одного
-  // и того же человека, но ничего о нём не раскрывает).
-  const name = String(payload?.name || '').trim() || anonName(fromFp || ringId);
-  const back = backOf(payload, fromFp);
-  S.incoming = { ringId, payload, fromFp, topic, name, back };
-  if (back) rememberPeer({ secret: back.k, fp: back.d, name }).catch(() => {});
-  $('#inName').textContent = name;
-  $('#inMeta').textContent = viaChat
-    ? `Входящий звонок из чата · отпечаток ${String(fromFp || '').slice(0, 8)}…`
-    : `Входящий звонок по личной ссылке · отпечаток ${String(fromFp || '').slice(0, 8)}…`;
-  $('#inAvatar').textContent = (name.trim()[0] || '?').toUpperCase();
-  $('#incomingCall')?.classList.remove('hidden');
-  startRingtone();
-  inboxAck(getWorkerBase(), topic, ringId, S.personal).catch(() => {});
-  // v38: нажали «Ответить» в уведомлении — принимаем без второго тапа.
-  if (S.pendingAccept && S.pendingAccept === ringId) {
-    S.pendingAccept = null;
-    setTimeout(() => $('#btnAccept')?.click(), 60);
-  }
-}
-
-function closeIncoming() {
-  stopRingtone();
-  $('#incomingCall')?.classList.add('hidden');
-  S.incoming = null;
-}
-
-$('#btnAccept') &&
-  ($('#btnAccept').onclick = async () => {
-    const inc = S.incoming;
-    if (!inc || !S.personal) return;
-    closeIncoming();
-    await inboxAnswer(getWorkerBase(), inc.topic || S.personalRoom.topic, inc.ringId, 'accepted', {
-      devicePub: S.personal.devicePub,
-      sign: (t) => signWithDevice(t),
-    }).catch(() => {});
-    const inName = inc.name || inc.payload?.name;
-    const inFp = inc.back?.d || null;
-    S.callMeta = { dir: 'in', name: inName, fp: inFp, key: journalAdd('in', inName, 'accepted', inFp ? { fp: inFp } : null) };
-    S.autoJoinPending = true;
-    let target = `k=${S.personal.secret}&d=${S.personal.fp}`;
-    // v28: дозвон из чата несёт в запечатанном payload секрет отдельной
-    // звонковой комнаты (1:1 из чата или групповой). Принявший входит именно
-    // в неё, а не в личную комнату владельца — иначе чат-дозвон не сойдётся
-    // с вызывающим. Обычный дозвон по личной ссылке payload без roomSecret
-    // и идёт прежним путём.
-    try {
-      const ks = inc.payload?.roomSecret;
-      if (ks && /^[A-Za-z0-9_-]{22,}$/.test(ks)) target = `k=${ks}`;
-    } catch {}
-    if (location.hash.slice(1) === target) preJoin();
-    else location.hash = target;
-  });
-$('#btnDecline') &&
-  ($('#btnDecline').onclick = async () => {
-    const inc = S.incoming;
-    if (!inc || !S.personal) return;
-    closeIncoming();
-    await inboxAnswer(getWorkerBase(), inc.topic || S.personalRoom.topic, inc.ringId, 'declined', {
-      devicePub: S.personal.devicePub,
-      sign: (t) => signWithDevice(t),
-    }).catch(() => {});
-    journalAdd('in', inc.name || inc.payload?.name, 'declined', inc.back?.d ? { fp: inc.back.d } : null);
-  });
-
-$('#btnCreatePersonal') &&
-  ($('#btnCreatePersonal').onclick = async () => {
-    try {
-      // v38: метка устройства уходит на сервер входящих открытым текстом —
-      // не отправляем туда имя пользователя.
-      await ensurePersonal('Владелец');
-      toast('Личная ссылка создана — отправьте её тем, кто должен вам звонить');
-      refreshPersonalUI().catch(() => {});
-    } catch (e) {
-      // v22: раньше здесь не было try/catch — любая ошибка (например,
-      // заблокированная IndexedDB) умирала молча, кнопка «не работала».
-      const text = 'Не удалось создать ссылку: ' + (e?.message || e);
-      toast(text);
-      window.__zvShowDiag?.(text + ' Пришлите этот текст разработчику.');
-    }
-  });
-$('#btnCopyPersonal') &&
-  ($('#btnCopyPersonal').onclick = () => S.personal && copy(personalLinkOf(S.personal)));
-$('#btnSharePersonal') &&
-  ($('#btnSharePersonal').onclick = () =>
-    S.personal &&
-    navigator
-      .share({ title: 'ZVONochek', text: 'Моя личная ссылка для звонков:', url: personalLinkOf(S.personal) })
-      .catch(() => {}));
-
-// ---------- v38: Web Push — автоподписка и регистрация везде ----------
-// Раньше подписка жила только до перезагрузки (S.pushSub не восстанавливался),
-// топик дозвона из чата регистрировался без подписки, а кнопка уведомлений
-// чата вообще не подписывалась на push. Теперь: если разрешение уже дано,
-// подписка сверяется/создаётся при каждом запуске и регистрируется в Inbox
-// (личная ссылка + дозвон из чата) и во всех чатах (событие zv-push-sub).
-const pushSupported = () =>
-  'PushManager' in window && 'serviceWorker' in navigator && 'Notification' in window;
-let pushEnsuring = null;
-async function ensurePushSub({ interactive = false } = {}) {
-  if (!pushSupported()) return null;
-  if (Notification.permission === 'denied') return null;
-  if (Notification.permission !== 'granted') {
-    if (!interactive) return null;
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') return null;
-  }
-  if (pushEnsuring) return pushEnsuring;
-  pushEnsuring = (async () => {
-    // VAPID-ключ — у того же Worker, который подписывает пуши: у «своего
-    // сервера» своя пара ключей; подписка на чужой ключ молча не доставлялась бы.
-    const key = (await fetchJson(getWorkerBase() + '/push-key').catch(() => null))?.public;
-    if (!key) return null;
-    const appKey = b64u.dec(key);
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-    const subKey = sub?.options?.applicationServerKey;
-    if (sub && subKey && b64u.enc(new Uint8Array(subKey)) !== b64u.enc(appKey)) {
-      await sub.unsubscribe().catch(() => {});
-      sub = null;
-    }
-    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
-    const j = sub.toJSON();
-    const next = { endpoint: j.endpoint, keys: j.keys };
-    let lastEp = '';
-    try {
-      lastEp = localStorage.getItem('zvPushEp') || '';
-    } catch {}
-    const changed = !S.pushSub || S.pushSub.endpoint !== next.endpoint || lastEp !== next.endpoint;
-    S.pushSub = next;
-    if (changed) {
-      try {
-        localStorage.setItem('zvPushEp', next.endpoint);
-      } catch {}
-      await registerPushEverywhere().catch(() => {});
-    }
-    updatePushUI();
-    return S.pushSub;
-  })();
-  try {
-    return await pushEnsuring;
-  } finally {
-    pushEnsuring = null;
-  }
-}
-async function registerPushEverywhere() {
-  if (!S.pushSub) return;
-  const base = getWorkerBase();
-  if (S.personal && S.personalRoom) {
-    await inboxRegister(base, S.personalRoom.topic, S.personal, S.pushSub).catch(() => {});
-    if (S.chatDialTopic) await inboxRegister(base, S.chatDialTopic, S.personal, S.pushSub).catch(() => {});
-  }
-  try {
-    window.dispatchEvent(new CustomEvent('zv-push-sub', { detail: S.pushSub }));
-  } catch {}
-}
-window.__zvPush = {
-  enable: () => ensurePushSub({ interactive: true }),
-  ensure: () => ensurePushSub(),
-  current: () => S.pushSub,
-  supported: pushSupported,
-};
-
-function updatePushUI() {
-  const b = $('#btnEnablePush');
-  const hint = $('#pushHint');
-  const set = (text, disabled, showHint) => {
-    if (b) {
-      b.disabled = disabled;
-      (b.querySelector('span') || b).textContent = text;
-    }
-    hint?.classList.toggle('hidden', !showHint);
-  };
-  if (!pushSupported()) {
-    set('Push-уведомления не поддерживаются браузером', true, false);
-  } else if (Notification.permission === 'denied') {
-    set('Уведомления запрещены в настройках браузера', true, false);
-  } else if (S.pushSub) {
-    set('Push включён: звонки приходят и при закрытом приложении', true, false);
-  } else {
-    set('Включить звонки при закрытом приложении', false, true);
-  }
-}
-$('#btnEnablePush') &&
-  ($('#btnEnablePush').onclick = async () => {
-    try {
-      const sub = await ensurePushSub({ interactive: true });
-      if (!sub) {
-        if (pushSupported() && Notification.permission !== 'granted') return toast('Разрешение на уведомления не дано');
-        return toast('Сервер не поддерживает push (нужен Worker v38). Пока приложение открыто, звонки приходят и так');
-      }
-      toast('Готово: звонки и сообщения будут приходить и при закрытом приложении');
-    } catch (e) {
-      toast('Не удалось включить уведомления: ' + e.message);
-    }
-  });
-$('#btnPushHint') && ($('#btnPushHint').onclick = () => $('#btnEnablePush')?.click());
-
-async function loadMissed() {
-  if (!S.personal || !S.personalRoom) return;
-  // v38: сначала регистрация устройства (иначе первый запрос — 403).
-  await Promise.resolve(S.inboxRegP).catch(() => {});
-  const r = await inboxMissed(getWorkerBase(), S.personalRoom.topic, S.personal).catch(() => null);
-  const items = r?.data?.missed || [];
-  S.missedIds = items.map((m) => m.ring_id);
-  const box = $('#missedBox');
-  const list = $('#missedList');
-  if (!box || !list) return;
-  box.classList.toggle('hidden', items.length === 0);
-  // v36: пропущенные рисуются тем же видом, что и журнал звонков.
-  const entries = [];
-  for (const m of items) {
-    let name = anonName(m.from_fp || m.ring_id);
-    let fp = null;
-    try {
-      const pl = await openSealed(S.personalRoom.key, m.blob, S.personalRoom.topic);
-      if (pl?.name) name = String(pl.name).slice(0, 60);
-      const back = backOf(pl, m.from_fp);
-      if (back) {
-        fp = back.d;
-        await rememberPeer({ secret: back.k, fp, name }).catch(() => {});
-      }
-    } catch {}
-    entries.push({ ts: m.ts, dir: 'in', name, outcome: 'missed', fp });
-  }
-  const book = await contactsLoad();
-  renderCallsList(list, entries, {
-    onCall: (v) => callPeer(v.fp),
-    onMenu: (v, el) => openContactMenu(v.fp, el, v),
-    nameOf: (v) => (v.fp && book.items[v.fp]?.saved ? book.items[v.fp].name : null),
-  });
-}
-$('#btnMissedClear') &&
-  ($('#btnMissedClear').onclick = async () => {
-    if (S.missedIds?.length) {
-      await inboxMissedAck(getWorkerBase(), S.personalRoom.topic, S.missedIds, S.personal).catch(() => {});
-    }
-    loadMissed().catch(() => {});
-  });
+// Web Push: автоподписка, кнопки уведомлений и пропущенные звонки — push-ui.js (v44)
+initPushUi();
 
 // ---------- Исходящий дозвон владельцу личной ссылки ----------
 async function startOutgoingCall() {
@@ -5435,7 +3272,7 @@ $('#btnCancelCall') &&
 // payload ring несёт секрет отдельной звонковой комнаты (roomSecret), и
 // принимающая сторона входит в неё (см. обработчик «Принять» выше).
 const chatRings = new Map(); // ringId -> {topic, poll, onState, done}
-function parseCallLink(linkOrSecret) {
+export function parseCallLink(linkOrSecret) {
   const raw = String(linkOrSecret || '').trim();
   if (!raw) return null;
   const frag = raw.includes('#') ? raw.slice(raw.indexOf('#') + 1) : raw;
@@ -5449,10 +3286,10 @@ function parseCallLink(linkOrSecret) {
     link: `${location.origin}${location.pathname}#k=${secret}${fp && /^[a-f0-9]{32}$/.test(fp) ? '&d=' + fp : ''}`,
   };
 }
-async function chatDialTopic(masterPub) {
+export async function chatDialTopic(masterPub) {
   return 'chatdial-' + (await sha256hex(b64u.dec(masterPub)));
 }
-async function chatDialKey(myPriv, peerPubRaw, topic) {
+export async function chatDialKey(myPriv, peerPubRaw, topic) {
   const pub = await crypto.subtle.importKey(
     'raw',
     peerPubRaw,

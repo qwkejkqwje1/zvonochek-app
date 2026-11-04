@@ -25,7 +25,6 @@ const app = await mk('app');
 const t0 = Date.now();
 const sec = () => Math.round((Date.now() - t0) / 1000);
 await web.goto(WEB, { waitUntil: 'load' });
-await web.evaluate(() => localStorage.setItem('zvOnboarded', '1'));
 await web.goto(WEB + '#k=' + secret, { waitUntil: 'load' });
 await web.reload({ waitUntil: 'load' });
 await web.waitForSelector('#prejoin:not(.hidden)', { timeout: 15000 });

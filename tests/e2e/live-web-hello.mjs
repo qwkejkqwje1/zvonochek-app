@@ -7,7 +7,6 @@ const page = await ctx.newPage();
 const logs = [];
 page.on('console', (m) => logs.push(m.type() + ': ' + m.text()));
 await page.goto('https://zvonochek.github.io/', { waitUntil: 'load' });
-await page.evaluate(() => localStorage.setItem('zvOnboarded', '1'));
 await page.goto(link, { waitUntil: 'load' });
 await page.reload({ waitUntil: 'load' });
 await page.waitForSelector('#prejoin:not(.hidden)', { timeout: 15000 });

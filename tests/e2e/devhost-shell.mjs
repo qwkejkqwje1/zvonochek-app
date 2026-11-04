@@ -36,7 +36,6 @@ const web = await webCtx.newPage();
 watch(web, 'web');
 const k = url.split('#k=')[1];
 await web.goto(WEB, { waitUntil: 'load' });
-await web.evaluate(() => localStorage.setItem('zvOnboarded', '1'));
 await web.goto(WEB + '#k=' + k, { waitUntil: 'load' });
 await web.reload({ waitUntil: 'load' });
 await web.waitForSelector('#prejoin:not(.hidden)', { timeout: 15000 });

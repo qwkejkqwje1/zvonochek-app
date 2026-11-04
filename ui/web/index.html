@@ -18,7 +18,7 @@
 <link rel="icon" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=44">
 </head>
 <body>
 
@@ -273,7 +273,9 @@
               <div class="btn-row">
                 <button id="btnCopyPersonal" class="btn small primary"><svg class="ic"><use href="#i-copy"/></svg><span>Копировать</span></button>
                 <button id="btnSharePersonal" class="btn small"><svg class="ic"><use href="#i-share"/></svg><span>Поделиться</span></button>
+                <button id="btnQrPersonal" class="btn small" aria-expanded="false"><svg class="ic"><use href="#i-qr"/></svg><span>QR-код</span></button>
               </div>
+              <div id="personalQr" class="qr hidden" aria-label="QR-код моей ссылки для звонков"></div>
               <p id="personalStatus" class="status-line">Подключаемся к серверу входящих…</p>
               <label class="check"><input type="checkbox" id="shareBack"> Передавать мой номер тем, кому я звоню (чтобы мне могли перезвонить)</label>
             </div>
@@ -738,7 +740,7 @@
     <div class="tb-left">
       <span id="status" class="pill pill-status"><svg class="ic"><use id="statusIcon" href="#i-loader"/></svg><span id="statusText">Подключение…</span></span>
       <span id="timer" class="pill mono-pill hidden"><span id="timerText">00:00</span></span>
-      <button id="bridgeBadge" class="pill pill-btn bridge-pill hidden" title="Голос идёт через зашифрованный канал сигнала (без TURN/UDP). Нажмите для статистики."><svg class="ic"><use href="#i-shield"/></svg><span>Мост</span></button>
+      <button id="bridgeBadge" class="pill pill-btn bridge-pill hidden" title="Голос идёт через зашифрованный канал сигнала (без TURN/UDP). Видео появится, когда соединение станет прямым. Нажмите для статистики."><svg class="ic"><use href="#i-shield"/></svg><span>Мост</span></button>
       <button id="quality" class="pill pill-btn hidden" title="Качество связи — нажмите для подробной статистики" aria-label="Качество связи"><svg class="ic"><use href="#i-wifi"/></svg><span id="qualityText"></span></button>
     </div>
     <div class="tb-right">
@@ -1032,12 +1034,12 @@
 
 <noscript><p class="noscript">Для ZVONochek нужен JavaScript.</p></noscript>
 
-<script src="mqtt-lite.js?v=41"></script>
-<script src="vendor/qrcode.js?v=41"></script>
-<script src="zvdiag.js?v=41"></script>
-<script type="module" src="app.js?v=41"></script>
-<script type="module" src="group.js?v=41"></script>
-<script type="module" src="chat.js?v=41"></script>
-<script type="module" src="backup.js?v=41"></script>
+<script src="mqtt-lite.js?v=44"></script>
+<script src="vendor/qrcode.js?v=44"></script>
+<script src="zvdiag.js?v=44"></script>
+<script type="module" src="app.js?v=44"></script>
+<script type="module" src="group.js?v=44"></script>
+<script type="module" src="chat.js?v=44"></script>
+<script type="module" src="backup.js?v=44"></script>
 </body>
 </html>

@@ -62,7 +62,7 @@
 //     цепочки — транзитом через 'drx'); при живой DR-сессии контент не
 //     в режиме d1 от собеседника не принимается (анти-downgrade);
 //   · сообщения ≤v30 расшифровываются статичными ключами, как раньше.
-import { CONFIG, getWorkerBase } from './config.js?v=41';
+import { CONFIG, getWorkerBase } from './config.js?v=44';
 import {
   b64u,
   newSecret,
@@ -121,7 +121,7 @@ import {
   genP256KeyPair,
   chainKeyAt,
   chainAdvanceSend,
-} from './crypto.js?v=41';
+} from './crypto.js?v=44';
 import {
   kvGet,
   kvPut,
@@ -131,10 +131,10 @@ import {
   kvDelPrefix,
   kvDelMany,
   normalizeRoomRecord,
-} from './store.js?v=41';
-import { coalesced } from './coalesce.js?v=41';
-import { plural } from './callstats.js?v=41';
-import { anonName, randomAnonName } from './anon-names.js?v=41';
+} from './store.js?v=44';
+import { coalesced } from './coalesce.js?v=44';
+import { plural } from './callstats.js?v=44';
+import { anonName, randomAnonName } from './anon-names.js?v=44';
 import {
   getChatDevice,
   getChatDeviceEcdh,
@@ -144,8 +144,8 @@ import {
   encryptWithVault,
   decryptWithVault,
   verifyDeviceCertClient,
-} from './identity.js?v=41';
-import { personKeyOf, groupPersons } from './sync-core.js?v=41';
+} from './identity.js?v=44';
+import { personKeyOf, groupPersons } from './sync-core.js?v=44';
 import {
   ChatTransportManager,
   FallbackTransport,
@@ -159,37 +159,44 @@ import {
   aggregateGcallState,
   gcallEventsFromEntries,
   shouldSweepRoom,
-} from './chat-transport.js?v=41';
+} from './chat-transport.js?v=44';
+import { aliasRenewIfDue, checkHash, onIdentityChanged, openRoomByPrefix, ownTagCache, registerPushInRooms, standaloneKeys, startRoomSweep, sweepOtherRooms, sweepState, unsubscribeRoom, initChatPush } from './chat-push.js?v=44';
+import { dialMember, joinGcall, leaveGcall, onCallEnded, openCallFromChat, startOrJoinGcall, updateGcallBanner } from './chat-call.js?v=44';
+import { renderMessagesNow } from './chat-render.js?v=44';
+import { aliasCreate, aliasRevokeCurrent, createInvite, pairApi, redeemCode, redeemGreet, redeemJoin, redeemWord, renderAliasBox, renderWordBox, renderWordHint, wordDisable, wordEnable, wordParts, wordRevokeCurrent } from './chat-invite.js?v=44';
+import { startVoiceRec, stopVoiceRec, uploadFile } from './chat-files.js?v=44';
+import { connectWs, setupTransport, initChatNet } from './chat-net.js?v=44';
+import { applyHistFloor, chatVisible, fetchMissed, flushAcks, healHistory, queueStubsForRetry, resyncRoom, scheduleFetchMissed, scheduleRetry, syncState, verifyMemberCerts } from './chat-delivery.js?v=44';
 
-const $ = (s, r = document) => r.querySelector(s);
+export const $ = (s, r = document) => r.querySelector(s);
 const te = new TextEncoder();
 
 // Каноническая строка подписи НЕ меняется с v21: поле epoch в неё сознательно
 // не входит — это лишь подсказка выбора ключа при расшифровке; подмена epoch
 // ломает AEAD и сообщение отбрасывается, подпись при этом не страдает.
-const canonical = (m) => `zv-chat-v1|${m.id}|${m.ts}|${m.devPub}|${m.type}|${m.text}`;
+export const canonical = (m) => `zv-chat-v1|${m.id}|${m.ts}|${m.devPub}|${m.type}|${m.text}`;
 const chatLinkOf = (seed, pinProtected = false) =>
   `${location.origin}${location.pathname}#chat=${seed}${pinProtected ? '&p=1' : ''}`;
-const greetLinkOf = (code) => `${location.origin}${location.pathname}#greet=${code}`;
-const joinLinkOf = (code) => `${location.origin}${location.pathname}#join=${code}`;
+export const greetLinkOf = (code) => `${location.origin}${location.pathname}#greet=${code}`;
+export const joinLinkOf = (code) => `${location.origin}${location.pathname}#join=${code}`;
 
-let cur = null; // {rec, keys, keys0, device, ws, closed, backoff, pendingCall, online:Set, receipts:Map, typing, pin, pinIkm, epochKeys:Map, epochMissing}
+export let cur = null; // {rec, keys, keys0, device, ws, closed, backoff, pendingCall, online:Set, receipts:Map, typing, pin, pinIkm, epochKeys:Map, epochMissing}
 let opening = false;
 let pendingPinSeed = null; // seed, ожидающий ввода PIN (экран запроса PIN)
-const fileState = new Map(); // fileId -> {progress, url, name, error, busy}
-const voiceAudio = new Map(); // fileId -> HTMLAudioElement (сессионный кэш плеера)
+export const fileState = new Map(); // fileId -> {progress, url, name, error, busy}
+export const voiceAudio = new Map(); // fileId -> HTMLAudioElement (сессионный кэш плеера)
 
 // v36: перерисовки ленты и списка схлопываются (см. coalesce.js) — пачка
 // досинхронизации больше не вызывает сотню полных перерисовок подряд.
-const renderMessages = coalesced(() => renderMessagesNow());
-const RENDER_PAGE = 200; // v38: окно ленты (строк в DOM)
-const renderRoomList = coalesced(() => renderRoomListNow(), 60);
+export const renderMessages = coalesced(() => renderMessagesNow());
+export const RENDER_PAGE = 200; // v38: окно ленты (строк в DOM)
+export const renderRoomList = coalesced(() => renderRoomListNow(), 60);
 
 // ---------- Сервер ----------
-const chatBase = (roomId) => `${getWorkerBase().replace(/\/$/, '')}/chat/${roomId}`;
-const workerBase = () => getWorkerBase().replace(/\/$/, '');
+export const chatBase = (roomId) => `${getWorkerBase().replace(/\/$/, '')}/chat/${roomId}`;
+export const workerBase = () => getWorkerBase().replace(/\/$/, '');
 
-async function api(roomId, token, path, opts = {}) {
+export async function api(roomId, token, path, opts = {}) {
   // v38: зависший запрос не должен навсегда держать очередь отправки.
   let signal;
   try {
@@ -211,7 +218,7 @@ async function api(roomId, token, path, opts = {}) {
   return { status: res.status, data };
 }
 
-async function existingPushSub() {
+export async function existingPushSub() {
   try {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
@@ -224,7 +231,7 @@ async function existingPushSub() {
 }
 
 // ---------- Локальное хранилище ----------
-const saveRoom = (rec) => {
+export const saveRoom = (rec) => {
   // v38: устаревшая копия ОТКРЫТОЙ комнаты (запись из списка комнат,
   // прочитанная раньше) не затирает живое состояние храповика, seq и
   // участников: сохраняется живая запись, из копии берётся только флаг
@@ -257,29 +264,39 @@ const saveRoom = (rec) => {
 };
 const backupFpCache = new Map(); // roomId -> отпечаток полей, входящих в бэкап
 const syncFpCache = new Map(); // v39: roomId -> отпечаток синхронизируемых полей
-const loadRoom = (roomId) => kvGet('rooms', roomId);
+export const loadRoom = (roomId) => kvGet('rooms', roomId);
 
 // v38: сводки списка комнат кэшируются по комнате и сбрасываются при любой
 // записи в её ленту (раньше каждый рендер списка читал ВСЕ сообщения ВСЕХ
 // чатов — в старых больших чатах интерфейс заметно тормозил).
-const roomSummaryCache = new Map(); // roomId -> {last, lastTs, others:number[]}
-function touchRoomMsgs(roomId) {
+export const roomSummaryCache = new Map(); // roomId -> {last, lastTs, others:number[]}
+// v44: поколение ленты комнаты. Сброс кэша только ДО записи оставлял гонку:
+// сводка, начатая между сбросом и концом записи, читала ленту без нового
+// сообщения и клала в кэш устаревшее превью (в списке чатов оставалось
+// предпоследнее сообщение, пока не придёт следующее). Теперь лента
+// «трогается» и после записи, а сводка кэшируется, только если за время
+// чтения поколение не сменилось.
+const roomSummaryGen = new Map();
+export function touchRoomMsgs(roomId) {
   roomSummaryCache.delete(roomId);
+  roomSummaryGen.set(roomId, (roomSummaryGen.get(roomId) || 0) + 1);
 }
-async function putMsg(roomId, entry) {
+export async function putMsg(roomId, entry) {
   touchRoomMsgs(roomId);
   if (cur && cur.rec.roomId === roomId && cur.msgIds && entry?.msg?.id) cur.msgIds.add(entry.msg.id);
   await kvPut('messages', roomId + ':' + entry.hash, { roomId, ...entry });
+  touchRoomMsgs(roomId);
 }
 async function delMsg(roomId, hash) {
   touchRoomMsgs(roomId);
   await kvDel('messages', roomId + ':' + hash);
+  touchRoomMsgs(roomId);
 }
-async function storeMessage(rec, entry) {
+export async function storeMessage(rec, entry) {
   await putMsg(rec.roomId, entry);
 }
 
-async function roomMessages(roomId) {
+export async function roomMessages(roomId) {
   // v38: только ключи этой комнаты (`${roomId}:${hash}`), без полного
   // прохода по сторам всех чатов.
   const rows = await kvPrefix('messages', roomId + ':');
@@ -294,15 +311,15 @@ async function roomMessages(roomId) {
 
 // v38: служебный heartbeat группового звонка (раз в 30 с от каждого
 // участника) нужен только живому звонку — локально храним не дольше часа.
-const GCALL_HB_KEEP_MS = 3600000;
-function isGcallHb(it) {
+export const GCALL_HB_KEEP_MS = 3600000;
+export function isGcallHb(it) {
   if (it?.msg?.type !== 'gcall-state') return false;
   if (typeof it.hb === 'boolean') return it.hb;
   return /"op":"hb"/.test(it.msg.text || '');
 }
 
 // ---------- UI: утилиты ----------
-function note(text) {
+export function note(text) {
   const n = $('#chatNote');
   if (n) n.textContent = text || '';
   // v22: #chatNote находится внутри экрана комнаты — пока комната скрыта,
@@ -314,7 +331,7 @@ function note(text) {
 // Статус соединения в шапке комнаты. Норма («На связи») места не занимает —
 // атрибут data-ok скрывает её стилем; видны только «Подключение…»,
 // «Офлайн…» и «Резервный канал», и строка состава комнаты не обрезается.
-const ONLINE = 'На связи';
+export const ONLINE = 'На связи';
 // Короткое подтверждение действия — общий #toast приложения.
 let flashTimer = 0;
 function flash(text) {
@@ -325,13 +342,13 @@ function flash(text) {
   clearTimeout(flashTimer);
   flashTimer = setTimeout(() => t.classList.add('hidden'), 2200);
 }
-function status(text) {
+export function status(text) {
   const s = $('#chatStatus');
   if (!s) return;
   s.textContent = text;
   s.toggleAttribute('data-ok', text === ONLINE);
 }
-function showChatScreen() {
+export function showChatScreen() {
   document.body.dataset.screen = 'chatroom';
   $('#home')?.classList.add('hidden');
   $('#prejoin')?.classList.add('hidden');
@@ -356,14 +373,14 @@ let selfDev = '';
 // v39: несколько устройств одного человека — один собеседник. Свои
 // устройства профиля (реестр devices.js) — «я»; чужие устройства с
 // проверенным сертификатом одного master — один человек (personKeyOf).
-const myProfile = () => window.__zvProfile || null;
+export const myProfile = () => window.__zvProfile || null;
 function ownSetOf() {
   const own = new Set(myProfile()?.own || []);
   if (selfDev) own.add(selfDev);
   if (cur?.device?.devicePub) own.add(cur.device.devicePub);
   return own;
 }
-function ownDev(dev, rec = cur?.rec) {
+export function ownDev(dev, rec = cur?.rec) {
   if (!dev) return false;
   if (cur && dev === cur.device.devicePub) return false; // это устройство — it.mine
   if (myProfile()?.own?.has(dev)) return true;
@@ -371,8 +388,8 @@ function ownDev(dev, rec = cur?.rec) {
   const master = myProfile()?.master;
   return !!(master && m?.certOk === true && m.masterPub === master);
 }
-const isOwnEntry = (it, rec = cur?.rec) => !!it && (it.mine || ownDev(it.msg?.devPub, rec));
-function personOf(dev, rec = cur?.rec) {
+export const isOwnEntry = (it, rec = cur?.rec) => !!it && (it.mine || ownDev(it.msg?.devPub, rec));
+export function personOf(dev, rec = cur?.rec) {
   return personKeyOf(dev, rec?.members?.[dev], ownSetOf(), myProfile()?.master || '');
 }
 const peersOf = (rec) => {
@@ -459,7 +476,7 @@ function showChatToast({ title, body, roomId }) {
 }
 // rec — запись комнаты (для заголовка); system — служебное уведомление,
 // его текст не секретен и показывается даже при скрытых превью.
-async function maybeNotifyMessage({ roomId, rec = null, nick, preview, mine, roomActive, system = false }) {
+export async function maybeNotifyMessage({ roomId, rec = null, nick, preview, mine, roomActive, system = false }) {
   const d = toastGate.check(roomId, {
     mine,
     roomActive,
@@ -491,7 +508,7 @@ async function maybeNotifyMessage({ roomId, rec = null, nick, preview, mine, roo
 // даёт одну локальную системную строку и, если комната не перед глазами,
 // тост. Историческая подгрузка при открытии комнаты тревоги не поднимает
 // (cur.syncingInitial). Это видимость, а не контроль доступа.
-async function noteRoomDevice(dev, { hasIntro = false } = {}) {
+export async function noteRoomDevice(dev, { hasIntro = false } = {}) {
   if (!cur || !dev || dev === cur.device.devicePub) return;
   const silent = !!cur.syncingInitial;
   const res = observeDevice(cur.rec.seenDevices, dev, { hasIntro, silent });
@@ -547,7 +564,7 @@ async function noteRoomDevice(dev, { hasIntro = false } = {}) {
 // v39: чьё это новое устройство. own — моё (реестр профиля или мой master
 // с проверенным сертификатом); person — ещё одно устройство участника,
 // который уже есть в чате (тот же master, сертификат проверен).
-function newDevKind(dev, rec = cur?.rec) {
+export function newDevKind(dev, rec = cur?.rec) {
   if (myProfile()?.own?.has(dev) || ownDev(dev, rec)) {
     return { own: true, person: true, nick: myProfile()?.labels?.[dev] || 'другое ваше устройство' };
   }
@@ -567,8 +584,8 @@ function newDevKind(dev, rec = cur?.rec) {
 const RU = 'ru-RU';
 const HM = { hour: '2-digit', minute: '2-digit' };
 const sameDay = (a, b) => a.toDateString() === b.toDateString();
-const fmtTime = (ts) => new Date(ts).toLocaleTimeString(RU, HM);
-const fmtDayTime = (ts) => {
+export const fmtTime = (ts) => new Date(ts).toLocaleTimeString(RU, HM);
+export const fmtDayTime = (ts) => {
   const d = new Date(ts);
   return sameDay(d, new Date())
     ? fmtTime(ts)
@@ -593,10 +610,10 @@ const fmtSeen = (ts) => {
   if (sameDay(d, new Date(Date.now() - 864e5))) return 'вчера в ' + fmtTime(ts);
   return d.toLocaleDateString(RU, { day: '2-digit', month: '2-digit' });
 };
-const fmtSize = (b) =>
+export const fmtSize = (b) =>
   b > 1024 * 1024 ? (b / (1024 * 1024)).toFixed(1) + ' МБ' : Math.max(1, Math.ceil(b / 1024)) + ' КБ';
 // v28 (F): подпись чипа даты в ленте — «Сегодня»/«Вчера»/полная дата.
-const dayLabel = (ts) => {
+export const dayLabel = (ts) => {
   const d = new Date(ts);
   const today = new Date();
   if (sameDay(d, today)) return 'Сегодня';
@@ -623,11 +640,11 @@ const AVATAR_GRADIENTS = [
   ['#72d5fd', '#2a9ef1'], // голубой
   ['#e0a2f3', '#d669ed'], // розовый
 ];
-function avatarBg(str) {
+export function avatarBg(str) {
   const [a, b] = AVATAR_GRADIENTS[hueOf(str) % AVATAR_GRADIENTS.length];
   return `linear-gradient(180deg, ${a}, ${b})`;
 }
-function nickOf(devPub) {
+export function nickOf(devPub) {
   if (!cur) return 'Участник';
   if (devPub === cur.device.devicePub) return cur.rec.nick || 'Вы';
   return cur.rec.members?.[devPub]?.nick || 'Участник';
@@ -635,7 +652,7 @@ function nickOf(devPub) {
 
 // Превью последнего сообщения комнаты и счётчик непрочитанных — для списка
 // комнат на главном экране (только локальные данные).
-function previewOf(m) {
+export function previewOf(m) {
   if (!m) return '';
   if (m.deleted) return 'Сообщение удалено';
   if (m.type === 'intro') return `${m.nick || 'Участник'} теперь в чате`;
@@ -782,6 +799,7 @@ function applySidebarFilter() {
 async function roomSummary(roomId, rec = null) {
   const hit = roomSummaryCache.get(roomId);
   if (hit) return hit;
+  const gen = roomSummaryGen.get(roomId) || 0;
   const msgs = await roomMessages(roomId);
   // v27: превью — по последнему ВИДИМОМУ сообщению: управляющие типы
   // (реакции, правки, закрепы) и обмен ключами эпохи в превью не показываем.
@@ -789,7 +807,7 @@ async function roomSummary(roomId, rec = null) {
   const last = visible.length ? visible[visible.length - 1] : null;
   const others = visible.filter((it) => !isOwnEntry(it, rec) && !it.local).map((it) => it.seq || 0);
   const sm = { last, others };
-  roomSummaryCache.set(roomId, sm);
+  if ((roomSummaryGen.get(roomId) || 0) === gen) roomSummaryCache.set(roomId, sm);
   return sm;
 }
 
@@ -868,7 +886,7 @@ function placeMenu(menu, anchor) {
 }
 // На сенсорных экранах касание пузыря открывает меню сообщения (как в
 // Telegram): iOS не присылает contextmenu на долгое нажатие.
-const TOUCH_UI = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
+export const TOUCH_UI = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
 
 let listMenuRec = null;
 function hideRoomListMenu() {
@@ -1390,7 +1408,7 @@ async function drDecryptTransit(raw, hint) {
 // подсказке nonce, при неудаче — статичные ключи (все сообщения ≤v30 и
 // служебные автономные посты). drx-обёртки, пришедшие статичным или
 // цепочечным путём, разворачиваются в DR-сообщение.
-async function decryptIncoming(raw) {
+export async function decryptIncoming(raw) {
   const hint = parseBlobHint(raw.subarray(0, 12));
   let retry = null;
   if (hint?.mode === 'c1') {
@@ -1429,7 +1447,7 @@ async function decryptIncoming(raw) {
 // v38: приостановка Double Ratchet (третий участник, рассинхронизация,
 // подписанное c1-сообщение собеседника). Чат продолжает работать на
 // цепочках уровня 1 — сообщения не теряются.
-function suspendDr(reason) {
+export function suspendDr(reason) {
   const dr = cur?.rec.ratchet?.dr;
   if (!dr || dr.suspended) return;
   dr.suspended = true;
@@ -1441,7 +1459,7 @@ function suspendDr(reason) {
 // Инициация DR-сессии собеседником: dr-init приходит обычным сообщением
 // текущего режима; корень выводится из ECDH(эфемерный ключ инициатора,
 // наш ECDH устройства) и секрета эпохи инициации.
-async function handleDrInit(msg, sigOk) {
+export async function handleDrInit(msg, sigOk) {
   if (!cur || !sigOk || !msg?.devPub) return;
   const peer = msg.devPub;
   if (peer === cur.device.devicePub) return;
@@ -1486,7 +1504,7 @@ async function handleDrInit(msg, sigOk) {
 // Инициатор — устройство с меньшим devPub (детерминированный тай-брейк,
 // обе стороны считают одинаково). Условия: комната строго 1:1,
 // собеседник объявил dr в caps и опубликовал ecdhPub.
-async function maybeStartDr() {
+export async function maybeStartDr() {
   if (!cur || !cur.rec.nick) return;
   const existing = drState();
   if (existing) return;
@@ -1521,7 +1539,7 @@ async function maybeStartDr() {
 // Заглушка навсегда недоступного сообщения храповика: ключ использован и
 // удалён (или вытеснен из skipped-окна) — содержимое не восстановить, но
 // место сообщения в ленте честно показываем.
-async function storeRatchetMiss(item, hash, miss) {
+export async function storeRatchetMiss(item, hash, miss) {
   const stubMsg = {
     v: 1,
     id: 'miss-' + hash,
@@ -1542,7 +1560,7 @@ async function storeRatchetMiss(item, hash, miss) {
 // opts.pin — PIN строкой; opts.pinProtected — ссылка помечена как PIN-комната
 // (маркер &p=1): если PIN не задан и локально не сохранён, показываем экран
 // запроса PIN и комнату не открываем.
-async function openRoomBySeed(seedStr, opts = {}) {
+export async function openRoomBySeed(seedStr, opts = {}) {
   if (opening) return;
   opening = true;
   try {
@@ -1870,7 +1888,7 @@ async function fastForwardOwnChains() {
   if (moved) await saveRoom(cur.rec);
 }
 
-function closeCurrent(hideScreen = true) {
+export function closeCurrent(hideScreen = true) {
   if (cur) {
     cur.closed = true;
     flushAcks(cur);
@@ -1937,12 +1955,13 @@ function notifyRoomsChanged() {
 // Полное локальное стирание комнаты: сообщения, запись, черновик и
 // seenDevices (всё внутри записи), tombstone против воскрешения из бэкапа.
 // Если комната сейчас открыта — закрываем её экран.
-async function wipeLocalRoom(roomId, { byCreator = false, silent = false } = {}) {
+export async function wipeLocalRoom(roomId, { byCreator = false, silent = false } = {}) {
   const isCur = !!cur && cur.rec.roomId === roomId;
   if (isCur) closeCurrent(true);
   // v38: одной транзакцией по диапазону ключей комнаты.
   touchRoomMsgs(roomId);
   await kvDelPrefix('messages', roomId + ':').catch(() => {});
+  touchRoomMsgs(roomId);
   await kvDel('rooms', roomId).catch(() => {});
   sweepState.delete(roomId);
   addTombstone(roomId);
@@ -1962,7 +1981,7 @@ async function wipeLocalRoom(roomId, { byCreator = false, silent = false } = {})
 
 // Сервер ответил 410 Gone: серверной копии больше нет (удаление
 // создателем или автоудаление по неактивности) — стираем и локально.
-async function handleRemoteDeleted(roomId) {
+export async function handleRemoteDeleted(roomId) {
   await wipeLocalRoom(roomId, { silent: true });
   note('Этот чат удалён на сервере (создателем или после 30 дней неактивности) — локальная копия стёрта.');
 }
@@ -2117,7 +2136,7 @@ async function sweepInactiveRooms() {
 // пузырями не рендерятся (кроме 'ttl' — служебной строкой о смене таймера).
 // v29: 'room-delete' (wipe у клиентов) и 'gcall-state' (агрегация живого
 // звонка) — тоже управляющие; у gcall-state есть своя ветка рендера строк.
-const CONTROL_TYPES = new Set([
+export const CONTROL_TYPES = new Set([
   'react',
   'edit',
   'del',
@@ -2158,7 +2177,7 @@ async function buildMsg(type, text) {
 // звонка, отправка пользователя) — одинаковые номера cn у двух сообщений,
 // «перетёртый» корень Double Ratchet и заглушка «ключ недоступен» поверх
 // уже расшифрованного сообщения. Теперь — строго по одному.
-function roomQueue(fn) {
+export function roomQueue(fn) {
   const c = cur;
   if (!c) return Promise.reject(new Error('no room'));
   const run = c.q.then(() => (cur === c && !c.closed ? fn() : undefined));
@@ -2181,7 +2200,7 @@ const QUIET_TYPES = new Set([
 // bodyExtra — поля тела /msg ВНЕ шифротекста (v29: creatorPub у room-meta —
 // сервер слеп к содержимому и регистрирует создателя только по этому полю;
 // v38: quiet — без пуша, push:'call' — пуш-звонок, ttlSec — серверный срок).
-function sendMsg(type, text, extra = null, bodyExtra = null) {
+export function sendMsg(type, text, extra = null, bodyExtra = null) {
   const c = cur;
   if (!c) return Promise.reject(new Error('no room'));
   // Отправки упорядочены между собой (номера цепочек уходят на сервер по
@@ -2292,7 +2311,7 @@ async function deliverOutgoing(c, { m, blob, hash, ttlSec, type }, bodyExtra) {
 // при ingest (с фактическим sigOk), и при собственной отправке (sigOk=true).
 // Чужая подпись (sigOk=false) и чужие edit/del игнорируются внутри чистых
 // функций crypto.js; здесь — только I/O и перерисовка.
-async function applyControlMessage(msg, sigOk) {
+export async function applyControlMessage(msg, sigOk) {
   if (!cur || !msg || !CONTROL_TYPES.has(msg.type)) return;
   const roomId = cur.rec.roomId;
   const loadTarget = async () => {
@@ -2317,6 +2336,7 @@ async function applyControlMessage(msg, sigOk) {
       got.entry.reactions = applyReactionState(got.entry.reactions, msg.devPub, data.emoji, data.op);
       touchRoomMsgs(roomId);
       await kvPut('messages', roomId + ':' + got.target, got.entry);
+      touchRoomMsgs(roomId);
       renderMessages().catch(() => {});
       return;
     }
@@ -2333,6 +2353,7 @@ async function applyControlMessage(msg, sigOk) {
       if (applyEditOrDelete(got.entry, msg, sigOk)) {
         touchRoomMsgs(roomId);
         await kvPut('messages', roomId + ':' + got.target, got.entry);
+        touchRoomMsgs(roomId);
         if (fileId) {
           // Удаление «для всех»: локально забываем скачанные чанки файла.
           const st = fileState.get(fileId);
@@ -2438,7 +2459,7 @@ async function sendEcdhIfNeeded() {
 // и отпечаток публичны, cert/chain доказывают принадлежность устройства
 // master-ключу. Секрет личной ссылки сюда НЕ входит: адрес дозвонa
 // выводится из masterPub, а payload запечатывается ECDH-ключом устройства.
-async function sendDialInfoIfNeeded() {
+export async function sendDialInfoIfNeeded() {
   if (!cur || cur.rec.dialInfoSent || !cur.rec.nick) return;
   const dev = cur.device;
   if (!dev?.masterPub) {
@@ -2462,7 +2483,7 @@ async function sendDialInfoIfNeeded() {
 // ---------- Эпохи (v26, фаза 3) ----------
 // Сообщение 'epoch' зашифровано ключом УХОДЯЩЕЙ эпохи (его читают все
 // текущие участники), внутри — завёртки нового секрета только оставленным.
-async function applyEpochMessage(msg) {
+export async function applyEpochMessage(msg) {
   if (!cur || !msg) return;
   let data = null;
   try {
@@ -2497,7 +2518,7 @@ async function applyEpochMessage(msg) {
   renderMessages().catch(() => {});
 }
 
-function memberEcdhPub(dev) {
+export function memberEcdhPub(dev) {
   if (!cur) return null;
   if (dev === cur.device.devicePub) return cur.ownEcdhPub || null;
   return cur.rec.members?.[dev]?.ecdhPub || null;
@@ -2586,1455 +2607,17 @@ async function doEpochRotate() {
   }
 }
 
-// ---------- Доставка / прочтение (v25) ----------
-const chatVisible = () =>
-  !!cur && !$('#chatroom')?.classList.contains('hidden') && document.visibilityState === 'visible';
+// Доставка и прочтение, пакетные ack, очередь повтора нерасшифрованных — chat-delivery.js (v44)
 
-// Подтвердить прочтение всего, что уже лежит локально (lastSeq), если чат
-// реально на экране. Сервер монотонно поднимает read_seq устройства и
-// рассылает receipt остальным.
-async function sendReadAck() {
-  if (!cur || !chatVisible() || !cur.rec.lastSeq) return;
-  const upto = cur.rec.lastSeq;
-  if ((cur.rec.lastReadSeq || 0) >= upto) return;
-  cur.rec.lastReadSeq = upto;
-  await saveRoom(cur.rec);
-  api(cur.keys.roomId, cur.keys.accessToken, '/ack', {
-    method: 'POST',
-    body: { seqs: [upto], dev: cur.device.devicePub, read: true },
-  }).catch(() => {});
-  renderRoomList().catch(() => {});
-}
+// Транспортный менеджер, резервный канал и WebSocket — chat-net.js (v44)
+initChatNet();
 
-function applyReceipt(dev, delivered, read) {
-  if (!cur || dev === cur.device.devicePub) return;
-  // v39: прочитано на другом своём устройстве — прочитано и здесь.
-  if (ownDev(dev) && (read || 0) > (cur.rec.lastReadSeq || 0)) {
-    cur.rec.lastReadSeq = read;
-    saveRoom(cur.rec).catch(() => {});
-    renderRoomList().catch(() => {});
-  }
-  const prev = cur.receipts.get(dev) || { delivered: 0, read: 0 };
-  cur.receipts.set(dev, {
-    delivered: Math.max(prev.delivered, delivered || 0),
-    read: Math.max(prev.read, read || 0),
-  });
-  renderMessages().catch(() => {});
-}
+// Файлы и голосовые сообщения — chat-files.js (v44)
 
-function applyPresence(dev, online, ts) {
-  if (!cur || dev === cur.device.devicePub) return;
-  // v28 (E): присутствие — источник реестра устройств без ника.
-  noteRoomDevice(dev, { hasIntro: !!cur.rec.members[dev]?.nick }).catch(() => {});
-  if (online) cur.online.add(dev);
-  else {
-    cur.online.delete(dev);
-    if (cur.rec.members[dev]) {
-      cur.rec.members[dev].lastSeen = ts || Date.now();
-      saveRoom(cur.rec).catch(() => {});
-    }
-  }
-  renderPresence();
-  renderMembersList();
-}
-
-// Синхронизация сводки при открытии: кто дочитал до какого seq + кто онлайн.
-async function syncState() {
-  if (!cur) return;
-  const r = await api(cur.keys.roomId, cur.keys.accessToken, '/state').catch(() => null);
-  if (!r || r.status !== 200 || !cur) return;
-  for (const m of r.data.members || []) applyReceipt(m.dev, m.delivered, m.read);
-  cur.online = new Set((r.data.online || []).filter((d) => d !== cur.device.devicePub));
-  renderPresence();
-  renderMembersList();
-}
-
-// opts.viaFetch — элемент из /fetch (порядок seq без дыр по определению);
-// opts.retry — повтор ранее не расшифрованного (seq-хвост не трогаем);
-// opts.live — пришло по WS прямо сейчас (оценка сдвига часов сервера).
-function ingest(item, opts = {}) {
-  return roomQueue(() => ingestNow(item, opts));
-}
-
-async function ingestNow(item, { viaFetch = false, retry = false, live = false } = {}) {
-  if (!cur || !item?.blob) return;
-  const raw = b64u.dec(item.blob);
-  const hash = await hashChatBlob(raw);
-  const key = cur.rec.roomId + ':' + hash;
-  const seen = await kvGet('messages', key);
-  if (live && Number.isFinite(item.ts)) noteServerClock(item.ts);
-  // v38: заглушка «не расшифровано» заменяется настоящим сообщением при повторе.
-  if (!seen || (retry && seen.msg?.ratchetMiss)) {
-    const dec = await decryptIncoming(raw);
-    const undec = !dec || dec.__miss || dec.__retry || dec.v !== 1;
-    if (undec && !seen && floorSkip(item)) {
-      // v39: история до подключения этого устройства к профилю, которую
-      // ему не расшифровать (Double Ratchet, чужие эпохи), — не заглушки:
-      // её перенесло основное устройство (или владелец выбрал «без истории»).
-    } else if (dec?.__miss) {
-      // v31: ключ сообщения навсегда недоступен (использован и удалён или
-      // вытеснен из skipped-окна) — кладём заглушку и НЕ выходим: seq-хвост
-      // ниже обязан продвинуть lastSeq, иначе fetch принесёт это снова.
-      if (!seen) await storeRatchetMiss(item, hash, dec.__miss);
-    } else if (!dec || dec.__retry || dec.v !== 1) {
-      // v38: не расшифровалось — раньше сообщение терялось молча и
-      // навсегда (следующие seq сдвигали lastSeq). Теперь — очередь
-      // повтора с бэкоффом: появится intro/ключ эпохи/ресинк — откроется.
-      await noteFailed(item, hash, dec?.__retry || null);
-    }
-    const msg = dec && !dec.__miss && !dec.__retry && dec.v === 1 ? dec : null;
-    if (msg) {
-    if (Number.isFinite(item.seq)) clearFailed(item.seq);
-    let sigOk = false;
-    try {
-      sigOk = !!(msg.devPub && msg.sig && (await verifyChatSig(msg.devPub, msg.sig, canonical(msg))));
-    } catch {}
-    const mine = msg.devPub === cur.device.devicePub;
-    if (msg.type === 'intro' && msg.devPub) {
-      cur.rec.members[msg.devPub] = {
-        ...cur.rec.members[msg.devPub],
-        nick: msg.nick || msg.text || 'Участник',
-        firstSeen: cur.rec.members[msg.devPub]?.firstSeen || Date.now(),
-        sigOk,
-        left: false, // v29: вернувшийся после leave снова участник
-      };
-      // v31: третий участник в комнате с DR-сессией — сессия
-      // приостанавливается, комната возвращается на цепочки уровня 1
-      // (Double Ratchet по определению парный).
-      const drIntro = cur.rec.ratchet?.dr;
-      if (
-        drIntro &&
-        !drIntro.suspended &&
-        msg.devPub !== drIntro.peer &&
-        msg.devPub !== cur.device.devicePub
-      ) {
-        drIntro.suspended = true;
-      }
-      await saveRoom(cur.rec);
-      renderPresence();
-      renderMembersList();
-    }
-    if (msg.type === 'ecdh' && msg.devPub && sigOk) {
-      // Ключ обмена участника: закрепляем только при валидной подписи, иначе
-      // завёртку эпохи можно было бы подменить чужим ключом.
-      const pub = String(msg.text || '');
-      if (/^[A-Za-z0-9_-]{87}$/.test(pub)) {
-        cur.rec.members[msg.devPub] = { ...cur.rec.members[msg.devPub], ecdhPub: pub };
-        await saveRoom(cur.rec);
-      }
-    }
-    // v28 (A): данные личной идентичности для дозвона — только с подписью.
-    if (msg.type === 'dial' && msg.devPub && sigOk) {
-      try {
-        const d = JSON.parse(msg.text || '');
-        if (d && typeof d.masterPub === 'string' && /^[A-Za-z0-9_-]{87}$/.test(d.masterPub)) {
-          // v39: сертификат устройства под этим master — основание считать
-          // несколько устройств одним человеком (и своими — свои).
-          const certOk = await verifyDeviceCertClient(d.masterPub, msg.devPub, d.cert || null, d.chain || null).catch(
-            () => false
-          );
-          cur.rec.members[msg.devPub] = {
-            ...cur.rec.members[msg.devPub],
-            masterPub: d.masterPub,
-            masterFp: d.masterFp || null,
-            cert: d.cert || null,
-            chain: d.chain || null,
-            certOk: !!certOk,
-          };
-          await saveRoom(cur.rec);
-          renderMembersList();
-        }
-      } catch {}
-    }
-    // v29: создатель комнаты — из подписанного room-meta, первый валидный
-    // закрепляется и не перезаписывается (как TOFU у участников).
-    if (msg.type === 'room-meta' && msg.devPub && sigOk && !cur.rec.creatorPub) {
-      try {
-        const d = JSON.parse(msg.text || '');
-        if (d && d.creator === msg.devPub) {
-          cur.rec.creatorPub = msg.devPub;
-          if (msg.devPub === cur.device.devicePub) cur.rec.createdByMe = true;
-          await saveRoom(cur.rec);
-          renderMembersList();
-        }
-      } catch {}
-    }
-    // v29: участник вышел из чата («Удалить у себя» у него) — помечаем
-    // left: knownMembers его больше не считает, до следующего intro.
-    if (msg.type === 'leave' && msg.devPub && sigOk) {
-      cur.rec.members[msg.devPub] = { ...cur.rec.members[msg.devPub], left: true };
-      await saveRoom(cur.rec);
-      renderPresence();
-      renderMembersList();
-    }
-    if (msg.type === 'epoch') {
-      await applyEpochMessage(msg).catch(() => {});
-    }
-    // v31: caps собеседника (объявление поддержки храповика) — сливаем в
-    // существующую запись участника; инициация DR — отдельным обработчиком.
-    if (msg.caps && msg.devPub && cur.rec.members[msg.devPub]) {
-      cur.rec.members[msg.devPub] = { ...cur.rec.members[msg.devPub], caps: msg.caps };
-      saveRoom(cur.rec).catch(() => {});
-    }
-    if (msg.type === 'dr-init') {
-      await handleDrInit(msg, sigOk).catch(() => {});
-    }
-    if (msg.type === 'ecdh' || msg.type === 'intro') {
-      maybeStartDr().catch(() => {});
-    }
-    // v28 (E): реестр увиденных устройств (алерт — внутри noteRoomDevice).
-    if (!mine && msg.devPub) {
-      noteRoomDevice(msg.devPub, {
-        hasIntro: !!cur.rec.members[msg.devPub]?.nick,
-      }).catch(() => {});
-    }
-    // v28 (D): дедуп по id сообщения между каналами — один и тот же msg мог
-    // прийти и из воркера, и из резервного канала разными blob-ами.
-    // v38: по индексу id в памяти вместо чтения всей ленты на КАЖДОЕ сообщение.
-    const byId = !!(msg.id && (await roomMsgIds()).has(msg.id));
-    let blocked = drDowngradeBlocked(cur.rec.ratchet?.dr, msg);
-    if (blocked && sigOk) {
-      // v38: подписанное c1-сообщение самого DR-собеседника — он вышел из
-      // сессии (потерял состояние или увидел третьего участника). Принимаем
-      // и приостанавливаем DR у себя; раньше такие сообщения молча
-      // отбрасывались — переписка шла «в одну сторону».
-      suspendDr('peer-chain');
-      blocked = false;
-    }
-    if (blocked) {
-      // v31: неподписанный контент не в режиме d1 от DR-собеседника при живой
-      // сессии не принимаем — защита от навязанного отката на статичный режим.
-    } else if (!byId) {
-      const entry = { hash, msg, sigOk, mine, reactions: {} };
-      // seq есть только у воркера; у резервного канала его нет до ресинка.
-      if (Number.isFinite(item.seq)) entry.seq = item.seq;
-      // v38: время по серверу в локальной шкале (прунинг участников звонка
-      // не зависит от сбитых часов отправителя).
-      if (Number.isFinite(item.ts)) entry.lts = item.ts + (cur.clockSkew || 0);
-      if (msg.type === 'gcall-state') entry.hb = /"op":"hb"/.test(msg.text || '');
-      // v27: локальный срок жизни исчезающего сообщения — из шифротекста.
-      if (msg.ttlSec > 0) entry.expiresAt = msg.ts + msg.ttlSec * 1000;
-      await storeMessage(cur.rec, entry);
-      if (CONTROL_TYPES.has(msg.type)) {
-        await applyControlMessage(msg, sigOk).catch(() => {});
-      }
-      renderMessages().catch(() => {});
-      if (!mine) renderRoomList().catch(() => {});
-      // v28 (B): уведомление, пока приложение живо (v38: не при «лечении» истории).
-      // v39: своё сообщение с другого устройства профиля — без уведомления.
-      if (!mine && !ownDev(msg.devPub) && !CONTROL_TYPES.has(msg.type) && msg.type !== 'ecdh' && !cur.healing) {
-        maybeNotifyMessage({
-          roomId: cur.rec.roomId,
-          rec: cur.rec,
-          nick: msg.nick || 'Участник',
-          preview: previewOf(msg),
-          mine: false,
-          roomActive: chatVisible(),
-        }).catch(() => {});
-      }
-    }
-    }
-  }
-  if (Number.isFinite(item.seq) && !retry && cur) {
-    if (item.seq > cur.rec.lastSeq) {
-      // v38: lastSeq двигается только без дыр: из /fetch (там порядок
-      // полный) или ровно следующий номер по WS. Дыра (сообщение,
-      // пропущенное сокетом) закрывается ближайшим fetch.
-      if (viaFetch || item.seq === (cur.rec.lastSeq || 0) + 1) {
-        cur.rec.lastSeq = item.seq;
-        await saveRoom(cur.rec);
-      } else {
-        scheduleFetchMissed();
-      }
-    }
-    // Доставка и прочтение — пачкой (раньше: два запроса на КАЖДОЕ
-    // сообщение — сотни запросов к бесплатному воркеру при докачке).
-    if (!cur.healing || item.seq > (cur.healKeepSeq || 0)) queueAck(item.seq);
-  }
-}
-
-// v39: граница истории подключённого устройства (см. applyHistFloor).
-function floorSkip(item) {
-  const f = cur?.rec?.histFloor;
-  return Number.isFinite(f) && f > 0 && Number.isFinite(item?.seq) && item.seq <= f;
-}
-// Первое /init комнаты, пришедшей синхронизацией профиля: всё, что было
-// на сервере до этого момента (seq ≤ lastSeq), — «старая» история.
-// histMode 'none' — владелец не переносил историю: начинаем с «сейчас».
-function applyHistFloor(rec, serverLastSeq) {
-  if (!rec?.linkImport || Number.isFinite(rec.histFloor)) return false;
-  rec.histFloor = Number(serverLastSeq) || 0;
-  if (rec.histMode === 'none' && (rec.lastSeq || 0) < rec.histFloor) rec.lastSeq = rec.histFloor;
-  return true;
-}
-
-// v39: участники, записанные до v39 (dial без проверки сертификата), —
-// проверяем один раз при открытии комнаты.
-async function verifyMemberCerts(c) {
-  if (!c) return;
-  let changed = false;
-  for (const [d, m] of Object.entries(c.rec.members || {})) {
-    if (!m || !m.masterPub || !m.cert || typeof m.certOk === 'boolean') continue;
-    m.certOk = !!(await verifyDeviceCertClient(m.masterPub, d, m.cert, m.chain || null).catch(() => false));
-    changed = true;
-  }
-  if (changed && cur === c) {
-    await saveRoom(c.rec);
-    renderPresence();
-    renderMembersList();
-    renderMessages().catch(() => {});
-  }
-}
-
-// v38: id сообщений открытой комнаты (дедуп между каналами).
-async function roomMsgIds() {
-  if (cur.msgIds) return cur.msgIds;
-  const c = cur;
-  const ids = new Set();
-  for (const it of await roomMessages(c.rec.roomId)) if (it.msg?.id) ids.add(it.msg.id);
-  c.msgIds = ids;
-  return ids;
-}
-
-// v38: сдвиг часов «локальные − серверные» по живым сообщениям WS
-// (минимум ≈ задержка доставки).
-function noteServerClock(serverTs) {
-  const d = Date.now() - serverTs;
-  if (!Number.isFinite(d) || Math.abs(d) > 7 * 24 * 3600000) return;
-  if (cur.clockSkew === undefined || cur.clockSkewN < 1) {
-    cur.clockSkew = d;
-    cur.clockSkewN = 1;
-    return;
-  }
-  cur.clockSkewN++;
-  // Минимальная задержка ≈ истинный сдвиг; медленный дрейф вверх — на
-  // случай перевода часов.
-  if (d < cur.clockSkew) cur.clockSkew = d;
-  else cur.clockSkew += Math.min(d - cur.clockSkew, 1000) * 0.05;
-}
-
-// ---------- v38: пакетные ack (доставка + прочтение) ----------
-function queueAck(seq) {
-  const c = cur;
-  if (!c || !Number.isFinite(seq)) return;
-  if (!c.ackSeqs) c.ackSeqs = [];
-  c.ackSeqs.push(seq);
-  if (c.ackTimer) return;
-  c.ackTimer = setTimeout(() => flushAcks(c), c.ackSeqs.length >= 150 ? 0 : 1200);
-}
-function flushAcks(c) {
-  if (!c) return;
-  if (c.ackTimer) clearTimeout(c.ackTimer);
-  c.ackTimer = null;
-  const seqs = (c.ackSeqs || []).splice(0);
-  if (!seqs.length) return;
-  const read = cur === c && !c.closed && chatVisible();
-  for (let i = 0; i < seqs.length; i += 200) {
-    const part = seqs.slice(i, i + 200);
-    const last = i + 200 >= seqs.length;
-    api(c.keys.roomId, c.keys.accessToken, '/ack', {
-      method: 'POST',
-      body: { seqs: part, dev: c.device.devicePub, ...(read && last ? { read: true } : {}) },
-    }).catch(() => {});
-  }
-  if (read) {
-    const upto = Math.max(...seqs);
-    if (upto > (c.rec.lastReadSeq || 0)) {
-      c.rec.lastReadSeq = upto;
-      saveRoom(c.rec).catch(() => {});
-      renderRoomList().catch(() => {});
-    }
-  }
-}
-
-// ---------- v38: очередь повтора нерасшифрованных сообщений ----------
-// rec.retry = [{seq, n (попыток), next (ts следующей), why}] — не больше
-// 300 записей; после 6 неудач — заглушка «не расшифровано» в ленте (если
-// причина известна) и запись снимается.
-const RETRY_MAX = 300;
-const RETRY_TRIES = 6;
-async function noteFailed(item, hash, why) {
-  if (!cur || !Number.isFinite(item.seq)) return;
-  const rec = cur.rec;
-  if (!Array.isArray(rec.retry)) rec.retry = [];
-  let e = rec.retry.find((x) => x.seq === item.seq);
-  if (!e) {
-    e = { seq: item.seq, n: 0, next: 0, why: why || '' };
-    rec.retry.push(e);
-    if (rec.retry.length > RETRY_MAX) rec.retry.splice(0, rec.retry.length - RETRY_MAX);
-  }
-  e.n++;
-  e.why = why || e.why;
-  e.next = Date.now() + Math.min(6 * 3600000, 15000 * 2 ** e.n);
-  if (e.n >= RETRY_TRIES) {
-    rec.retry = rec.retry.filter((x) => x !== e);
-    if (e.why) await storeUndecrypted(item, hash, e.why);
-  }
-  saveRoom(rec).catch(() => {});
-}
-function clearFailed(seq) {
-  const rec = cur?.rec;
-  if (!rec || !Array.isArray(rec.retry) || !rec.retry.length) return;
-  const n = rec.retry.length;
-  rec.retry = rec.retry.filter((x) => x.seq !== seq);
-  if (rec.retry.length !== n) saveRoom(rec).catch(() => {});
-}
-async function storeUndecrypted(item, hash, why) {
-  const seen = await kvGet('messages', cur.rec.roomId + ':' + hash);
-  if (seen) return;
-  const stubMsg = {
-    v: 1,
-    id: 'undec-' + hash,
-    ts: Number.isFinite(item.ts) ? item.ts + (cur.clockSkew || 0) : Date.now(),
-    nick: '',
-    devPub: '',
-    type: 'text',
-    text: '',
-    epoch: 0,
-    ratchetMiss: true,
-    undecrypted: why,
-  };
-  const entry = { hash, msg: stubMsg, sigOk: false, mine: false, reactions: {} };
-  if (Number.isFinite(item.seq)) entry.seq = item.seq;
-  await storeMessage(cur.rec, entry);
-  renderMessages().catch(() => {});
-}
-let retryTimer = null;
-function scheduleRetry(delay = 1500) {
-  if (retryTimer) return;
-  retryTimer = setTimeout(() => {
-    retryTimer = null;
-    retryFailed().catch(() => {});
-  }, delay);
-}
-async function retryFailed({ force = false } = {}) {
-  const c = cur;
-  if (!c || c.closed || c.retrying) return 0;
-  const now = Date.now();
-  const due = (c.rec.retry || []).filter((x) => force || x.next <= now).sort((a, b) => a.seq - b.seq);
-  if (!due.length) return 0;
-  c.retrying = true;
-  let fixed = 0;
-  try {
-    let i = 0;
-    while (i < due.length && cur === c && !c.closed) {
-      const from = due[i].seq;
-      const r = await api(c.keys.roomId, c.keys.accessToken, `/fetch?after=${from - 1}`).catch(() => null);
-      if (!r || r.status !== 200 || cur !== c) break;
-      const rows = r.data.messages || [];
-      const bySeq = new Map(rows.map((x) => [x.seq, x]));
-      const maxSeq = rows.length ? rows[rows.length - 1].seq : from;
-      while (i < due.length && (due[i].seq <= maxSeq || rows.length < 500)) {
-        const e = due[i++];
-        const row = bySeq.get(e.seq);
-        if (!row) {
-          clearFailed(e.seq); // на сервере уже нет (срок хранения) — повторять нечего
-          continue;
-        }
-        await ingest(row, { retry: true }).catch(() => {});
-        if (!(c.rec.retry || []).some((x) => x.seq === e.seq)) fixed++;
-      }
-      if (rows.length < 500) break;
-    }
-  } finally {
-    c.retrying = false;
-  }
-  if (fixed && cur === c) renderMessages().catch(() => {});
-  return fixed;
-}
-
-// v38: один fetch за раз (раньше на подключении их шло 2–3 параллельно по
-// одному диапазону — гонка с заглушками «ключ недоступен») и докачка
-// страницами: сервер отдаёт не больше 500 за запрос, а после долгого
-// офлайна (или часа группового звонка с heartbeat) их больше — хвост
-// раньше не докачивался до следующего открытия.
-function fetchMissed() {
-  const c = cur;
-  if (!c) return Promise.resolve();
-  if (c.fetching) {
-    c.fetchAgain = true;
-    return c.fetching;
-  }
-  c.fetching = (async () => {
-    try {
-      let pages = 0;
-      do {
-        c.fetchAgain = false;
-        const r = await api(c.keys.roomId, c.keys.accessToken, `/fetch?after=${c.rec.lastSeq || 0}`).catch(
-          () => null
-        );
-        if (!r || cur !== c) return;
-        // v29: комната удалена на сервере, пока мы были офлайн.
-        if (r.status === 410) {
-          await handleRemoteDeleted(c.rec.roomId);
-          return;
-        }
-        if (r.status !== 200) return;
-        const rows = r.data.messages || [];
-        for (const item of rows) await ingest(item, { viaFetch: true });
-        if (rows.length >= 500) c.fetchAgain = true;
-      } while (c.fetchAgain && ++pages < 40 && cur === c && !c.closed);
-    } finally {
-      c.fetching = null;
-    }
-    if (cur === c && (c.rec.retry || []).some((x) => x.next <= Date.now())) scheduleRetry();
-  })();
-  return c.fetching;
-}
-let fetchSoonTimer = null;
-function scheduleFetchMissed(delay = 700) {
-  if (fetchSoonTimer) return;
-  fetchSoonTimer = setTimeout(() => {
-    fetchSoonTimer = null;
-    fetchMissed().catch(() => {});
-  }, delay);
-}
-
-// v38: «Пересинхронизировать шифрование» (меню чата): приостановить
-// Double Ratchet, повторить все нерасшифрованные и заново пройти историю
-// сервера (до 30 дней): сохранённое пропускается по хэшу, ранее
-// потерянное расшифровывается из корней цепочек.
-async function resyncRoom() {
-  const c = cur;
-  if (!c) return;
-  note('Пересинхронизация шифрования…');
-  suspendDr('manual');
-  c.drFails = 0;
-  await queueStubsForRetry();
-  const before = (c.rec.retry || []).length;
-  const fixed = await healHistory(c, { force: true });
-  if (cur !== c) return;
-  const left = (c.rec.retry || []).length;
-  note(
-    `Готово: восстановлено ${fixed}` +
-      (before ? ` (в очереди было ${before})` : '') +
-      (left ? `; не открылось ${left} — отправитель неизвестен или ключ удалён храповиком` : '') +
-      '. Новые сообщения идут в устойчивом режиме цепочек.'
-  );
-  renderMessages().catch(() => {});
-}
-
-// Заглушки (ratchetMiss/undecrypted) с seq — в очередь повтора.
-async function queueStubsForRetry() {
-  const c = cur;
-  if (!c) return 0;
-  const items = await roomMessages(c.rec.roomId);
-  if (!Array.isArray(c.rec.retry)) c.rec.retry = [];
-  const have = new Set(c.rec.retry.map((x) => x.seq));
-  let n = 0;
-  for (const it of items) {
-    if (!it.msg?.ratchetMiss || !Number.isFinite(it.seq) || have.has(it.seq)) continue;
-    c.rec.retry.push({ seq: it.seq, n: 0, next: 0, why: it.msg.undecrypted || 'miss' });
-    n++;
-  }
-  if (c.rec.retry.length > RETRY_MAX) c.rec.retry.splice(0, c.rec.retry.length - RETRY_MAX);
-  if (n) saveRoom(c.rec).catch(() => {});
-  return n;
-}
-
-// v38: «лечение» истории: повтор очереди и повторный проход серверной
-// истории (до 30 дней) — сохранённое пропускается по хэшу, а сообщения,
-// которые версии ≤ v37 молча выбросили (разрыв цепочки > 1000, гонки),
-// расшифровываются заново. Без уведомлений; один раз на комнату после
-// обновления и вручную из меню.
-async function healHistory(c, { force = false } = {}) {
-  if (!c || cur !== c) return 0;
-  // hash -> была ли заглушкой (для подсчёта восстановленного)
-  const before = new Map((await roomMessages(c.rec.roomId)).map((x) => [x.hash, !!x.msg?.ratchetMiss]));
-  c.healing = true;
-  try {
-    await retryFailed({ force });
-    const keepSeq = c.rec.lastSeq || 0;
-    c.healKeepSeq = keepSeq;
-    c.rec.lastSeq = 0;
-    await fetchMissed();
-    if (cur === c && (c.rec.lastSeq || 0) < keepSeq) c.rec.lastSeq = keepSeq;
-    c.rec.healV = 38;
-    await saveRoom(c.rec);
-  } finally {
-    c.healing = false;
-  }
-  if (cur !== c) return 0;
-  let n = 0;
-  for (const it of await roomMessages(c.rec.roomId)) {
-    if (it.msg?.ratchetMiss) continue;
-    if (!before.has(it.hash) || before.get(it.hash) === true) {
-      if (!it.mine && !CONTROL_TYPES.has(it.msg?.type)) n++;
-    }
-  }
-  return n;
-}
-
-// ---------- v28: транспортный менеджер и резервный канал ----------
-// Основной канал — воркер (WS + HTTP, поведение не менялось). При его
-// недоступности дольше порога менеджер переключает комнату на
-// FallbackTransport (MQTT live + Nostr store); сообщения этого периода
-// помечаются pendingWorkerSync и при возврате воркера публикуются в него
-// ровно тем же blob (серверный дедуп по хэшу съедает дубли).
-async function workerHealthOk() {
-  try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 2500);
-    const r = await fetch(workerBase() + '/health', { signal: ctl.signal, cache: 'no-store' });
-    clearTimeout(t);
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
-async function healthTick() {
-  if (!cur || cur.closed || !cur.mgr) return;
-  // v38: живой WS воркера — уже доказательство его здоровья; раньше каждая
-  // открытая комната дёргала /health раз в 5 секунд (≈17 000 запросов в
-  // сутки на устройство — заметная доля бесплатного лимита воркера).
-  if (cur.transportMode === 'worker' && cur.ws && cur.ws.readyState === 1) {
-    // Страховка от «полуоткрытого» сокета мобильной сети: долгое молчание
-    // WS на видимом экране — один дешёвый fetch раз в 90 с.
-    const now = Date.now();
-    if (
-      document.visibilityState === 'visible' &&
-      now - (cur.lastWsAt || 0) > 90000 &&
-      now - (cur.lastSafetyFetch || 0) > 90000
-    ) {
-      cur.lastSafetyFetch = now;
-      fetchMissed().catch(() => {});
-    }
-    return;
-  }
-  if (navigator.onLine === false) return;
-  const ok = await workerHealthOk();
-  if (!cur || cur.closed || !cur.mgr) return;
-  if (ok) await cur.mgr.noteWorkerSuccess().catch(() => {});
-  else await cur.mgr.noteWorkerFailure().catch(() => {});
-}
-function applyTransportMode(mode) {
-  if (!cur) return;
-  cur.transportMode = mode === 'worker' ? 'worker' : 'fallback';
-  const fb = cur.transportMode === 'fallback';
-  $('#chatFallbackBadge')?.classList.toggle('hidden', !fb);
-  const attach = $('#chatAttach');
-  if (attach) {
-    attach.disabled = fb;
-    attach.title = fb
-      ? 'Файлы недоступны на резервном канале'
-      : 'Прикрепить файл';
-  }
-  const mic = $('#chatMic');
-  if (mic) {
-    mic.disabled = fb;
-    mic.title = fb ? 'Голосовые недоступны на резервном канале' : 'Голосовое сообщение';
-  }
-  if (fb) {
-    status('Резервный канал');
-    try {
-      cur.ws?.close();
-    } catch {}
-    // Подтянуть историю из Nostr store за время отсутствия воркера
-    // (fetchSince ждёт курсор в секундах, fallbackSince храним в мс).
-    cur.fb
-      ?.fetchSince(Math.floor((cur.rec.fallbackSince || 0) / 1000))
-      .then(async (items) => {
-        let maxTs = cur.rec.fallbackSince || 0;
-        for (const it of items || []) {
-          const blob = typeof it === 'string' ? it : it?.blob;
-          if (blob) await ingest({ blob }).catch(() => {});
-          const ts = typeof it === 'object' ? it?.ts || 0 : 0;
-          if (ts > maxTs) maxTs = ts;
-        }
-        if (cur && maxTs > (cur.rec.fallbackSince || 0)) {
-          cur.rec.fallbackSince = maxTs;
-          saveRoom(cur.rec).catch(() => {});
-        }
-      })
-      .catch(() => {});
-  } else {
-    status(ONLINE);
-    if (!cur.ws || cur.ws.readyState > 1) connectWs();
-    fetchMissed().catch(() => {});
-  }
-  renderPresence();
-}
-// Ресинк при возврате воркера: pending-сообщения публикуются в воркер тем
-// же blob, затем докачивается пропущенное. Ошибка любого шага оставляет
-// комнату на резервном канале (менеджер это обработает).
-async function resyncToWorker() {
-  if (!cur) return;
-  const roomId = cur.rec.roomId;
-  const items = await roomMessages(roomId);
-  for (const it of items) {
-    if (!it.pendingWorkerSync || !it.blobB64) continue;
-    const r = await api(roomId, cur.keys.accessToken, '/msg', {
-      method: 'POST',
-      body: { blob: it.blobB64, dev: cur.device.devicePub },
-    }).catch(() => null);
-    if (!r || (r.status !== 200 && r.status !== 201 && r.status !== 409)) {
-      throw new Error('ресинк: воркер отклонил сообщение (' + (r?.status || 'нет сети') + ')');
-    }
-    const upd = { ...it };
-    delete upd.pendingWorkerSync;
-    delete upd.blobB64;
-    if (Number.isFinite(r.data?.seq)) upd.seq = r.data.seq;
-    await putMsg(roomId, upd);
-  }
-  await fetchMissed();
-}
-async function setupTransport() {
-  if (!cur || cur.mgr) return;
-  let secret = null;
-  try {
-    secret = await getChatNostrSecret();
-  } catch {}
-  const fb = new FallbackTransport({
-    roomId: cur.keys.roomId,
-    brokers: CONFIG.MQTT_BROKERS || [],
-    relays: CONFIG.NOSTR_RELAYS || [],
-    ntfyBase: CONFIG.NTFY_BASE || '',
-    secret,
-    onBlob: (blob) => {
-      ingest({ blob }).catch(() => {});
-    },
-  });
-  cur.fb = fb;
-  cur.transportMode = 'worker';
-  cur.mgr = new ChatTransportManager({
-    fallback: fb,
-    thresholdMs: 8000,
-    onModeChange: (m) => applyTransportMode(m),
-    onResync: () => resyncToWorker(),
-  });
-  cur.healthTimer = setInterval(() => {
-    healthTick().catch(() => {});
-  }, 5000);
-}
-
-// ---------- WebSocket ----------
-function connectWs() {
-  if (!cur || cur.closed) return;
-  const url = chatBase(cur.keys.roomId).replace(/^http/, 'ws') + '/listen';
-  let ws;
-  try {
-    ws = new WebSocket(url);
-  } catch {
-    scheduleReconnect();
-    return;
-  }
-  cur.ws = ws;
-  ws.onopen = () => {
-    cur.backoff = 1000;
-    // v28 (D): живой WS воркера — сигнал менеджеру каналов.
-    cur.mgr?.noteWorkerSuccess().catch(() => {});
-    ws.send(JSON.stringify({ type: 'auth', token: cur.keys.accessToken, dev: cur.device.devicePub }));
-  };
-  ws.onmessage = async (e) => {
-    let m;
-    try {
-      m = JSON.parse(e.data);
-    } catch {
-      return;
-    }
-    if (cur) cur.lastWsAt = Date.now();
-    if (m.type === 'msg') await ingest({ seq: m.seq, blob: m.blob, ts: m.ts }, { live: true }).catch(() => {});
-    else if (m.type === 'ready') {
-      if (Array.isArray(m.online) && cur) {
-        cur.online = new Set(m.online.filter((d) => d !== cur.device.devicePub));
-        renderPresence();
-        renderMembersList();
-      }
-      if (Array.isArray(m.members)) {
-        for (const s of m.members) applyReceipt(s.dev, s.delivered, s.read);
-      }
-      fetchMissed().catch(() => {});
-    } else if (m.type === 'presence') applyPresence(m.dev, !!m.online, m.ts);
-    else if (m.type === 'receipt') applyReceipt(m.dev, m.delivered, m.read);
-    else if (m.type === 'typing' && cur) {
-      cur.typing = { dev: m.dev, until: Date.now() + 4000 };
-      renderPresence();
-      if (cur.typingTimer) clearTimeout(cur.typingTimer);
-      cur.typingTimer = setTimeout(() => renderPresence(), 4100);
-    }
-  };
-  ws.onclose = () => {
-    if (!cur || cur.closed) return;
-    // v28 (D): обрыв WS кормит менеджер; в fallback переподключения к
-    // воркеру не крутим — возвратом управляет health-цикл менеджера.
-    cur.mgr?.noteWorkerFailure().catch(() => {});
-    if (cur.transportMode === 'fallback') return;
-    status('Офлайн, переподключение…');
-    scheduleReconnect();
-  };
-  ws.onerror = () => {
-    try {
-      ws.close();
-    } catch {}
-  };
-}
-function scheduleReconnect() {
-  if (!cur || cur.closed || cur.transportMode === 'fallback') return;
-  const wait = cur.backoff;
-  cur.backoff = Math.min(30000, cur.backoff * 2);
-  setTimeout(() => {
-    if (cur && !cur.closed) {
-      connectWs();
-      fetchMissed().catch(() => {});
-    }
-  }, wait);
-}
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && cur && !cur.closed) {
-    fetchMissed()
-      .then(() => sendReadAck())
-      .catch(() => {});
-  }
-});
-
-// ---------- Файлы (v25) ----------
-function setFileProgress(pct, label) {
-  const box = $('#chatFileProgress');
-  const fill = $('#chatFileProgressFill');
-  const text = $('#chatFileProgressText');
-  if (!box || !fill || !text) return;
-  if (pct === null) {
-    box.classList.add('hidden');
-    return;
-  }
-  box.classList.remove('hidden');
-  fill.style.width = Math.round(pct * 100) + '%';
-  text.textContent = label || '';
-}
-
-// extra.voice = {durSec} — голосовое сообщение: тот же файловый канал и то
-// же шифрование, отличается только тип сообщения ('voice') и метаданные.
-async function uploadFile(file, extra = {}) {
-  if (!cur) return;
-  if (!cur.rec.nick) return note('Сначала введите никнейм.');
-  // v28 (D): файловый канал существует только у воркера.
-  if (cur.transportMode === 'fallback') {
-    return note('Файлы и голосовые недоступны на резервном канале: дождитесь возврата основного сервера.');
-  }
-  if (file.size > FILE_MAX_BYTES) {
-    return note(`Файл больше ${fmtSize(FILE_MAX_BYTES)} — лимит для чата.`);
-  }
-  try {
-    const raw = new Uint8Array(await file.arrayBuffer());
-    const keyRaw = crypto.getRandomValues(new Uint8Array(32));
-    const fileKey = await importFileKey(keyRaw);
-    const salt = crypto.getRandomValues(new Uint8Array(4));
-    const fileId = b64u.enc(crypto.getRandomValues(new Uint8Array(12)));
-    const total = Math.max(1, Math.ceil(raw.length / FILE_CHUNK_PT));
-    for (let idx = 0; idx < total; idx++) {
-      const chunk = raw.subarray(idx * FILE_CHUNK_PT, (idx + 1) * FILE_CHUNK_PT);
-      const ct = await encryptFileChunk(fileKey, salt, idx, chunk);
-      const r = await api(cur.keys.roomId, cur.keys.accessToken, '/file', {
-        method: 'POST',
-        body: { fileId, idx, total, blob: b64u.enc(ct) },
-      });
-      if (r.status !== 200 && r.status !== 201) {
-        throw new Error('Сервер отклонил чанк файла: ' + r.status);
-      }
-      setFileProgress((idx + 1) / total, `Отправка файла ${idx + 1}/${total}…`);
-    }
-    const meta = {
-      fileId,
-      name: file.name || 'файл',
-      size: raw.length,
-      mime: file.type || 'application/octet-stream',
-      chunks: total,
-      salt: b64u.enc(salt),
-      fileKey: b64u.enc(keyRaw),
-    };
-    if (extra.voice) meta.durSec = extra.voice.durSec || 0;
-    await sendMsg(extra.voice ? 'voice' : 'file', JSON.stringify(meta));
-    note(extra.voice ? 'Голосовое сообщение отправлено.' : 'Файл отправлен.');
-  } catch (e) {
-    note('Не удалось отправить файл: ' + e.message);
-  } finally {
-    setFileProgress(null);
-  }
-}
-
-// opts.auto — автозагрузка (картинки ≤3 МБ и голосовые): не дёргаем
-// сохранение файла по завершении, только заполняем кэш и превью/плеер.
-async function downloadFile(meta, card, opts = {}) {
-  const st = fileState.get(meta.fileId) || {};
-  if (st.busy) return;
-  if (st.url) {
-    if (opts.auto) return;
-    // Уже скачан: для картинок превью уже в ленте, кнопка сохраняет файл.
-    const a = document.createElement('a');
-    a.href = st.url;
-    a.download = meta.name || 'файл';
-    a.click();
-    return;
-  }
-  st.busy = true;
-  st.error = '';
-  fileState.set(meta.fileId, st);
-  renderFileCardState(meta, card, st);
-  try {
-    const fileKey = await importFileKey(b64u.dec(meta.fileKey));
-    const salt = b64u.dec(meta.salt);
-    const parts = [];
-    for (let idx = 0; idx < meta.chunks; idx++) {
-      const r = await api(
-        cur.keys.roomId,
-        cur.keys.accessToken,
-        `/file?fileId=${encodeURIComponent(meta.fileId)}&idx=${idx}`
-      );
-      if (r.status !== 200 || !r.data.blob) throw new Error('чанк ' + idx + ' недоступен');
-      parts.push(await decryptFileChunk(fileKey, salt, idx, b64u.dec(r.data.blob)));
-      st.progress = (idx + 1) / meta.chunks;
-      renderFileCardState(meta, card, st);
-    }
-    const blob = new Blob(parts, { type: meta.mime || 'application/octet-stream' });
-    st.url = URL.createObjectURL(blob);
-    st.busy = false;
-    st.progress = 1;
-    fileState.set(meta.fileId, st);
-    renderFileCardState(meta, card, st);
-    if (!opts.auto && !(meta.mime || '').startsWith('image/')) {
-      const a = document.createElement('a');
-      a.href = st.url;
-      a.download = meta.name || 'файл';
-      a.click();
-    }
-  } catch (e) {
-    st.busy = false;
-    st.error = 'Ошибка загрузки: ' + e.message;
-    fileState.set(meta.fileId, st);
-    renderFileCardState(meta, card, st);
-  }
-}
-
-function renderFileCardState(meta, card, st) {
-  if (!card) return;
-  const btn = card.querySelector('.chat-file-btn');
-  const info = card.querySelector('.chat-file-state');
-  const prev = card.querySelector('.chat-file-preview');
-  const barFill = card.querySelector('.chat-file-bar-fill');
-  if (barFill) {
-    barFill.style.width = st.busy || st.progress ? Math.round((st.progress || 0) * 100) + '%' : '0%';
-  }
-  if (btn) {
-    btn.disabled = !!st.busy;
-    btn.textContent = st.busy
-      ? `Загрузка ${Math.round((st.progress || 0) * 100)}%`
-      : st.url
-        ? 'Сохранить файл'
-        : st.error
-          ? 'Повторить'
-          : 'Скачать';
-  }
-  if (info) info.textContent = st.error || '';
-  if (prev && st.url && (meta.mime || '').startsWith('image/') && !prev.firstChild) {
-    const img = document.createElement('img');
-    img.className = 'chat-file-img';
-    img.alt = meta.name || 'изображение';
-    img.src = st.url;
-    prev.append(img);
-  }
-}
-
-// ---------- Голосовые сообщения (v26) ----------
-const VOICE_MAX_MS = 10 * 60000;
-let voiceRec = null; // {mr, chunks, stream, startedAt, timer, discard}
-
-const fmtDur = (sec) => {
-  const s = Math.max(0, Math.round(sec || 0));
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-};
-
-function voiceUiRecording(on) {
-  $('#chatRecBar')?.classList.toggle('hidden', !on);
-  const bar = $('#chatroom .chat-input-bar');
-  if (bar) bar.classList.toggle('hidden', on);
-}
-
-async function startVoiceRec() {
-  if (!cur) return;
-  if (!cur.rec.nick) return note('Сначала введите никнейм.');
-  if (voiceRec) return;
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (e) {
-    return note('Нет доступа к микрофону: ' + (e?.message || e));
-  }
-  try {
-    const mime =
-      ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'].find(
-        (m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
-      ) || '';
-    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
-    const rec = { mr, chunks: [], stream, startedAt: Date.now(), timer: null, discard: false };
-    voiceRec = rec;
-    mr.ondataavailable = (e) => {
-      if (e.data?.size) rec.chunks.push(e.data);
-    };
-    mr.onstop = () => finishVoiceRec(rec);
-    mr.start(250);
-    voiceUiRecording(true);
-    const tick = () => {
-      const el = $('#chatRecTime');
-      if (el) el.textContent = fmtDur((Date.now() - rec.startedAt) / 1000);
-      if (Date.now() - rec.startedAt >= VOICE_MAX_MS) stopVoiceRec(true); // автостоп 10 минут — отправить
-    };
-    tick();
-    rec.timer = setInterval(tick, 250);
-  } catch (e) {
-    stream.getTracks().forEach((t) => t.stop());
-    voiceRec = null;
-    note('Не удалось начать запись: ' + (e?.message || e));
-  }
-}
-
-function stopVoiceRec(send) {
-  if (!voiceRec) return;
-  voiceRec.discard = !send;
-  try {
-    voiceRec.mr.stop();
-  } catch {
-    finishVoiceRec(voiceRec);
-  }
-}
-
-async function finishVoiceRec(rec) {
-  if (voiceRec !== rec) return;
-  voiceRec = null;
-  if (rec.timer) clearInterval(rec.timer);
-  rec.stream?.getTracks().forEach((t) => t.stop());
-  voiceUiRecording(false);
-  if (rec.discard || !rec.chunks.length) return;
-  const type = rec.mr.mimeType || 'audio/webm';
-  const blob = new Blob(rec.chunks, { type });
-  const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm';
-  const durSec = Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000));
-  const file = new File([blob], 'voice.' + ext, { type });
-  await uploadFile(file, { voice: { durSec } }).catch(() => {});
-}
-
-// Плеер голосового: play/pause, прогресс по timeupdate, перемотка кликом.
-function wireVoicePlayer(wrap, meta) {
-  const btn = wrap.querySelector('.chat-voice-play');
-  const bar = wrap.querySelector('.chat-voice-bar');
-  const fill = wrap.querySelector('.chat-voice-fill');
-  const time = wrap.querySelector('.chat-voice-time');
-  const total = meta.durSec || 0;
-  if (time) time.textContent = fmtDur(total);
-  const ensureAudio = () => {
-    let a = voiceAudio.get(meta.fileId);
-    if (!a) {
-      const st = fileState.get(meta.fileId);
-      if (!st?.url) return null;
-      a = new Audio(st.url);
-      voiceAudio.set(meta.fileId, a);
-      a.addEventListener('timeupdate', () => {
-        const dur = a.duration || total;
-        if (fill && dur) fill.style.width = (a.currentTime / dur) * 100 + '%';
-        if (time) time.textContent = fmtDur(a.currentTime) + ' / ' + fmtDur(dur);
-      });
-      a.addEventListener('ended', () => {
-        if (btn) btn.textContent = '▶';
-        if (fill) fill.style.width = '0%';
-        if (time) time.textContent = fmtDur(total);
-      });
-    }
-    return a;
-  };
-  if (btn) {
-    btn.onclick = async () => {
-      const st = fileState.get(meta.fileId);
-      if (!st?.url && !st?.busy) {
-        await downloadFile(meta, wrap.closest('.chat-file') || wrap, { auto: true }).catch(() => {});
-      }
-      const a = ensureAudio();
-      if (!a) return;
-      if (a.paused) {
-        for (const other of voiceAudio.values()) if (other !== a) other.pause();
-        await a.play().catch(() => {});
-        btn.textContent = '⏸';
-      } else {
-        a.pause();
-        btn.textContent = '▶';
-      }
-    };
-  }
-  if (bar) {
-    bar.onclick = (e) => {
-      const a = ensureAudio();
-      if (!a || !a.duration) return;
-      const r = bar.getBoundingClientRect();
-      a.currentTime = ((e.clientX - r.left) / r.width) * a.duration;
-    };
-  }
-}
-
-// ---------- Код приветствия (v25) ----------
-async function pairApi(path, body) {
-  const res = await fetch(workerBase() + path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  let data = {};
-  try {
-    data = await res.json();
-  } catch {}
-  return { status: res.status, data };
-}
-
-// v36: claim по адресу схемы 2 (адрес из медленного KDF, см. codeAccess в
-// crypto.js); при 404 — по адресу ≤ v35, чтобы коды и короткие ссылки,
-// выданные старыми клиентами, продолжали работать до своего срока.
-async function claimCode(acc) {
-  const r = await pairApi('/pair/claim', { codeHash: acc.addr });
-  if (r.status === 404) {
-    const legacy = await pairApi('/pair/claim', { codeHash: acc.legacy.addr });
-    if (legacy.status !== 404) return { r: legacy, key: acc.legacy.key };
-  }
-  return { r, key: acc.key };
-}
-
-async function createInvite() {
-  if (!cur) return;
-  try {
-    const seed = await decryptWithVault(cur.rec.seedEnc);
-    const code = newGreetCode();
-    const acc = await codeAccess('greet', code);
-    const blob = await sealCodeBlob(acc.key, { seed, roomId: cur.rec.roomId });
-    const codeHash = acc.addr;
-    const r = await pairApi('/pair/create', {
-      codeHash,
-      blob,
-      exp: Date.now() + 15 * 60000,
-    });
-    if (r.status !== 200 && r.status !== 201) {
-      throw new Error('сервер пар недоступен (' + r.status + ') — воркер v25 задеплоен?');
-    }
-    const box = $('#chatGreetBox');
-    if (!box) return;
-    $('#greetCode').textContent = code;
-    const linkInput = $('#greetLink');
-    if (linkInput) linkInput.value = greetLinkOf(code);
-    const qr = $('#greetQr');
-    if (qr && typeof qrcode !== 'undefined') {
-      try {
-        const q = qrcode(0, 'M');
-        q.addData(greetLinkOf(code));
-        q.make();
-        qr.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
-      } catch {
-        qr.textContent = '';
-      }
-    }
-    box.classList.remove('hidden');
-    note('Покажите код собеседнику или отправьте короткую ссылку. Код одноразовый, действует 15 минут.');
-  } catch (e) {
-    note('Не удалось создать код приглашения: ' + e.message);
-  }
-}
-
-// Возвращает true, если комната открыта; false — если код не подошёл
-// (чтобы redeemCode мог попробовать второе пространство кодов).
-async function redeemGreet(codeRaw, opts = {}) {
-  const code = String(codeRaw || '').trim();
-  if (!/^[A-Za-z0-9_-]{9}$/.test(code)) {
-    note('Код подключения — 9 символов.');
-    return false;
-  }
-  try {
-    note('Проверяю код подключения…');
-    const { r, key } = await claimCode(await codeAccess('greet', code));
-    if (r.status === 404) {
-      if (!opts.quiet) note('Код не найден или уже использован.');
-      return false;
-    }
-    if (r.status === 410) {
-      note('Код истёк (15 минут) или лимит попыток исчерпан. Попросите новый.');
-      return false;
-    }
-    if (r.status !== 200 || !r.data.blob) {
-      note('Сервер пар отклонил запрос: ' + r.status);
-      return false;
-    }
-    const payload = await openCodeBlob(key, r.data.blob);
-    if (!payload?.seed) {
-      note('Не удалось расшифровать приглашение этим кодом.');
-      return false;
-    }
-    note('');
-    await openRoomBySeed(payload.seed);
-    return true;
-  } catch (e) {
-    note('Не удалось подключиться по коду: ' + e.message);
-    return false;
-  }
-}
-
-// ---------- Постоянная короткая ссылка (v26, алиас PairingDO) ----------
-async function aliasCreate() {
-  if (!cur) return false;
-  try {
-    const seed = await decryptWithVault(cur.rec.seedEnc);
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const code = newJoinCode();
-      const acc = await codeAccess('alias', code);
-      const codeHash = acc.addr;
-      const blob = await sealCodeBlob(acc.key, { seed, roomId: cur.rec.roomId });
-      const admin = b64u.enc(crypto.getRandomValues(new Uint8Array(16))); // 128 бит
-      const adminHash = await sha256hex(admin);
-      const r = await pairApi('/pair/alias', { codeHash, blob, adminHash });
-      if (r.status === 409) continue; // код занят — берём другой
-      if (r.status !== 200 && r.status !== 201) {
-        throw new Error('сервер пар недоступен (' + r.status + ') — воркер v26 задеплоен?');
-      }
-      cur.rec.alias = { code, adminEnc: await encryptWithVault(admin), scheme: 2, createdAt: Date.now() };
-      await saveRoom(cur.rec);
-      return true;
-    }
-    throw new Error('не удалось подобрать свободный код');
-  } catch (e) {
-    note('Не удалось создать короткую ссылку: ' + e.message);
-    return false;
-  }
-}
-
-async function aliasRevokeCurrent() {
-  if (!cur?.rec.alias) return true;
-  try {
-    const admin = await decryptWithVault(cur.rec.alias.adminEnc);
-    const codeHash = await codeAddrForScheme('alias', cur.rec.alias.code, cur.rec.alias.scheme);
-    const r = await pairApi('/pair/revoke', { codeHash, admin });
-    if (r.status !== 200 && r.status !== 404) {
-      throw new Error('сервер пар отклонил отзыв (' + r.status + ')');
-    }
-    cur.rec.alias = null;
-    await saveRoom(cur.rec);
-    return true;
-  } catch (e) {
-    note('Не удалось отозвать короткую ссылку: ' + e.message);
-    return false;
-  }
-}
-
-async function renderAliasBox() {
-  const box = $('#chatAliasBox');
-  if (!box || !cur) return;
-  box.classList.remove('hidden');
-  // Создание — автоматически при первом открытии блока.
-  if (!cur.rec.alias) await aliasCreate();
-  const input = $('#aliasLink');
-  const state = $('#aliasState');
-  if (cur.rec.alias) {
-    if (input) input.value = joinLinkOf(cur.rec.alias.code);
-    if (state) {
-      state.textContent =
-        'Постоянная короткая ссылка этой комнаты. Работает, пока вы её не отзовёте; длинная ссылка при этом остаётся главным ключом.' +
-        (cur.rec.alias.scheme === 2
-          ? ''
-          : ' Ссылка выпущена старой версией (адрес на сервере без медленного KDF) — нажмите «Перевыпустить», чтобы перейти на усиленную схему.');
-    }
-  } else if (state) {
-    state.textContent = 'Короткая ссылка не создана.';
-  }
-}
-
-// Подключение по постоянной ссылке. Возвращает true при успехе.
-async function redeemJoin(codeRaw) {
-  const code = String(codeRaw || '').trim();
-  if (!/^[A-Za-z0-9_-]{9}$/.test(code)) {
-    note('Код подключения — 9 символов.');
-    return false;
-  }
-  try {
-    note('Проверяю короткую ссылку…');
-    const { r, key } = await claimCode(await codeAccess('alias', code));
-    if (r.status === 404) return false;
-    if (r.status === 429) {
-      note('Слишком много подключений по этому коду за час — подождите или попросите длинную ссылку.');
-      return false;
-    }
-    if (r.status !== 200 || !r.data.blob) {
-      note('Сервер пар отклонил запрос: ' + r.status);
-      return false;
-    }
-    const payload = await openCodeBlob(key, r.data.blob);
-    if (!payload?.seed) {
-      note('Не удалось расшифровать приглашение этим кодом.');
-      return false;
-    }
-    note('');
-    await openRoomBySeed(payload.seed);
-    return true;
-  } catch (e) {
-    note('Не удалось подключиться по короткой ссылке: ' + e.message);
-    return false;
-  }
-}
-
-// Единая точка входа для кода из 9 символов (поле на главном экране).
-// Пространства разные: greet — одноразовый, join — постоянный. Порядок
-// важен: СНАЧАЛА пробуем алиас (его claim ничего не сжигает), при 404 —
-// greet (его claim одноразовый, поэтому он второй, а не первый).
-async function redeemCode(code) {
-  if (await redeemJoin(code)) return;
-  await redeemGreet(code);
-}
-
-// ---------- Кодовое слово (v30, rendezvous — режим 'word' PairingDO) ----------
-// Владелец задаёт фразу из 3+ слов; blob {seed, roomId} запечатан ключом
-// PBKDF2(фраза, 'zv-word-v1', 600k). Встреча одноразовая, TTL 24 часа,
-// отзыв — тем же /pair/revoke по admin, что и алиас. Фраза на сервере не
-// бывает: только SHA-256 её нормализованной формы как адрес DO.
-const WORD_TTL_MS_CLIENT = 24 * 3600000;
-
-const wordParts = (phraseRaw) => {
-  const norm = normalizeWordPhrase(phraseRaw);
-  return { norm, words: norm ? norm.split(' ') : [] };
-};
-
-// Отзыв встречи из записи комнаты (общий путь для «Отключить», смены
-// фразы, удаления чата). 404 = встречи уже нет (истекла/использована) — ок.
-async function wordRevokeCurrent(rec) {
-  if (!rec?.word) return true;
-  const admin = await decryptWithVault(rec.word.adminEnc);
-  const phrase = await decryptWithVault(rec.word.phraseEnc);
-  const codeHash = await codeAddrForScheme('word', phrase, rec.word.scheme);
-  const r = await pairApi('/pair/revoke', { codeHash, admin });
-  if (r.status !== 200 && r.status !== 404) {
-    throw new Error('сервер пар отклонил отзыв (' + r.status + ')');
-  }
-  rec.word = null;
-  await saveRoom(rec);
-  return true;
-}
-
-async function wordEnable() {
-  if (!cur) return;
-  const { norm, words } = wordParts($('#wordPhraseInput')?.value || '');
-  if (words.length < 3) {
-    renderWordHint(words.length);
-    note('Кодовая фраза — минимум 3 слова: одно-два слова перебираются слишком быстро.');
-    return;
-  }
-  try {
-    // Прежняя встреча гасится, чтобы живых фраз у комнаты было не две.
-    if (cur.rec.word) await wordRevokeCurrent(cur.rec).catch(() => {});
-    const seed = await decryptWithVault(cur.rec.seedEnc);
-    const acc = await codeAccess('word', norm);
-    const blob = await sealCodeBlob(acc.key, { seed, roomId: cur.rec.roomId });
-    const codeHash = acc.addr;
-    const admin = b64u.enc(crypto.getRandomValues(new Uint8Array(16))); // 128 бит
-    const adminHash = await sha256hex(admin);
-    const exp = Date.now() + WORD_TTL_MS_CLIENT;
-    const r = await pairApi('/pair/word', { codeHash, blob, exp, adminHash });
-    if (r.status === 409) {
-      note('Эта фраза уже занята другой встречей — придумайте другую: адрес фразы один на всех.');
-      return;
-    }
-    if (r.status !== 200 && r.status !== 201) {
-      throw new Error('сервер пар недоступен (' + r.status + ') — воркер v30 задеплоен?');
-    }
-    cur.rec.word = {
-      phraseEnc: await encryptWithVault(norm),
-      adminEnc: await encryptWithVault(admin),
-      exp,
-      scheme: 2,
-    };
-    await saveRoom(cur.rec);
-    await renderWordBox();
-    note('Доступ по кодовому слову включён на 24 часа. Продиктуйте фразу собеседнику голосом: встреча одноразовая, после его входа фраза сгорит.');
-  } catch (e) {
-    note('Не удалось включить доступ по слову: ' + e.message);
-  }
-}
-
-async function wordDisable() {
-  if (!cur) return;
-  try {
-    await wordRevokeCurrent(cur.rec);
-    await renderWordBox();
-    note('Доступ по кодовому слову отключён.');
-  } catch (e) {
-    note('Не удалось отключить доступ по слову: ' + e.message);
-  }
-}
-
-function renderWordHint(count) {
-  const hint = $('#wordPhraseHint');
-  if (!hint) return;
-  hint.textContent =
-    count < 3
-      ? `Слов: ${count} из минимум 3. Регистр, лишние пробелы и буква ё не важны.`
-      : `Слов: ${count}. Фразу такой длины подобрать практически невозможно.`;
-}
-
-async function renderWordBox() {
-  const box = $('#chatWordBox');
-  if (!box || !cur) return;
-  box.classList.remove('hidden');
-  const state = $('#wordState');
-  const input = $('#wordPhraseInput');
-  let w = cur.rec.word;
-  if (w && w.exp <= Date.now()) {
-    // Срок вышел — сервер встречу уже не отдаст; локально просто забываем.
-    cur.rec.word = null;
-    await saveRoom(cur.rec);
-    w = null;
-  }
-  if (w) {
-    try {
-      const phrase = await decryptWithVault(w.phraseEnc);
-      if (input && document.activeElement !== input) {
-        input.value = phrase;
-        renderWordHint(wordParts(phrase).words.length);
-      }
-    } catch {}
-    if (state) {
-      state.textContent =
-        'Активно до ' + fmtDayTime(w.exp) + '. Встреча одноразовая: после первого входа собеседника фраза сгорит.';
-    }
-  } else if (state) {
-    state.textContent = 'Сейчас доступ по слову выключен.';
-  }
-  const disableBtn = $('#wordDisable');
-  if (disableBtn) disableBtn.disabled = !w;
-}
-
-// Поиск чата по фразе с главного экрана. Возвращает true при успехе.
-// Любая неудача (нет встречи, истекла, сожжена попытками, blob не
-// открылся этой фразой) — одним понятным текстом, без деталей сервера.
-async function redeemWord(phraseRaw) {
-  const { norm, words } = wordParts(phraseRaw);
-  const fail = () =>
-    note('Чат по этой фразе не найден: проверьте фразу или срок (встреча живёт сутки и одноразовая).');
-  if (!norm || words.length < 2) {
-    fail();
-    return false;
-  }
-  try {
-    note('Ищу чат по кодовой фразе…');
-    const { r, key } = await claimCode(await codeAccess('word', norm));
-    if (r.status !== 200 || !r.data.blob) {
-      fail();
-      return false;
-    }
-    const payload = await openCodeBlob(key, r.data.blob);
-    if (!payload?.seed) {
-      fail();
-      return false;
-    }
-    note('');
-    await openRoomBySeed(payload.seed);
-    return true;
-  } catch (e) {
-    note('Не удалось найти чат по фразе: ' + e.message);
-    return false;
-  }
-}
+// Код приветствия, постоянная короткая ссылка и кодовое слово — chat-invite.js (v44)
 
 // ---------- Присутствие и шапка ----------
-function knownMembers() {
+export function knownMembers() {
   if (!cur) return [];
   const devs = new Set([
     cur.device.devicePub,
@@ -4052,12 +2635,12 @@ function knownMembers() {
 }
 
 // v39: участники по людям: Map(personKey → {key, devs, nick}).
-function knownPersons() {
+export function knownPersons() {
   const obj = {};
   for (const d of knownMembers()) obj[d] = cur.rec.members?.[d] || {};
   return groupPersons(obj, ownSetOf(), myProfile()?.master || '');
 }
-function personReceipts(persons) {
+export function personReceipts(persons) {
   const others = [];
   const map = new Map();
   for (const [k, g] of persons) {
@@ -4091,7 +2674,7 @@ function presenceText(total, others, onlineCount) {
   return onlineCount ? `${count} · ${onlineCount} в сети` : count;
 }
 
-function renderPresence() {
+export function renderPresence() {
   const line = $('#chatPresence');
   if (!line || !cur) return;
   const titleEl = $('#chatRoomTitle');
@@ -4120,7 +2703,7 @@ function renderPresence() {
   $('#chatGroupCallBtn')?.classList.toggle('hidden', others.length < 2);
 }
 
-function renderMembersList() {
+export function renderMembersList() {
   const box = $('#chatMembersList');
   if (!box || !cur || box.classList.contains('hidden')) return;
   box.replaceChildren();
@@ -4206,7 +2789,7 @@ function receiptLabel(it) {
 }
 
 // ---------- v27: цитаты, закреп, поиск, сроки жизни ----------
-function excerptOf(it) {
+export function excerptOf(it) {
   const m = it?.msg || {};
   if (m.deleted) return 'Сообщение удалено';
   if (m.type === 'voice') return 'Голосовое сообщение';
@@ -4226,7 +2809,7 @@ const TTL_OPTIONS = [
   { sec: 24 * 3600, label: '24 часа' },
   { sec: 7 * 24 * 3600, label: '7 дней' },
 ];
-const ttlLabel = (sec) => TTL_OPTIONS.find((o) => o.sec === sec)?.label || `${sec} с`;
+export const ttlLabel = (sec) => TTL_OPTIONS.find((o) => o.sec === sec)?.label || `${sec} с`;
 
 // Локальная чистка истёкших исчезающих сообщений (сервер чистит по своему
 // expires_at независимо; здесь — чтобы не висели в ленте офлайн).
@@ -4244,7 +2827,7 @@ async function pruneExpired() {
   if (removed && cur) renderMessages().catch(() => {});
 }
 
-function scrollToMessage(hash, flash = true) {
+export function scrollToMessage(hash, flash = true) {
   const box = $('#chatMessages');
   if (!box || !hash) return;
   const el = box.querySelector(`[data-hash="${hash}"]`);
@@ -4271,7 +2854,7 @@ function scrollToMessage(hash, flash = true) {
   }
 }
 
-function renderPinBar(items) {
+export function renderPinBar(items) {
   const bar = $('#chatPinBar');
   if (!bar || !cur) return;
   const pin = cur.rec.pinned;
@@ -4289,7 +2872,7 @@ function renderPinBar(items) {
   bar.classList.remove('hidden');
 }
 
-function renderTextWithMarks(el, text, q) {
+export function renderTextWithMarks(el, text, q) {
   const needle = (q || '').trim().toLowerCase();
   if (!needle) {
     el.textContent = text;
@@ -4314,7 +2897,7 @@ function renderTextWithMarks(el, text, q) {
 }
 
 // Реакция из UI: toggle по текущему локальному состоянию.
-async function toggleReaction(it, emoji) {
+export async function toggleReaction(it, emoji) {
   if (!cur) return;
   const op = nextReactionOp(it.reactions, cur.device.devicePub, emoji);
   if (!op) return;
@@ -4331,7 +2914,7 @@ function hideMsgMenu() {
   if (cur) cur.menuTarget = null;
 }
 
-function openMsgMenu(it, anchor) {
+export function openMsgMenu(it, anchor) {
   const menu = $('#chatMsgMenu');
   if (!menu || !cur) return;
   if (cur.menuTarget?.hash === it.hash && !menu.classList.contains('hidden')) {
@@ -4348,7 +2931,7 @@ function openMsgMenu(it, anchor) {
   placeMenu(menu, anchor);
 }
 
-function renderReplyBar() {
+export function renderReplyBar() {
   const bar = $('#chatReplyBar');
   if (!bar || !cur) return;
   if (!cur.replyTo) {
@@ -4366,7 +2949,7 @@ function renderReplyBar() {
   bar.classList.remove('hidden');
 }
 
-function renderEditBar() {
+export function renderEditBar() {
   const bar = $('#chatEditBar');
   if (!bar || !cur) return;
   bar.classList.toggle('hidden', !cur.editing);
@@ -4384,772 +2967,12 @@ function renderTtlState() {
   }
 }
 
-// ---------- Рендер ----------
-// Карточка пустой ленты (по центру свободного места, как в Telegram).
-// Пока собеседника нет — с кнопками приглашения из меню комнаты.
-function welcomeCard(alone) {
-  const wrap = document.createElement('div');
-  wrap.className = 'tg-chat-welcome';
-  const card = document.createElement('div');
-  card.className = 'tg-chat-welcome-card';
-  const icon = document.createElement('div');
-  icon.className = 'tg-chat-welcome-icon';
-  icon.textContent = '🔒';
-  const head = document.createElement('b');
-  head.textContent = 'Сквозное шифрование';
-  const text = document.createElement('p');
-  text.textContent =
-    'Ключи есть только у участников: сервер и брокеры видят лишь шифротекст. ' +
-    (alone
-      ? 'Пригласите собеседника ссылкой, кодом или QR.'
-      : 'Напишите первое сообщение или запишите голосовое.');
-  card.append(icon, head, text);
-  if (alone) {
-    const acts = document.createElement('div');
-    acts.className = 'tg-chat-welcome-acts';
-    for (const [label, target, kind] of [
-      ['Пригласить', '#roomActInvite', 'primary'],
-      ['Копировать ссылку', '#roomActCopy', 'ghost'],
-    ]) {
-      const b = document.createElement('button');
-      b.className = `btn small ${kind}`;
-      b.textContent = label;
-      b.onclick = () => $(target)?.click();
-      acts.append(b);
-    }
-    card.append(acts);
-  }
-  wrap.append(card);
-  return wrap;
-}
+// Отрисовка сообщений и списка — chat-render.js (v44)
 
-// v38: строка ленты, которая реально рисуется (для окна последних N).
-function rendersRow(it) {
-  const t = it.msg?.type;
-  if (!t || t === 'ecdh' || t === 'room-meta') return false;
-  if (t === 'gcall-state') return !isGcallHb(it);
-  if (t === 'ttl') return true;
-  return !CONTROL_TYPES.has(t);
-}
-function showEarlier() {
-  const box = $('#chatMessages');
-  if (!box || !cur) return;
-  const prevH = box.scrollHeight;
-  const prevTop = box.scrollTop;
-  cur.renderLimit = (cur.renderLimit || RENDER_PAGE) + RENDER_PAGE;
-  renderMessagesNow()
-    .then(() => {
-      box.scrollTop = box.scrollHeight - prevH + prevTop;
-    })
-    .catch(() => {});
-}
-
-async function renderMessagesNow() {
-  const box = $('#chatMessages');
-  if (!box || !cur) return;
-  const nowMs = Date.now();
-  const roomId = cur.rec.roomId;
-  const stale = [];
-  const all = await roomMessages(roomId);
-  if (!cur || cur.rec.roomId !== roomId) return;
-  const items = all.filter((it) => {
-    if (it.expiresAt && it.expiresAt <= nowMs) {
-      stale.push(roomId + ':' + it.hash);
-      return false;
-    }
-    // v38: heartbeat звонка старше часа — мусор, чистим локально.
-    if (isGcallHb(it) && nowMs - (it.lts || it.msg.ts || 0) > GCALL_HB_KEEP_MS) {
-      stale.push(roomId + ':' + it.hash);
-      return false;
-    }
-    return true;
-  });
-  if (stale.length) {
-    touchRoomMsgs(roomId);
-    kvDelMany('messages', stale).catch(() => {});
-  }
-  cur.lastItemHashes = items.map((x) => x.hash);
-  renderPinBar(items);
-  // v29: контекст живого группового звонка для строк ленты и плашки.
-  const gEvents = gcallEventsFromEntries(items);
-  const gStartTs = new Map();
-  for (const e of gEvents) {
-    if (e.op === 'start' && !gStartTs.has(e.callId)) gStartTs.set(e.callId, e.ts);
-  }
-  const gStateIds = new Set(gEvents.map((e) => e.callId));
-  const gEndShown = new Set();
-  updateGcallBanner(gEvents).catch(() => {});
-  // v28 (F): группировка подряд идущих пузырей одного автора (пауза < 5 мин,
-  // один день): аватар — у нижнего в группе, ник — у первого.
-  const bubbleItems = items.filter(
-    (x) => ['text', 'file', 'voice'].includes(x.msg.type) && !x.msg.ratchetMiss
-  );
-  const grp = new Map();
-  bubbleItems.forEach((x, i) => {
-    const same = (a, b) =>
-      !!a &&
-      !!b &&
-      (a.msg.devPub === b.msg.devPub || personOf(a.msg.devPub) === personOf(b.msg.devPub)) &&
-      Math.abs(b.msg.ts - a.msg.ts) < 5 * 60000 &&
-      new Date(a.msg.ts).toDateString() === new Date(b.msg.ts).toDateString();
-    grp.set(x.hash, { first: !same(bubbleItems[i - 1], x), last: !same(x, bubbleItems[i + 1]) });
-  });
-  // Личный чат (двое) — как в Telegram: без аватаров и ников у входящих.
-  // v39: считаются люди, а не устройства (второе своё устройство — не третий).
-  const persons = knownPersons();
-  const duo = persons.size <= 2;
-  const rcpt = personReceipts(persons);
-  box.classList.toggle('duo', duo);
-  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
-  // v38: в DOM — только последние renderLimit строк (раньше лента из
-  // тысяч сообщений перестраивалась целиком на каждое новое).
-  const limit = cur.renderLimit || RENDER_PAGE;
-  let start = 0;
-  for (let i = items.length - 1, cnt = 0; i >= 0; i--) {
-    if (rendersRow(items[i]) && ++cnt > limit) {
-      start = i + 1;
-      break;
-    }
-  }
-  box.replaceChildren();
-  if (!bubbleItems.length) box.append(welcomeCard(knownMembers().length < 2));
-  if (start > 0) {
-    const more = document.createElement('button');
-    more.type = 'button';
-    more.className = 'chat-more-btn';
-    more.textContent = 'Показать более ранние сообщения';
-    more.onclick = () => showEarlier();
-    box.append(more);
-  }
-  let lastDayKey = '';
-  const introduced = new Set(); // v39: люди, чей «теперь в чате» уже показан
-  for (const it of start > 0 ? items.slice(start) : items) {
-    const m = it.msg;
-    const dk = new Date(m.ts).toDateString();
-    if (dk !== lastDayKey) {
-      lastDayKey = dk;
-      const chip = document.createElement('div');
-      chip.className = 'chat-date-chip';
-      chip.textContent = dayLabel(m.ts);
-      box.append(chip);
-    }
-    if (m.type === 'intro') {
-      // v39: ещё одно устройство уже знакомого человека (и ваше) — без
-      // повторного «теперь в чате»: о нём говорит строка «новое устройство».
-      const pk = personOf(m.devPub);
-      if (introduced.has(pk)) continue;
-      introduced.add(pk);
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      div.textContent = `${m.nick || 'Участник'} теперь в чате`;
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'ecdh') {
-      continue; // служебный обмен ключами эпохи — в ленте не показываем
-    }
-    if (m.type === 'epoch') {
-      let n = '';
-      try {
-        n = JSON.parse(m.text || '')?.n ?? '';
-      } catch {}
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      div.textContent = `Эпоха сменена · ${n}`;
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'ttl') {
-      let sec = 0;
-      try {
-        sec = Number(JSON.parse(m.text || '{}')?.ttl) || 0;
-      } catch {}
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      div.textContent =
-        sec > 0 ? `Исчезающие сообщения: ${ttlLabel(sec)}` : 'Исчезающие сообщения выключены';
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'room-meta') {
-      continue; // v29: служебная метка создателя — в ленте не показываем
-    }
-    if (m.type === 'leave') {
-      // v39: человек вышел с одного из устройств, но остался на другом.
-      const pk = personOf(m.devPub);
-      const still = Object.entries(cur.rec.members || {}).some(
-        ([d, o]) => d !== m.devPub && o && !o.left && o.nick && personOf(d) === pk
-      );
-      if (still) continue;
-      introduced.delete(pk);
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      div.textContent = `${m.nick || 'Участник'} больше не в чате`;
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'gcall-state') {
-      // v29: строки живого звонка. hb в ленту не пишем; end — один раз на
-      // звонок, с длительностью от start (по клиентским ts — приблизительно).
-      let d = null;
-      try {
-        d = JSON.parse(m.text || '');
-      } catch {}
-      if (!d || d.op === 'hb') continue;
-      if (d.op === 'end') {
-        if (gEndShown.has(d.callId)) continue;
-        gEndShown.add(d.callId);
-      }
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      if (d.op === 'start') div.textContent = `📞 ${m.nick || 'Участник'}: групповой звонок`;
-      else if (d.op === 'join') div.textContent = `${m.nick || 'Участник'} теперь в звонке`;
-      else if (d.op === 'leave') div.textContent = `${m.nick || 'Участник'} больше не в звонке`;
-      else if (d.op === 'end') {
-        const st = gStartTs.get(d.callId);
-        const dur =
-          st && m.ts > st ? ` · длился ${Math.max(1, Math.round((m.ts - st) / 60000))} мин` : '';
-        div.textContent = `Звонок завершён${dur}`;
-      } else continue;
-      box.append(div);
-      continue;
-    }
-    if (CONTROL_TYPES.has(m.type)) {
-      continue; // react/edit/del/pin/unpin уже применены к состоянию при ingest
-    }
-    if (m.ratchetMiss) {
-      // v31: содержимое навсегда недоступно — ключ сообщения использован
-      // и удалён храповиком (или вытеснен из окна пропущенных). Место в
-      // ленте показываем честной заглушкой, а не дырой.
-      const div = document.createElement('div');
-      div.className = 'chat-bubble ratchet-miss';
-      div.textContent = m.undecrypted
-        ? '🔒 Сообщение не расшифровано — попросите отправить ещё раз (меню чата → «Пересинхронизировать шифрование»)'
-        : '🔒 Ключ сообщения недоступен (устарело)';
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'system' && typeof m.text === 'string' && m.text.startsWith('newdev:')) {
-      // v28 (E): локальная строка о новом устройстве (вне сервера).
-      // Ник подставляется, как только устройство представилось (intro);
-      // хвост ключа — чтобы сверить с собеседником голосом.
-      const dev = m.text.slice(7);
-      const who = cur.rec.members?.[dev]?.nick;
-      const kind = newDevKind(dev);
-      const div = document.createElement('div');
-      div.className = 'chat-sys' + (kind.person ? '' : ' warn');
-      const key = document.createElement('span');
-      key.className = 'chat-sys-key';
-      key.textContent = `ключ …${dev.slice(-6)}`;
-      // v39: устройство, подписанное тем же master, что и уже знакомый
-      // участник (или вы сами), — не чужак; остальные — по-прежнему с ⚠.
-      const text = kind.own
-        ? `Ваше устройство подключилось к чату: ${kind.nick}`
-        : kind.person
-          ? `${kind.nick}: новое устройство (подтверждено ключом профиля)`
-          : who
-            ? `⚠ Новое устройство в чате: ${who}`
-            : '⚠ К чату подключилось новое устройство';
-      div.append(text, key);
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'system' && typeof m.text === 'string' && m.text.startsWith('gcall:')) {
-      // v29: если этот звонок ведётся gcall-state-сообщениями, legacy-строка
-      // не нужна — вход живёт на плашке «Идёт групповой звонок».
-      if (gStateIds.has(m.text.slice(6))) continue;
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      const span = document.createElement('span');
-      span.textContent = `📞 ${m.nick || 'Участник'}: групповой звонок `;
-      const btn = document.createElement('button');
-      btn.className = 'btn small primary';
-      btn.textContent = 'Войти в групповой звонок';
-      btn.onclick = () => openCallFromChat(m.text.slice(6), { autoJoin: true });
-      div.append(span, btn);
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'system' && typeof m.text === 'string' && m.text.startsWith('call:')) {
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      const span = document.createElement('span');
-      span.textContent = isOwnEntry(it) ? 'Вы позвонили ' : `${m.nick || 'Участник'} приглашает на звонок `;
-      const btn = document.createElement('button');
-      btn.className = 'btn small primary';
-      // v38: старое приглашение (больше 3 часов) — просто «Позвонить» заново.
-      const fresh = Date.now() - (it.lts || m.ts || 0) < 3 * 3600000;
-      btn.textContent = fresh && !isOwnEntry(it) ? 'Ответить' : 'Войти в звонок';
-      btn.onclick = () => openCallFromChat(m.text.slice(5), { autoJoin: true });
-      div.append(span, btn);
-      box.append(div);
-      continue;
-    }
-    if (m.type === 'system') {
-      // v28: прочие системные строки (статусы дозвонa и т.п.) — плашкой.
-      const div = document.createElement('div');
-      div.className = 'chat-sys';
-      div.textContent = String(m.text || '');
-      box.append(div);
-      continue;
-    }
-    const g = grp.get(it.hash) || { first: true, last: true };
-    // v39: сообщение с другого своего устройства — тоже «моё» (справа, без
-    // ника); править и удалять его можно только там, где оно написано.
-    const own = isOwnEntry(it);
-    const rowEl = document.createElement('div');
-    rowEl.className =
-      'chat-msg-row' +
-      (own ? ' mine' : '') +
-      (g.first ? ' grp-first' : '') +
-      (g.last ? ' grp-last' : '') +
-      (g.last ? ' tail' : '');
-    rowEl.dataset.hash = it.hash; // v27: цель для цитат, закрепа и поиска
-    if (!own && !duo) {
-      const av = document.createElement('span');
-      // v28 (F): аватар виден только у нижнего сообщения группы (место в
-      // раскладке сохраняется прозрачным слотом, чтобы пузыри не прыгали).
-      av.className = 'chat-avatar' + (g.last ? '' : ' ghost');
-      av.style.background = avatarBg(m.devPub || '');
-      av.textContent = (m.nick || 'У')[0].toUpperCase();
-      rowEl.append(av);
-    }
-    const div = document.createElement('div');
-    div.className = 'chat-msg' + (own ? ' mine' : '') + (g.last ? ' tail' : '');
-    if (!m.deleted && (m.type === 'file' || m.type === 'voice')) {
-      let meta = null;
-      try {
-        meta = JSON.parse(m.text || '');
-      } catch {}
-      if (meta && meta.fileId && m.type === 'voice') {
-        // Голосовое: плеер; звук автоподгружается всегда (они маленькие).
-        const wrap = document.createElement('div');
-        wrap.className = 'chat-voice';
-        wrap.dataset.voice = meta.fileId;
-        const pb = document.createElement('button');
-        pb.className = 'btn small chat-voice-play';
-        pb.textContent = '▶';
-        pb.setAttribute('aria-label', 'Прослушать голосовое сообщение');
-        const bar = document.createElement('div');
-        bar.className = 'chat-voice-bar';
-        const fill = document.createElement('div');
-        fill.className = 'chat-voice-fill';
-        bar.append(fill);
-        const tm = document.createElement('span');
-        tm.className = 'chat-voice-time';
-        tm.textContent = fmtDur(meta.durSec || 0);
-        const ste = document.createElement('div');
-        ste.className = 'chat-file-state';
-        wrap.append(pb, bar, tm, ste);
-        div.append(wrap);
-        wireVoicePlayer(wrap, meta);
-        const st = fileState.get(meta.fileId);
-        if (!st?.url && !st?.busy && !st?.error) {
-          downloadFile(meta, wrap, { auto: true }).catch(() => {});
-        } else if (st?.error) {
-          ste.textContent = 'Не удалось загрузить голосовое';
-        }
-      } else if (meta && meta.fileId) {
-        const card = document.createElement('div');
-        card.className = 'chat-file';
-        const nm = document.createElement('div');
-        nm.className = 'chat-file-name';
-        nm.textContent = meta.name || 'файл';
-        const sz = document.createElement('div');
-        sz.className = 'chat-file-size';
-        sz.textContent = fmtSize(meta.size || 0);
-        const pv = document.createElement('div');
-        pv.className = 'chat-file-preview';
-        const barEl = document.createElement('div');
-        barEl.className = 'chat-file-bar';
-        const barFill = document.createElement('div');
-        barFill.className = 'chat-file-bar-fill';
-        barEl.append(barFill);
-        const btn = document.createElement('button');
-        btn.className = 'btn small chat-file-btn';
-        btn.textContent = 'Скачать';
-        const stEl = document.createElement('div');
-        stEl.className = 'chat-file-state';
-        btn.onclick = () => downloadFile(meta, card).catch(() => {});
-        card.append(nm, sz, pv, barEl, btn, stEl);
-        div.append(card);
-        const st = fileState.get(meta.fileId);
-        if (st) renderFileCardState(meta, card, st);
-        // v26: картинки до 3 МБ подгружаются и расшифровываются сами.
-        const isSmallImage =
-          (meta.mime || '').startsWith('image/') && (meta.size || 0) <= 3 * 1024 * 1024;
-        if (isSmallImage && !st?.url && !st?.busy && !st?.error) {
-          downloadFile(meta, card, { auto: true }).catch(() => {});
-        }
-      } else {
-        const body = document.createElement('div');
-        body.className = 'chat-msg-text';
-        body.textContent = 'Файл (повреждённые метаданные)';
-        div.append(body);
-      }
-    } else if (m.deleted) {
-      const body = document.createElement('div');
-      body.className = 'chat-msg-text chat-deleted';
-      body.textContent = 'Сообщение удалено';
-      div.append(body);
-    } else {
-      if (!own && g.first && !duo) {
-        // v28 (F): ник — только у первого сообщения группы одного автора.
-        const head = document.createElement('div');
-        head.className = 'chat-msg-head';
-        head.textContent = m.nick || 'Участник';
-        div.append(head);
-      }
-      // v27: цитата-ответ — блок внутри пузыря, клик ведёт к оригиналу.
-      if (m.replyTo && (m.replyTo.hash || m.replyTo.excerpt)) {
-        const q = document.createElement('div');
-        q.className = 'chat-quote';
-        const qn = document.createElement('b');
-        qn.textContent = m.replyTo.name || 'Участник';
-        const qt = document.createElement('span');
-        qt.textContent = m.replyTo.excerpt || '';
-        q.append(qn, qt);
-        q.onclick = () => scrollToMessage(m.replyTo.hash);
-        div.append(q);
-      }
-      const body = document.createElement('div');
-      body.className = 'chat-msg-text';
-      renderTextWithMarks(body, m.text || '', cur.search?.q);
-      div.append(body);
-    }
-    const foot = document.createElement('div');
-    foot.className = 'chat-msg-foot';
-    const tm = document.createElement('span');
-    tm.textContent = fmtTime(m.ts);
-    foot.append(tm);
-    if (own) {
-      // v28 (F): статус — галочками в стиле Telegram, подпись — в title.
-      // v39: по людям — «прочитано», когда прочитал каждый собеседник на
-      // любом своём устройстве; свои устройства в расчёт не входят.
-      const st = receiptState(it, rcpt.map, rcpt.others);
-      const rc = document.createElement('span');
-      rc.className = 'chat-receipt st-' + st;
-      rc.textContent = RECEIPT_GLYPHS[st] || '✓';
-      rc.title = RECEIPT_LABELS[st] || '';
-      foot.append(rc);
-    } else if (!it.sigOk) {
-      const warn = document.createElement('span');
-      warn.className = 'chat-receipt warn';
-      warn.textContent = 'подпись не подтверждена';
-      foot.append(warn);
-    }
-    if (m.edited && !m.deleted) {
-      const ed = document.createElement('span');
-      ed.className = 'chat-edited';
-      ed.textContent = 'изменено';
-      foot.append(ed);
-    }
-    // v27: кнопка действий (ответить, реакция, закрепить; у своих — ещё
-    // изменить и удалить). У удалённых и служебных действий нет.
-    if (!m.deleted && (m.type === 'text' || m.type === 'file' || m.type === 'voice')) {
-      const mb = document.createElement('button');
-      mb.className = 'chat-act-btn';
-      mb.textContent = '···';
-      mb.title = 'Действия с сообщением';
-      mb.setAttribute('aria-label', 'Действия с сообщением');
-      mb.onclick = (e) => {
-        e.stopPropagation();
-        openMsgMenu(it, mb);
-      };
-      foot.append(mb);
-      div.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        openMsgMenu(it, mb);
-      });
-      if (TOUCH_UI) {
-        div.addEventListener('click', (e) => {
-          if (e.target.closest('button, a, input, .chat-quote, .chat-voice, .chat-file')) return;
-          if (window.getSelection()?.toString()) return;
-          e.stopPropagation(); // иначе общий обработчик клика сразу закроет меню
-          openMsgMenu(it, mb);
-        });
-      }
-      div.addEventListener('dblclick', (e) => {
-        if (window.getSelection()?.toString()) return;
-        e.preventDefault();
-        if (!cur) return;
-        cur.replyTo = { hash: it.hash, name: it.msg.nick || 'Участник', excerpt: excerptOf(it) };
-        cur.editing = null;
-        renderEditBar();
-        renderReplyBar();
-        $('#chatInput')?.focus();
-      });
-    }
-    div.append(foot);
-    rowEl.append(div);
-    // v27: чипы реакций под пузырём; клик по чипу — toggle своей реакции.
-    const reactions = it.reactions || {};
-    const reactedEmojis = Object.keys(reactions).filter((e) => reactions[e]?.length);
-    if (reactedEmojis.length && !m.deleted) {
-      const chips = document.createElement('div');
-      chips.className = 'chat-reactions';
-      for (const emoji of reactedEmojis) {
-        const chip = document.createElement('button');
-        chip.className =
-          'chat-chip' + (reactions[emoji].includes(cur.device.devicePub) ? ' mine' : '');
-        chip.textContent = `${emoji} ${reactions[emoji].length}`;
-        chip.onclick = () => toggleReaction(it, emoji).catch(() => {});
-        chips.append(chip);
-      }
-      rowEl.append(chips);
-    }
-    box.append(rowEl);
-  }
-  if (nearBottom || !box.dataset.scrolled) {
-    box.scrollTop = box.scrollHeight;
-    box.dataset.scrolled = '1';
-  }
-}
-
-// ---------- v29 (B): живой групповой звонок в чате ----------
-// Модель: состояние звонка — подписанные 'gcall-state' сообщения в ленте
-// комнаты; актуальное множество участников выводит чистая агрегация
-// (chat-transport.js) с прунингом по heartbeat (v38: 30 с hb, 150 с тишины =
-// вышел). Вход/выход свободные; дозвон делается только при старте.
-// v38: навигация в звонок из чата больше НЕ закрывает контекст чата
-// (checkHash) — heartbeat идёт всё время звонка; возобновление по моему
-// последнему событию — только если звонок реально идёт на устройстве.
-// v38: heartbeat — раз в 30 с, без пуша и со сроком хранения на сервере
-// 15 минут (раньше раз в 20 с, навсегда и с пушем всем участникам);
-// start — пуш-«звонок» тем, у кого чат закрыт.
-async function gcallPost(op, callId) {
-  const bodyExtra =
-    op === 'hb' ? { quiet: true, ttlSec: 900 } : op === 'start' ? { push: 'call' } : null;
-  await sendMsg('gcall-state', JSON.stringify({ callId, op }), null, bodyExtra);
-}
-const GCALL_HB_EVERY_MS = 30000;
-function adoptGcall(callId) {
-  if (!cur) return;
-  if (cur.gcall?.callId === callId && cur.gcall.hbTimer) return;
-  if (cur.gcall?.hbTimer) clearInterval(cur.gcall.hbTimer);
-  const c = cur;
-  const hbTimer = setInterval(() => {
-    if (cur === c && !c.closed && c.gcall?.callId === callId) {
-      gcallPost('hb', callId).catch(() => {});
-    }
-  }, GCALL_HB_EVERY_MS);
-  cur.gcall = { callId, hbTimer };
-  cur.callSecrets.add(callId);
-}
-
-// v38: переход в звонок из чата — сразу в разговор (без лишнего экрана
-// подготовки), ник чата — именем в звонке, по завершении — назад в чат.
-// Контекст чата при этом НЕ закрывается (см. checkHash): heartbeat звонка
-// и приём сообщений продолжаются, плашка не исчезает у остальных.
-function openCallFromChat(secret, { autoJoin = true } = {}) {
-  if (!secret) return;
-  if (cur) cur.callSecrets.add(secret);
-  const link = callLinkOf(secret);
-  const opts = { autoJoin, name: cur?.rec.nick || '', returnTo: cur?.returnHash || '', fromChat: true };
-  if (window.__zvDial?.openCallLink) window.__zvDial.openCallLink(link, opts);
-  else location.hash = 'k=' + secret;
-}
-
-// app.js сообщает о завершении звонка: если это групповой звонок чата —
-// выходим из него (leave; последний участник — end).
-async function onCallEnded(secret) {
-  if (!cur || !secret) return;
-  if (cur.inCall === secret) cur.inCall = null;
-  if (cur.gcall?.callId === secret) {
-    const st = cur.gcallState;
-    const others = (st?.participants || []).filter((p) => p.dev !== cur.device.devicePub);
-    await leaveGcall().catch(() => {});
-    if (st && st.callId === secret && !others.length) {
-      if (!cur.gcallEndPosted) cur.gcallEndPosted = new Set();
-      if (!cur.gcallEndPosted.has(secret)) {
-        cur.gcallEndPosted.add(secret);
-        await gcallPost('end', secret).catch(() => {});
-      }
-    }
-  }
-}
-function dropGcall() {
-  if (!cur?.gcall) return;
-  if (cur.gcall.hbTimer) clearInterval(cur.gcall.hbTimer);
-  cur.gcall = null;
-}
-async function leaveGcall() {
-  if (!cur?.gcall) return;
-  const { callId } = cur.gcall;
-  dropGcall();
-  await gcallPost('leave', callId).catch(() => {});
-  updateGcallBanner().catch(() => {});
-}
-async function joinGcall(callId) {
-  if (!cur) return;
-  if (!cur.rec.nick) return note('Сначала введите никнейм.');
-  const already = cur.gcall?.callId === callId;
-  adoptGcall(callId);
-  // Переход — сразу; join уходит параллельно (не ждём сеть перед звонком).
-  openCallFromChat(callId, { autoJoin: true });
-  if (!already) await gcallPost('join', callId).catch(() => {});
-}
-// Кнопка «Групповой звонок»: активного звонка нет — создать и дозвониться;
-// есть — просто войти (повторного дозвонa не делается).
-async function startOrJoinGcall() {
-  if (!cur || !cur.rec.nick) return note('Сначала введите никнейм.');
-  const items = await roomMessages(cur.rec.roomId);
-  const st = aggregateGcallState(gcallEventsFromEntries(items));
-  if (st && st.active) {
-    await joinGcall(st.callId);
-    return;
-  }
-  const callId = newSecret();
-  const c = cur;
-  await gcallPost('start', callId);
-  // v38: сразу в звонок; дозвон участников и служебные строки — фоном
-  // (контекст чата живёт и во время звонка). Раньше звонящий ждал, пока
-  // по очереди отработают все дозвоны.
-  adoptGcall(callId);
-  openCallFromChat(callId, { autoJoin: true });
-  (async () => {
-    // Legacy-приглашение для клиентов v28 (у них нет gcall-state).
-    await postCallLine('gcall:' + callId);
-    const link = callLinkOf(callId);
-    const devs = knownMembers().filter((d) => d !== c.device.devicePub && c.rec.members?.[d]?.masterPub);
-    const results = await Promise.all(
-      devs.map((dev) => dialMember(dev, { group: true, secret: callId, link }).catch(() => ({ dialed: false })))
-    );
-    if (cur !== c) return;
-    const dialed = results.filter((r) => r.dialed).length;
-    await postCallLine(
-      dialed
-        ? `📞 Групповой звонок: дозвон ${dialed} участн. — телефоны звонят`
-        : '📞 Групповой звонок начат: вход — по плашке в шапке чата'
-    );
-  })().catch(() => {});
-}
-// Плашка «Идёт групповой звонок» в шапке + возобновление/завершение моей
-// сессии звонка по агрегации. Вызывается из renderMessages (с готовыми
-// событиями), из applyControlMessage и по таймеру прунинга (20 с).
-async function updateGcallBanner(eventsArg) {
-  const bar = $('#chatGcallBar');
-  if (!cur) return;
-  let events = eventsArg;
-  if (!events) {
-    const items = await roomMessages(cur.rec.roomId);
-    if (!cur) return;
-    events = gcallEventsFromEntries(items);
-  }
-  const st = aggregateGcallState(events);
-  cur.gcallState = st;
-  if (st && st.active) {
-    if (cur.gcall && cur.gcall.callId !== st.callId) dropGcall();
-    if (!cur.gcall) {
-      // Возобновление: моё последнее событие этого звонка — start/join/hb
-      // и не было leave: я всё ещё участник (контекст чата пересоздался
-      // после возврата из звонкового экрана).
-      const mine = [...events]
-        .reverse()
-        .find((e) => e.callId === st.callId && e.dev === cur.device.devicePub);
-      // v38: только если звонок на этом устройстве действительно идёт —
-      // иначе закрытая посреди звонка вкладка превращала участника в
-      // «призрака», и звонок не завершался.
-      const live = window.__zvDial?.activeCallSecret?.() === st.callId;
-      if (live && mine && (mine.op === 'start' || mine.op === 'join' || mine.op === 'hb')) {
-        adoptGcall(st.callId);
-        gcallPost('hb', st.callId).catch(() => {});
-      }
-    }
-  } else if (cur.gcall) {
-    dropGcall();
-  }
-  // Автозавершение: звонок опустел по прунингу и end ещё никто не вывел —
-  // выводим один раз (идемпотентно по callId в рамках сессии и ленты).
-  if (st && st.autoEnded && cur.rec.nick) {
-    if (!cur.gcallEndPosted) cur.gcallEndPosted = new Set();
-    if (!cur.gcallEndPosted.has(st.callId)) {
-      cur.gcallEndPosted.add(st.callId);
-      gcallPost('end', st.callId).catch(() => {});
-    }
-  }
-  const gbtnSpan = $('#chatGroupCallBtn span');
-  if (gbtnSpan) gbtnSpan.textContent = st && st.active ? 'Войти в звонок' : 'Групповой звонок';
-  if (!bar) return;
-  if (!st || !st.active) {
-    bar.classList.add('hidden');
-    return;
-  }
-  bar.classList.remove('hidden');
-  const names = st.participants.map((p) => p.nick || 'Участник').join(', ');
-  const txt = $('#chatGcallText');
-  if (txt) {
-    txt.textContent =
-      `📞 Идёт групповой звонок · ${st.participants.length} участн.` + (names ? ` · ${names}` : '');
-  }
-  const joined = !!cur.gcall && cur.gcall.callId === st.callId;
-  const jb = $('#chatGcallJoin span');
-  if (jb) jb.textContent = joined ? 'Вернуться' : 'Войти';
-  $('#chatGcallJoin')?.classList.remove('hidden');
-  $('#chatGcallLeave')?.classList.toggle('hidden', !joined);
-  bar.classList.toggle('joined', joined);
-}
-
-// ---------- v28 (A): дозвон из чата через Inbox ----------
-// Чат не реализует Inbox сам: звонит публичный хук app.js
-// (window.__zvDial.ringPersonal). Приглашение в чат ('call:'/'gcall:') при
-// этом остаётся и как запасной путь, и как кнопка входа в звонковую
-// комнату для всех участников.
-const callLinkOf = (secret) => `${location.origin}${location.pathname}#k=${secret}`;
-// v38: служебные строки звонка («дозвон…», «принял(а)») — без пуша;
-// приглашение 'call:'/'gcall:' будит пушем-«звонком» тех, у кого чат
-// закрыт (opts.ring), если телефон собеседника не звонит иначе.
-async function postCallLine(text, { ring = false } = {}) {
-  try {
-    await sendMsg('system', text, null, ring ? { push: 'call' } : { quiet: true });
-  } catch {}
-}
-async function dialMember(dev, { group = false, secret = null, link = null } = {}) {
-  if (!cur) return { dialed: false, reason: 'no-room' };
-  const member = cur.rec.members?.[dev] || {};
-  const dial = window.__zvDial;
-  if (!member.masterPub || !dial?.ringPersonal) return { dialed: false, reason: 'no-dial' };
-  const roomId = cur.rec.roomId;
-  const sec = secret || newSecret();
-  const lnk = link || callLinkOf(sec);
-  // v39: звенят все устройства человека (подтверждённые его master), а
-  // не только то, с которого он писал: ring несёт завёртку на каждое.
-  const ecdhPubs = [];
-  for (const [d, m] of Object.entries(cur.rec.members || {})) {
-    if (!m || m.left || !m.ecdhPub) continue;
-    if (d === dev || (m.certOk === true && member.certOk === true && m.masterPub === member.masterPub)) ecdhPubs.push(m.ecdhPub);
-  }
-  const res = await dial
-    .ringPersonal(member.masterPub, lnk, {
-      ecdhPub: member.ecdhPub || memberEcdhPub(dev),
-      ecdhPubs: [...new Set(ecdhPubs)].slice(0, 5),
-      name: cur.rec.nick || 'Участник чата',
-      callKind: group ? 'group' : 'single',
-      onState: (state) => {
-        if (!cur || cur.closed || cur.rec.roomId !== roomId) return;
-        const label = {
-          accepted: 'принял(а) звонок',
-          declined: 'отклонил(а) звонок',
-          cancelled: 'звонок отменён',
-          expired: 'не ответил(а) на звонок',
-        }[state];
-        if (label) postCallLine(`📞 ${nickOf(dev)} ${label}`);
-      },
-    })
-    .catch((e) => ({ ok: false, error: e?.message || String(e) }));
-  if (res?.ok) {
-    if (!group) {
-      await postCallLine('call:' + sec);
-      await postCallLine(`📞 Дозвон: ${nickOf(dev)} — телефон звенит…`);
-    }
-    return { dialed: true, secret: sec, link: lnk };
-  }
-  return { dialed: false, reason: res?.error || 'ring-failed' };
-}
+// Живой групповой звонок в чате и дозвон из чата через Inbox — chat-call.js (v44)
 
 // ---------- Проводка UI ----------
-function initChatUI() {
+export function initChatUI() {
   // v30: меню списка комнат (···) должно открываться и из десктопного
   // сайдбара экрана чата, где #home скрыт. Меню — position:fixed,
   // поэтому переносим узел в body: от родителя оно не зависит.
@@ -5364,26 +3187,36 @@ function initChatUI() {
     const text = (myInput?.value || '').trim();
     if (!text || !cur) return;
     if (!cur.rec.nick) return note('Сначала введите никнейм.');
+    // v43: поле очищаем сразу, до отправки. Раньше оно очищалось после
+    // await sendMsg (шифрование + сеть): то, что человек успел набрать за это
+    // время, стиралось, а следующее Enter уходило в пустоту — так терялось
+    // каждое второе сообщение при быстрой отправке подряд.
+    const c = cur;
+    const editing = c.editing;
+    const replyTo = c.replyTo;
+    c.editing = null;
+    c.replyTo = null;
+    renderEditBar();
+    renderReplyBar();
+    myInput.value = '';
+    myInput.dispatchEvent(new Event('input')); // mic/send + черновик ниже
+    c.rec.draft = '';
+    saveRoom(c.rec).catch(() => {});
     try {
       // v27: режим редактирования — вместо нового сообщения уходит 'edit'.
-      if (cur.editing) {
-        await sendMsg('edit', JSON.stringify({ target: cur.editing.hash, text }));
-        cur.editing = null;
-        renderEditBar();
-      } else {
-        const extra = cur.replyTo ? { replyTo: cur.replyTo } : null;
-        await sendMsg('text', text, extra);
-        cur.replyTo = null;
-        renderReplyBar();
-      }
-      myInput.value = '';
-      myInput.dispatchEvent(new Event('input')); // mic/send + черновик ниже
-      if (cur) {
-        cur.rec.draft = '';
-        saveRoom(cur.rec).catch(() => {});
-      }
+      if (editing) await sendMsg('edit', JSON.stringify({ target: editing.hash, text }));
+      else await sendMsg('text', text, replyTo ? { replyTo } : null);
     } catch (e) {
       note(e.message);
+      // Не отправилось — возвращаем текст, если поле ещё пустое.
+      if (cur === c && !myInput.value) {
+        myInput.value = text;
+        c.editing = editing;
+        c.replyTo = replyTo;
+        renderEditBar();
+        renderReplyBar();
+        myInput.dispatchEvent(new Event('input'));
+      }
     }
   };
   if (send) send.onclick = doSend;
@@ -6072,316 +3905,8 @@ function initChatUI() {
   window.__zvChatBooted = true;
 }
 
-// ---------- v38: push и комнаты ----------
-// Открыть комнату по префиксу id (из уведомления SW).
-async function openRoomByPrefix(prefix) {
-  if (!/^[a-f0-9]{8,64}$/.test(prefix || '')) return false;
-  const rooms = (await kvAll('rooms')).map((x) => x.value).filter(Boolean);
-  const r = rooms.find((x) => x.roomId.startsWith(prefix));
-  if (!r) return false;
-  if (cur && !cur.closed && cur.rec.roomId === r.roomId) {
-    if (!cur.inCall) {
-      showChatScreen();
-      fetchMissed().catch(() => {});
-    }
-    return true;
-  }
-  await openRoomBySeed(await decryptWithVault(r.seedEnc));
-  return true;
-}
-
-// Ключи неоткрытой комнаты (для /init, /unsub) — тем же путём, что свип.
-async function standaloneKeys(r) {
-  const seedBytes = b64u.dec(await decryptWithVault(r.seedEnc));
-  let pinIkm = null;
-  if (r.pinEnc) {
-    try {
-      const pin = await decryptWithVault(r.pinEnc);
-      if (pin) pinIkm = await derivePinIkm(pin, seedBytes);
-    } catch {}
-  }
-  const keys = await deriveChatKeys(seedBytes, { pinIkm });
-  return keys.roomId === r.roomId ? keys : null;
-}
-
-// Зарегистрировать push-подписку во всех комнатах, где она ещё не стоит
-// (rec.pushEp — какой endpoint уже отдан серверу этой комнаты).
-let pushRegRunning = false;
-async function registerPushInRooms(sub) {
-  if (!sub?.endpoint || pushRegRunning) return;
-  pushRegRunning = true;
-  try {
-    const device = await getChatDevice();
-    const rooms = (await kvAll('rooms')).map((x) => x.value).filter(Boolean);
-    for (const r of rooms) {
-      if (r.pushEp === sub.endpoint && Date.now() - (r.pushAt || 0) < 7 * 24 * 3600000) continue;
-      try {
-        const keys = await standaloneKeys(r);
-        if (!keys) continue;
-        const res = await api(r.roomId, keys.accessToken, '/init', {
-          method: 'POST',
-          body: { dev: device.devicePub, sub },
-        });
-        if (res.status === 410) {
-          await wipeLocalRoom(r.roomId, { silent: true });
-          continue;
-        }
-        if (res.status !== 200) continue;
-        const live = cur && cur.rec.roomId === r.roomId ? cur.rec : await loadRoom(r.roomId);
-        if (live) {
-          live.pushEp = sub.endpoint;
-          live.pushAt = Date.now();
-          await saveRoom(live);
-        }
-      } catch {}
-      await new Promise((ok) => setTimeout(ok, 150)); // не залпом
-    }
-  } finally {
-    pushRegRunning = false;
-  }
-}
-
-// Устройство уходит из комнаты — снять его push-подписку и состояние
-// доставки на сервере (иначе сервер продолжал бы будить ушедшего и держать
-// под него историю). Ошибки не важны: сервер сам чистит через 30 дней.
-async function unsubscribeRoom(r, keys = null) {
-  try {
-    const k = keys || (await standaloneKeys(r));
-    if (!k) return;
-    const device = await getChatDevice();
-    const sub = window.__zvPush?.current?.() || (await existingPushSub());
-    await api(r.roomId, k.accessToken, '/unsub', {
-      method: 'POST',
-      body: { endpoint: sub?.endpoint || '', dev: device.devicePub },
-    });
-  } catch {}
-}
-
-// Продление постоянной короткой ссылки (алиас живёт 30 дней с последнего
-// использования): владелец продлевает раз в неделю, пока открывает комнату.
-async function aliasRenewIfDue() {
-  const c = cur;
-  if (!c?.rec.alias?.code || c.rec.alias.scheme !== 2) return;
-  if (Date.now() - (c.rec.alias.renewedAt || c.rec.alias.createdAt || 0) < 7 * 24 * 3600000) return;
-  try {
-    const admin = await decryptWithVault(c.rec.alias.adminEnc);
-    const codeHash = await codeAddrForScheme('alias', c.rec.alias.code, c.rec.alias.scheme);
-    const r = await pairApi('/pair/alias', { codeHash, renew: true, admin });
-    if (cur !== c || !c.rec.alias) return;
-    if (r.status === 200) {
-      c.rec.alias.renewedAt = Date.now();
-      await saveRoom(c.rec);
-    } else if (r.status === 404) {
-      // Алиас истёк (30 дней без использования) — при следующем открытии
-      // блока «короткая ссылка» будет выпущен новый.
-      c.rec.alias = null;
-      await saveRoom(c.rec);
-    }
-  } catch {}
-}
-
-// ---------- v28 (B): живой фон для неоткрытых комнат ----------
-// У неоткрытой комнаты нет WS; раз в 30 секунд лёгкий fetch по seq считает
-// новые сообщения и поднимает тост/уведомление без текста переписки.
-// Сообщения при этом НЕ помечаются прочитанными и не сохраняются — при
-// входе в комнату их подтянет обычный fetchMissed.
-const sweepState = new Map(); // roomId -> {token, lastNotifiedSeq}
-let sweepStarted = false;
-function startRoomSweep() {
-  if (sweepStarted) return;
-  sweepStarted = true;
-  setInterval(() => {
-    sweepOtherRooms().catch(() => {});
-  }, 30000);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
-    roomSummaryCache.clear(); // другая вкладка могла писать в ленты
-    renderRoomList().catch(() => {});
-    sweepOtherRooms({ force: true }).catch(() => {});
-  });
-}
-// v38: адаптивный опрос неоткрытых комнат: видимая вкладка — раз в
-// минуту, скрытая — раз в 5 минут, «тихие» комнаты (сутки без новостей) —
-// втрое реже; пуш (если включён) будит опрос нужной комнаты сразу. Раньше
-// каждая комната опрашивалась раз в 30 секунд всегда — при десятке чатов
-// это ~30 000 запросов в сутки с одного устройства.
-let sweeping = false;
-const sweepWanted = new Set(); // префиксы комнат из пушей, пришедших во время опроса
-async function sweepOtherRooms({ force = false, onlyPrefix = null } = {}) {
-  if (sweeping) {
-    if (onlyPrefix) sweepWanted.add(onlyPrefix);
-    return;
-  }
-  if (navigator.onLine === false) return;
-  sweeping = true;
-  try {
-    await sweepOtherRoomsNow({ force, onlyPrefix });
-  } finally {
-    sweeping = false;
-  }
-  if (sweepWanted.size) {
-    const pre = [...sweepWanted][0];
-    sweepWanted.delete(pre);
-    sweepOtherRooms({ force: true, onlyPrefix: pre }).catch(() => {});
-  }
-}
-async function sweepOtherRoomsNow({ force = false, onlyPrefix = null } = {}) {
-  const rooms = (await kvAll('rooms')).map((x) => x.value).filter(Boolean);
-  const now = Date.now();
-  const hidden = document.visibilityState !== 'visible';
-  for (const r of rooms) {
-    if (cur && !cur.closed && cur.rec.roomId === r.roomId) continue;
-    if (onlyPrefix && !r.roomId.startsWith(onlyPrefix)) continue;
-    let st = sweepState.get(r.roomId);
-    if (!st) {
-      try {
-        const seed = await decryptWithVault(r.seedEnc);
-        const seedBytes = b64u.dec(seed);
-        let pinIkm = null;
-        if (r.pinEnc) {
-          try {
-            const pin = await decryptWithVault(r.pinEnc);
-            if (pin) pinIkm = await derivePinIkm(pin, seedBytes);
-          } catch {}
-        }
-        const keys = await deriveChatKeys(seedBytes, { pinIkm });
-        if (keys.roomId !== r.roomId) continue;
-        st = { token: keys.accessToken, lastNotifiedSeq: r.lastReadSeq || 0, nextAt: 0, lastNewAt: 0 };
-        sweepState.set(r.roomId, st);
-      } catch {
-        continue;
-      }
-    }
-    if (!force && !onlyPrefix && now < (st.nextAt || 0)) continue;
-    const quiet = now - (st.lastNewAt || 0) > 24 * 3600000;
-    st.nextAt = now + (hidden ? 300000 : 60000) * (quiet ? 3 : 1);
-    const after = Math.max(r.lastSeq || 0, st.lastNotifiedSeq);
-    const res = await api(r.roomId, st.token, `/fetch?after=${after}`).catch(() => null);
-    // v29: серверная копия удалена — стираем локальную молча (без тостов).
-    if (res && res.status === 410) {
-      await wipeLocalRoom(r.roomId, { silent: true });
-      continue;
-    }
-    if (!res || res.status !== 200) continue;
-    const all = res.data.messages || [];
-    if (!all.length) continue;
-    const top = Math.max(st.lastNotifiedSeq, ...all.map((i) => i.seq || 0));
-    // v39: комната пришла с другого устройства профиля — первый опрос
-    // только запоминает позицию (старое уже прочитано там).
-    if (r.linkImport && !st.primed) {
-      st.primed = true;
-      st.lastNotifiedSeq = top;
-      continue;
-    }
-    st.primed = true;
-    // v39: свои сообщения с других устройств профиля — не «новые».
-    const items = all.filter((i) => !ownBlob(i.blob));
-    st.lastNotifiedSeq = top;
-    if (!items.length) continue;
-    st.lastNewAt = now;
-    maybeNotifyMessage({
-      roomId: r.roomId,
-      rec: r,
-      nick: null,
-      preview: items.length > 1 ? `Новых сообщений: ${items.length}` : 'Новое сообщение',
-      mine: false,
-      roomActive: false,
-    }).catch(() => {});
-  }
-}
-
-// v39: blob цепочки (c1) несёт 2 байта ключа автора — по ним опрос фона
-// отличает сообщения с других своих устройств, не расшифровывая их.
-const ownTagCache = new Map();
-function ownBlob(blobB64) {
-  const own = myProfile()?.own;
-  if (!own || own.size < 2 || typeof blobB64 !== 'string') return false;
-  let nonce;
-  try {
-    nonce = b64u.dec(blobB64.slice(0, 24)).subarray(0, 12);
-  } catch {
-    return false;
-  }
-  const h = parseBlobHint(nonce);
-  if (!h || h.mode !== 'c1') return false;
-  for (const d of own) {
-    let t = ownTagCache.get(d);
-    if (!t) {
-      try {
-        t = [...pubTagOf(b64u.dec(d)).subarray(0, 2)];
-      } catch {
-        continue;
-      }
-      ownTagCache.set(d, t);
-    }
-    if (tagBytesEq(t, h.tag)) return true;
-  }
-  return false;
-}
-
-function checkHash() {
-  const params = new URLSearchParams(location.hash.slice(1));
-  const join = params.get('join');
-  if (join && /^[A-Za-z0-9_-]{9}$/.test(join)) {
-    $('#home')?.classList.remove('hidden');
-    redeemJoin(join).then((okJoin) => {
-      if (!okJoin) note('Короткая ссылка не найдена или отключена владельцем комнаты.');
-    });
-    return;
-  }
-  const greet = params.get('greet');
-  if (greet && /^[A-Za-z0-9_-]{9}$/.test(greet)) {
-    $('#home')?.classList.remove('hidden');
-    redeemGreet(greet);
-    return;
-  }
-  const seed = params.get('chat');
-  if (seed && /^[A-Za-z0-9_-]{43}$/.test(seed)) {
-    openRoomBySeed(seed, { pinProtected: params.get('p') === '1' });
-  } else if (cur && params.get('k') && cur.callSecrets?.has(params.get('k'))) {
-    // v38: звонок, начатый или принятый из этого чата: контекст чата живёт
-    // (WS, heartbeat группового звонка, приём сообщений) — скрываем только
-    // экран; по завершении звонка app.js вернёт сюда (#chat=…).
-    cur.inCall = params.get('k');
-    document.body.dataset.screen = 'call';
-    $('#chatroom')?.classList.add('hidden');
-    $('#home')?.classList.add('hidden');
-  } else if (cur) {
-    // Ушли по звонковой ссылке или домой — закрываем чат-канал.
-    closeCurrent(true);
-    $('#chatroom')?.classList.add('hidden');
-    $('#home')?.classList.add('hidden'); // экранами дальше управляет app.js (route)
-  }
-}
-
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    initChatUI();
-    checkHash();
-  });
-} else {
-  initChatUI();
-  checkHash();
-}
-window.addEventListener('hashchange', checkHash);
-
-// Для тестов и отладки: чистое API модуля.
-// v38: «Сменить номер» (app.js): masterPub и сертификат устройства сменились —
-// во всех комнатах заново публикуем 'dial' (иначе собеседники звонили бы на
-// отозванный адрес). Ключ устройства прежний: переписка не затрагивается.
-async function onIdentityChanged() {
-  if (cur) cur.rec.dialInfoSent = false;
-  const rooms = (await kvAll('rooms')).map((x) => x.value).filter(Boolean);
-  for (const r of rooms) {
-    if (!r.dialInfoSent) continue;
-    r.dialInfoSent = false;
-    await saveRoom(r).catch(() => {});
-  }
-  if (cur) {
-    cur.device = await getChatDevice().catch(() => cur.device);
-    await sendDialInfoIfNeeded().catch(() => {});
-  }
-}
+// Push и комнаты, живой фон для неоткрытых комнат — chat-push.js (v44)
+initChatPush();
 
 // ---------- v39: хуки синхронизации профиля (devices.js) ----------
 // Живая запись открытой комнаты — cur.rec (её же сохраняет saveRoom);

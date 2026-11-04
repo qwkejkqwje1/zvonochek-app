@@ -99,7 +99,6 @@ const shell = watch(await appCtx.newPage(), 'оболочка');
 let chat;
 await step('сайт: свой чат по ссылке', async () => {
   await web.goto(WEB, { waitUntil: 'load' });
-  await web.evaluate(() => localStorage.setItem('zvOnboarded', '1'));
   await web.goto(WEB + '#chat=' + seed, { waitUntil: 'load' });
   await web.reload({ waitUntil: 'load' });
   await enter(web, 'Браузер');

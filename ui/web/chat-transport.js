@@ -13,9 +13,9 @@
 // об уведомлениях, реестр увиденных устройств, менеджер каналов) покрыты
 // Node-тестами test-v28.mjs: chat.js при импорте трогает DOM и в тестах не
 // поднимается.
-import { b64u, sha256hex } from './crypto.js?v=41';
-import { ntfyTopic, ntfySubscribeUrl, parseNtfyFrame, fitsNtfy } from './ntfy.js?v=41';
-import { schnorr } from './vendor/secp256k1.js?v=41';
+import { b64u, sha256hex } from './crypto.js?v=44';
+import { ntfyTopic, ntfySubscribeUrl, parseNtfyFrame, fitsNtfy } from './ntfy.js?v=44';
+import { schnorr } from './vendor/secp256k1.js?v=44';
 
 const te = new TextEncoder();
 export const bytesToHex = (bytes) =>

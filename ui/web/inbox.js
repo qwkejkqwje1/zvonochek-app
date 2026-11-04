@@ -2,7 +2,7 @@
 // слушатель входящих по WebSocket, ответы и пропущенные. Протокол и подписи —
 // см. worker/inbox.js. Ring идёт ТОЛЬКО через Worker (не через публичные
 // транспорты — иначе «кому звонят» узнали бы все наблюдатели сигналинга).
-import { signWithDevice } from './identity.js?v=41';
+import { signWithDevice } from './identity.js?v=44';
 
 const base = (workerUrl, topic) => `${workerUrl.replace(/\/$/, '')}/inbox/${topic}`;
 
