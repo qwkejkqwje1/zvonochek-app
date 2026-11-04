@@ -53,6 +53,6 @@ fs.writeFileSync(
   path.join(dir, 'notes.md'),
   `${notes || 'Что нового — в CHANGELOG.md.'}\n\n---\nWindows: ZVONochek_${version}_x64.exe — для обычных ПК, …_arm64.exe — для ПК на ARM (Snapdragon). ` +
     'Без установки: положите exe в папку (например, «Документы» или флешку) и запустите — данные будут в папке ZVONochek-data рядом с ним. ' +
-    'Уже установленный ZVONochek обновится сам. Android 7.0+: файл …_android.apk.\n'
+    'Уже установленный ZVONochek обновится сам.\n'
 );
 console.log(`latest.json: ${version}, ${Object.keys(platforms).join(', ')} → ${repo}`);

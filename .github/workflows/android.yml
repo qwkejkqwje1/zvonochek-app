@@ -105,3 +105,8 @@ jobs:
           gh api -X POST -H "Content-Type: application/vnd.android.package-archive" \
             "https://uploads.github.com/repos/$REPO/releases/$ID/assets?name=$FILE" \
             --input "$FILE" --jq .browser_download_url
+          # строка про APK в тексте релиза — только когда APK действительно лежит в релизе
+          BODY=$(gh api "repos/$REPO/releases/$ID" --jq .body)
+          case "$BODY" in *_android.apk*) ;; *)
+            gh api -X PATCH "repos/$REPO/releases/$ID" -f body="$(printf '%s\n\nAndroid 7.0+: %s (arm64 и armv7).' "$BODY" "$FILE")" > /dev/null;;
+          esac
