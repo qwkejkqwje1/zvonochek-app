@@ -29,6 +29,9 @@ pub struct Settings {
     pub p2p: bool,
     /// Второй P2P-транспорт — libp2p (QUIC/TCP, свои релеи, DHT, mDNS); работает вместе с iroh.
     pub libp2p: bool,
+    /// Звонок приложению — ещё и через P2P-туннель (ADR-0008): медиа WebRTC идёт по связи
+    /// приложений, если напрямую не вышло (вместо TURN).
+    pub tunnel: bool,
     /// Сообщать контакту, что его сообщения прочитаны.
     pub read_receipts: bool,
     /// Картинки до 25 МБ от контактов скачивать сразу.
@@ -56,6 +59,7 @@ impl Default for Settings {
             tray_hint_shown: false,
             p2p: true,
             libp2p: true,
+            tunnel: true,
             read_receipts: true,
             auto_images: true,
             eco: false,

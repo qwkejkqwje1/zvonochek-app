@@ -15,6 +15,7 @@ mod p2p;
 mod profile;
 pub mod protect;
 pub mod store;
+mod tunnel;
 pub mod update;
 pub mod vault;
 
@@ -91,6 +92,8 @@ struct Inner {
     p2p_starting: std::sync::atomic::AtomicBool,
     /// Поколение узла: события старого (выключенного) узла не трогают состояние нового.
     p2p_gen: AtomicU64,
+    /// Туннели звонков через P2P-линк (отдельная блокировка: каждый пакет медиа).
+    tun: Mutex<tunnel::TunState>,
 }
 
 struct State {
@@ -245,6 +248,7 @@ impl Core {
             p2p: std::sync::RwLock::new(None),
             p2p_starting: std::sync::atomic::AtomicBool::new(false),
             p2p_gen: AtomicU64::new(0),
+            tun: Mutex::new(Default::default()),
         });
         let core = Core { inner };
         core.inner.files_after_start();
@@ -1277,7 +1281,15 @@ impl Inner {
             if let Some(zv) = zv {
                 self.p2p_consider(room_id, &zv, name.as_deref());
             }
-            self.emit("room:msg", json!({"roomId": room_id, "msg": msg}));
+            // 1:1 с приложением: кандидат туннеля в SDP собеседника
+            let msg = if group_call {
+                Some(msg)
+            } else {
+                self.tun_on_msg(room_id, &typ, &from, msg)
+            };
+            if let Some(msg) = msg {
+                self.emit("room:msg", json!({"roomId": room_id, "msg": msg}));
+            }
             return;
         }
         let Some(link_id) = r.link_id.clone() else {

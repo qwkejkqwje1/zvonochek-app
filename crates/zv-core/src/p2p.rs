@@ -223,6 +223,7 @@ impl Inner {
                 h.remove_channel(&chan_name(*l));
             }
         }
+        self.tun_close_all();
         self.refresh_extras();
         self.rt.spawn(async move { node.shutdown().await });
         tracing::info!("p2p: выключен");
@@ -302,6 +303,7 @@ impl Inner {
         let Some(peer) = node.peer_of(link) else {
             return;
         };
+        let tun = self.tunnel_enabled();
         let k = {
             let mut st = self.lock();
             let Some(r) = st.rooms.get(topic) else { return };
@@ -312,7 +314,12 @@ impl Inner {
             k
         };
         let proof = zv_p2p::crypto::bind_proof(&k, node.id(), &peer);
-        node.send(link, &json!({"t": "bind", "r": topic, "p": proof}));
+        // tun: 1 — умеем туннель звонка (ADR-0008)
+        let mut m = json!({"t": "bind", "r": topic, "p": proof});
+        if tun {
+            m["tun"] = json!(1);
+        }
+        node.send(link, &m);
     }
 
     fn on_bind(self: &Arc<Self>, link: LinkId, peer: &str, msg: &Value) {
@@ -382,6 +389,8 @@ impl Inner {
             self.lock().p2p.binds_sent.remove(&(link, topic.clone()));
         }
         self.send_bind(link, &topic);
+        let tun = msg.get("tun").and_then(|v| v.as_u64()) == Some(1);
+        self.tun_bound(&topic, link, peer, tun);
     }
 
     fn detach(&self, link: LinkId, topic: &str) {
@@ -400,6 +409,7 @@ impl Inner {
 
     /// Комната закрывается/выходим из звонка — отвязать P2P.
     pub(crate) fn p2p_room_closed(&self, topic: &str) {
+        self.tun_close(topic);
         let links: Vec<LinkId> = {
             let st = self.lock();
             st.p2p
@@ -514,11 +524,14 @@ impl Inner {
                         }
                     }
                     "pong" => {}
+                    "tun" => self.tun_frame(link, &msg),
                     _ => self.on_zv4(crate::contacts::Src::Link(link), &peer, msg),
                 }
             }
             Event::Datagram { link, data, .. } => {
-                if data.len() > 33
+                if data.first() == Some(&b'T') {
+                    self.tun_datagram(link, &data);
+                } else if data.len() > 33
                     && data[0] == b'E'
                     && let (Ok(topic), Ok(d)) = (
                         std::str::from_utf8(&data[1..33]),
@@ -541,6 +554,7 @@ impl Inner {
             }
             Event::LinkDown { link, peer, reason } => {
                 tracing::debug!("p2p: линк {link} закрыт: {reason}");
+                self.tun_link_down(link);
                 let (rooms, contact) = {
                     let mut st = self.lock();
                     let rooms: Vec<String> = st
@@ -634,6 +648,8 @@ impl Inner {
             .map(|(id, l)| json!({"link": id, "rooms": l.rooms.iter().map(|t| &t[..8]).collect::<Vec<_>>()}))
             .collect();
         v["bound"] = Value::Array(rooms);
+        drop(st);
+        v["tunnels"] = self.tun_status();
         v["enabled"] = json!(true);
         v["running"] = json!(true);
         v
