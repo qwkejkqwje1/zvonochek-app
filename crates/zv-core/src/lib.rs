@@ -375,6 +375,7 @@ impl Core {
             "ws_open" => i.ws_open(&args),
             "ws_send" => i.ws_send(&args),
             "ws_close" => i.ws_close(&args),
+            "ws_keep" => i.ws_keep(&args),
             "vault_status" => i.vault_status(),
             "vault_remove_password" => i.vault_remove_password(),
             "vault_remember" => i.vault_remember(&args),
@@ -508,12 +509,12 @@ fn link_parse(text: &str) -> Value {
             "d": d,
             "url": zv_proto::link::call_url(&secret),
         }),
-        // веб-чат по ссылке — открывается в браузере (чаты приложения — с контактами)
+        // веб-чат сайта — в окне веб-чатов (встроенный веб-клиент); `url` — для браузера
         Some(zv_proto::Link::Chat(_)) => {
             let t = text.trim();
             let url =
                 (t.starts_with("https://") || t.starts_with("http://")).then(|| t.to_string());
-            json!({"kind": "chat", "url": url})
+            json!({"kind": "chat", "url": url, "frag": zv_proto::link::chat_fragment(t)})
         }
         Some(zv_proto::Link::DeviceLink(_)) => json!({"kind": "link"}),
         None => json!({"kind": "none"}),

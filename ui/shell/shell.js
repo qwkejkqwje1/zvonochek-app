@@ -24,6 +24,7 @@ import {
   menu,
   qrSvg,
   openCall,
+  openWebChat,
   Ringer,
 } from './lib.js';
 import { mountIncoming } from './incoming.js';
@@ -207,11 +208,13 @@ async function onDialInput() {
       : `Приглашение в контакты от «${r.name || 'без имени'}» — нажмите «Добавить»`;
     if (expired) dialBtn.disabled = true;
   } else if (r.kind === 'chat') {
-    cls = r.url ? 'hint ok' : 'hint bad';
-    msg = r.url
-      ? 'Ссылка на веб-чат — откроется в браузере. Чаты в приложении — с контактами: страница «Чаты»'
-      : 'Ссылка на веб-чат — откройте её в браузере';
-    dialBtn.disabled = !r.url;
+    cls = r.frag || r.url ? 'hint ok' : 'hint bad';
+    msg = r.frag
+      ? 'Ссылка на чат сайта — откроется в окне «Чаты сайта»'
+      : r.url
+        ? 'Ссылка на чат сайта — откроется в браузере'
+        : 'Ссылка на чат сайта — откройте её в браузере';
+    dialBtn.disabled = !r.frag && !r.url;
     dialBtn.lastChild.textContent = 'Открыть';
   } else if (r.kind === 'link') {
     cls = 'hint bad';
@@ -230,8 +233,9 @@ dialInput.addEventListener('keydown', (e) => {
 dialBtn.addEventListener('click', dial);
 async function dial() {
   const r = S.parsed;
-  if (r && r.kind === 'chat' && r.url) {
-    if (host === 'tauri') call('host_open_external', { url: r.url }).catch((e) => toast(e.message || e));
+  if (r && r.kind === 'chat' && (r.frag || r.url)) {
+    if (r.frag) openWebChat(r.frag).catch((e) => toast('Не открылось: ' + (e.message || e)));
+    else if (host === 'tauri') call('host_open_external', { url: r.url }).catch((e) => toast(e.message || e));
     else window.open(r.url, '_blank', 'noopener');
     dialInput.value = '';
     onDialInput();

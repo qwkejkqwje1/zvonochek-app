@@ -2,7 +2,8 @@
 //! Origin, а WebView шлёт его всегда (`https://tauri.localhost`). Ядро открывает сокет без Origin
 //! (как и `fetch`, см. fetch.rs) и пересылает кадры событиями `ws:open` / `ws:msg` / `ws:close`.
 //! Номер сокета выбирает страница (случайная строка): события приходят во все окна, и ответ на
-//! `ws_open` не может разминуться с первым событием.
+//! `ws_open` не может разминуться с первым событием. Закрытое окно не всегда успевает закрыть свои
+//! сокеты, поэтому страница раз в 30 с подтверждает их (`ws_keep`); забытый сокет ядро закрывает.
 
 use crate::Inner;
 use base64::Engine;
@@ -10,7 +11,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::CloseFrame;
@@ -18,6 +19,9 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 /// Не больше стольких сокетов сразу (чат держит один, страница с ошибкой не съест ресурсы).
 const MAX_SOCKETS: usize = 16;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Сокет без подтверждения страницы дольше этого закрывается (таймеры скрытого окна WebView2
+/// замедляются до раза в минуту — запас тройной).
+const KEEP: Duration = Duration::from_secs(180);
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
 pub(crate) enum Cmd {
@@ -26,9 +30,14 @@ pub(crate) enum Cmd {
     Close(u16, String),
 }
 
+struct Sock {
+    tx: mpsc::UnboundedSender<Cmd>,
+    seen: Instant,
+}
+
 #[derive(Default)]
 pub(crate) struct WsState {
-    socks: HashMap<String, mpsc::UnboundedSender<Cmd>>,
+    socks: HashMap<String, Sock>,
 }
 
 /// Адрес сокета: `wss://` к тем же хостам, что разрешены для `fetch` (Worker, `*.workers.dev`);
@@ -94,7 +103,13 @@ impl Inner {
             if st.socks.len() >= MAX_SOCKETS {
                 return Err("слишком много сокетов".into());
             }
-            st.socks.insert(id.clone(), tx);
+            st.socks.insert(
+                id.clone(),
+                Sock {
+                    tx,
+                    seen: Instant::now(),
+                },
+            );
         }
         self.rt.spawn(run(
             Arc::downgrade(self),
@@ -116,9 +131,10 @@ impl Inner {
         } else {
             return Err("нечего отправлять".into());
         };
-        let st = self.ws_lock();
-        let tx = st.socks.get(id).ok_or("сокет закрыт")?;
-        tx.send(cmd).map_err(|_| "сокет закрыт".to_string())?;
+        let mut st = self.ws_lock();
+        let sock = st.socks.get_mut(id).ok_or("сокет закрыт")?;
+        sock.seen = Instant::now();
+        sock.tx.send(cmd).map_err(|_| "сокет закрыт".to_string())?;
         Ok(Value::Null)
     }
 
@@ -137,10 +153,35 @@ impl Inner {
             .chars()
             .take(60)
             .collect();
-        if let Some(tx) = self.ws_lock().socks.get(id) {
-            let _ = tx.send(Cmd::Close(code, reason));
+        if let Some(sock) = self.ws_lock().socks.get(id) {
+            let _ = sock.tx.send(Cmd::Close(code, reason));
         }
         Ok(Value::Null)
+    }
+
+    /// `ws_keep {ids}` — страница жива и держит эти сокеты.
+    pub(crate) fn ws_keep(&self, args: &Value) -> Result<Value, String> {
+        let now = Instant::now();
+        let mut st = self.ws_lock();
+        for id in args
+            .get("ids")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|v| v.as_str())
+        {
+            if let Some(sock) = st.socks.get_mut(id) {
+                sock.seen = now;
+            }
+        }
+        Ok(Value::Null)
+    }
+
+    fn ws_stale(&self, id: &str) -> bool {
+        self.ws_lock()
+            .socks
+            .get(id)
+            .is_none_or(|s| s.seen.elapsed() > KEEP)
     }
 }
 
@@ -187,8 +228,19 @@ async fn run(
     };
     emit(&w, "ws:open", json!({"id": id, "protocol": ""}));
     let (mut sink, mut stream) = ws.split();
+    let mut tick = tokio::time::interval(Duration::from_secs(30));
+    tick.tick().await;
     loop {
         tokio::select! {
+            _ = tick.tick() => {
+                if w.upgrade().is_none_or(|i| i.ws_stale(&id)) {
+                    tracing::info!("ws {url}: страница не подтверждает сокет — закрываю");
+                    let frame = CloseFrame { code: 1001.into(), reason: "".into() };
+                    let _ = tokio::time::timeout(Duration::from_secs(3), sink.send(Message::Close(Some(frame)))).await;
+                    closed(&w, &id, 1001, "", false);
+                    return;
+                }
+            }
             m = stream.next() => match m {
                 Some(Ok(Message::Text(t))) => emit(&w, "ws:msg", json!({"id": id, "text": t.as_str()})),
                 Some(Ok(Message::Binary(b))) => emit(&w, "ws:msg", json!({"id": id, "b64": B64.encode(&b)})),

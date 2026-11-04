@@ -9197,6 +9197,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zv-core",
+ "zv-proto",
  "zv-signal",
 ]
 

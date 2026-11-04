@@ -9,7 +9,7 @@ pub const WEB_BASE: &str = "https://zvonochek.github.io/";
 pub enum Link {
     /// Звонок: секрет комнаты (base64url, ≥ 22 символов) и необязательный отпечаток владельца номера.
     Call { secret: String, d: Option<String> },
-    /// Приватный чат веба (`#chat=`) — в приложении пока не поддерживается.
+    /// Приватный чат веба (`#chat=`) — открывается в окне веб-чатов приложения (встроенный веб-клиент).
     Chat(String),
     /// Привязка устройства веба (`#link=`) — в приложении пока не поддерживается.
     DeviceLink(String),
@@ -86,6 +86,39 @@ pub fn parse_link(input: &str) -> Option<Link> {
     })
 }
 
+/// Фрагмент ссылки веб-чата для окна приложения: `chat=<seed>[&p=1]` (`p=1` — комната с PIN).
+/// Только символы base64url: фрагмент подставляется в адрес окна.
+pub fn chat_fragment(input: &str) -> Option<String> {
+    let s = input.trim();
+    let frag = &s[s.find('#')? + 1..];
+    let mut seed = None;
+    let mut pin = false;
+    for pair in frag.split('&') {
+        match pair.split_once('=') {
+            Some(("chat", v)) if seed.is_none() => seed = Some(v.trim()),
+            Some(("p", v)) => pin = v.trim() == "1",
+            _ => {}
+        }
+    }
+    let seed = seed.filter(|v| {
+        (22..=128).contains(&v.len())
+            && v.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"-_=".contains(&b))
+    })?;
+    Some(format!("chat={seed}{}", if pin { "&p=1" } else { "" }))
+}
+
+/// `#chat=…` для адреса окна веб-чатов из фрагмента `chat=…[&p=1]` (пустой — список чатов);
+/// `None` — фрагмент не такой, какой даёт [`chat_fragment`].
+pub fn chat_hash(frag: &str) -> Option<String> {
+    if frag.is_empty() {
+        return Some(String::new());
+    }
+    chat_fragment(&format!("#{frag}"))
+        .filter(|f| f == frag)
+        .map(|f| format!("#{f}"))
+}
+
 /// Новый секрет как в вебе: 32 случайных байта → base64url (43 символа).
 pub fn new_secret() -> String {
     let mut b = [0u8; 32];
@@ -107,6 +140,35 @@ pub fn app_url(secret: &str) -> String {
 mod tests {
     use super::*;
     const S: &str = "AbCdEfGhIjKlMnOpQrStUv";
+
+    #[test]
+    fn chat_frag() {
+        let seed = "q3bL0x9_Zk-AbCdEfGhIjKlMnOpQrStUvWxYz012345";
+        assert_eq!(
+            chat_fragment(&format!("{WEB_BASE}#chat={seed}")),
+            Some(format!("chat={seed}"))
+        );
+        assert_eq!(
+            chat_fragment(&format!(
+                "https://qwkejkqwje1.github.io/zvonochek/#chat={seed}&p=1"
+            )),
+            Some(format!("chat={seed}&p=1"))
+        );
+        assert_eq!(
+            chat_fragment(&format!("#chat={seed}&p=0")),
+            Some(format!("chat={seed}"))
+        );
+        assert_eq!(chat_fragment("#chat=short"), None);
+        assert_eq!(chat_fragment(&format!("#chat={seed}');alert(1)//")), None);
+        assert_eq!(chat_fragment(&format!("chat={seed}")), None);
+        assert_eq!(chat_fragment(&format!("#k={seed}")), None);
+        assert_eq!(chat_hash(""), Some(String::new()));
+        assert_eq!(
+            chat_hash(&format!("chat={seed}&p=1")),
+            Some(format!("#chat={seed}&p=1"))
+        );
+        assert_eq!(chat_hash(&format!("chat={seed}&x=<b>")), None);
+    }
 
     #[test]
     fn parses_variants() {

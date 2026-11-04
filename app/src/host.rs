@@ -73,6 +73,16 @@ pub async fn command(
             let boot = args.get("boot").cloned().unwrap_or_else(|| json!({}));
             wins::open_call(app, secret, boot)
         }
+        "host_open_chat" => {
+            let frag = args.get("frag").and_then(|v| v.as_str()).unwrap_or("");
+            let hash = zv_proto::link::chat_hash(frag).ok_or("неверная ссылка на чат")?;
+            let mut boot = match args.get("boot") {
+                Some(Value::Object(m)) => Value::Object(m.clone()),
+                _ => json!({}),
+            };
+            boot["chat"] = json!(true);
+            wins::open_chat(app, &hash, boot)
+        }
         "host_call_done" => {
             wins::call_done(app, window);
             Ok(Value::Null)

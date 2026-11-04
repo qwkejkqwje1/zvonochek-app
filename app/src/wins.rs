@@ -242,6 +242,48 @@ pub fn open_call(app: &AppHandle, secret: &str, boot: Value) -> Result<Value, St
     Ok(json!({"opened": true}))
 }
 
+/// Окно веб-чатов (ссылки `#chat=` сайта): встроенный веб-клиент, раздел «Чаты»; одно на все чаты.
+/// `hash` — `#chat=…` (проверен `zv_proto::link::chat_hash`) или пусто (список чатов).
+pub fn open_chat(app: &AppHandle, hash: &str, boot: Value) -> Result<Value, String> {
+    let h = serde_json::to_string(hash).unwrap_or_else(|_| "\"\"".into());
+    if let Some(w) = app.get_webview_window("webchat") {
+        if !hash.is_empty() {
+            w.eval(format!("location.hash={h}"))
+                .map_err(|e| e.to_string())?;
+        }
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return Ok(json!({"focused": true}));
+    }
+    // начальный чат — только при первой загрузке окна (sessionStorage живёт до закрытия окна)
+    let boot_js = format!(
+        "window.__ZV_BOOT__={};if(!sessionStorage.zvChatInit){{sessionStorage.zvChatInit='1';if({h}&&!location.hash)history.replaceState(null,'',location.pathname+location.search+{h});}}",
+        serde_json::to_string(&boot).unwrap_or_else(|_| "{}".into())
+    );
+    let w = base(app, "webchat", "web/index.html")
+        .title("Чаты сайта — ZVONochek")
+        .inner_size(980.0, 720.0)
+        .min_inner_size(360.0, 520.0)
+        .center()
+        .initialization_script(boot_js)
+        .initialization_script(PRELOAD)
+        .on_permission_request(|_, kind| match kind {
+            // голосовые сообщения, звонок из чата, вставка из буфера
+            PermissionKind::Microphone
+            | PermissionKind::Camera
+            | PermissionKind::DisplayCapture
+            | PermissionKind::ClipboardRead
+            | PermissionKind::Autoplay => PermissionResponse::Allow,
+            PermissionKind::Notifications | PermissionKind::Geolocation => PermissionResponse::Deny,
+            _ => PermissionResponse::Default,
+        })
+        .build()
+        .map_err(|e| e.to_string())?;
+    let _ = w.set_focus();
+    Ok(json!({"opened": true}))
+}
+
 /// Всплывающее окно входящего звонка — внизу справа, поверх всех, без кражи фокуса.
 pub fn show_incoming(app: &AppHandle, _call_id: &str, _text: &str) {
     if let Some(w) = app.get_webview_window("incoming") {

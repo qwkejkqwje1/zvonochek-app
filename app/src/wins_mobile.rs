@@ -94,6 +94,25 @@ pub fn open_call(app: &AppHandle, secret: &str, boot: Value) -> Result<Value, St
     Ok(json!({"opened": true}))
 }
 
+/// Веб-чаты сайта (`#chat=`): встроенный веб-клиент в том же окне; «Назад» из списка чатов —
+/// `host_call_done` (звонка нет — просто обратно в оболочку).
+pub fn open_chat(app: &AppHandle, hash: &str, boot: Value) -> Result<Value, String> {
+    let st = app.state::<AppState>();
+    if st.current_call.lock().unwrap().is_some() {
+        return Err("идёт звонок — чаты сайта откроются после него".into());
+    }
+    let w = build_main(app, true).map_err(|e| e.to_string())?;
+    let q: String = url::form_urlencoded::byte_serialize(
+        serde_json::to_string(&boot)
+            .unwrap_or_else(|_| "{}".into())
+            .as_bytes(),
+    )
+    .collect();
+    let u = app_url(&w, &format!("/web/index.html?zvboot={q}{hash}"))?;
+    w.navigate(u).map_err(|e| e.to_string())?;
+    Ok(json!({"opened": true}))
+}
+
 /// Звонок закончился (страница звонка сообщила или ушли с неё): выйти из комнат и вернуться в оболочку.
 pub fn call_done(app: &AppHandle, window: &WebviewWindow) {
     let st = app.state::<AppState>();

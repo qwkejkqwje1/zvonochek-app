@@ -274,6 +274,7 @@ async fn client(app: Arc<App>, ws: WebSocket) {
                 Some(std::fs::remove_dir_all(&old).map(|_| json!({"removed": [old.display().to_string()]})).map_err(|e| e.to_string()))
             }
             "host_open_call" => Some(Ok(host_open_call(&args))),
+            "host_open_chat" => Some(host_open_chat(&args)),
             "host_call_done" | "host_focus" | "host_open_external" | "host_incoming_empty" => Some(Ok(Value::Null)),
             // как в приложении: путь берём у ядра (только файлы чатов), но не открываем — запоминаем
             "host_open_path" => Some(app.core.dispatch_sync("chat_file_path", &args).unwrap_or_else(|| Err("нет команды".into())).map(|v| {
@@ -359,6 +360,19 @@ fn host_open_call(args: &Value) -> Value {
     let boot = args.get("boot").cloned().unwrap_or_else(|| json!({}));
     let q: String = url_encode(&boot.to_string());
     json!({"url": format!("/web/index.html?zvboot={q}#k={secret}")})
+}
+
+/// Адрес окна веб-чатов: встроенный веб-клиент (раздел «Чаты»), чат сайта — в `#chat=`.
+fn host_open_chat(args: &Value) -> Result<Value, String> {
+    let frag = args.get("frag").and_then(|v| v.as_str()).unwrap_or("");
+    let hash = zv_proto::link::chat_hash(frag).ok_or("неверная ссылка на чат")?;
+    let mut boot = match args.get("boot") {
+        Some(Value::Object(m)) => Value::Object(m.clone()),
+        _ => json!({}),
+    };
+    boot["chat"] = json!(true);
+    let q: String = url_encode(&boot.to_string());
+    Ok(json!({"url": format!("/web/index.html?zvboot={q}{hash}")}))
 }
 
 fn url_encode(s: &str) -> String {

@@ -323,6 +323,18 @@ export async function openCall(secret, boot = {}) {
   return r;
 }
 
+/** Окно «Чаты сайта» (встроенный веб-клиент): чат по фрагменту `chat=…[&p=1]` или список чатов. */
+export async function openWebChat(frag = '') {
+  const st = await call('settings_get');
+  const r = await call('host_open_chat', { frag, boot: { name: st.name || '' } });
+  if (r && r.url) {
+    // zv-devhost: окно — вкладка
+    const w = window.open(r.url, 'zvchat');
+    if (!w) location.href = r.url;
+  }
+  return r;
+}
+
 // ---------- мелодия (WebAudio, своя: «звоночек» из двух нот) ----------
 export class Ringer {
   constructor() {

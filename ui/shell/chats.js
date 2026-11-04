@@ -20,6 +20,7 @@ import {
   promptDialog,
   menu,
   openCall,
+  openWebChat,
 } from './lib.js';
 import {
   C as CT,
@@ -170,6 +171,7 @@ function wire() {
   addEventListener('focus', syncFocus);
   addEventListener('blur', syncFocus);
   $('#chNewGroup')?.addEventListener('click', () => newGroupDialog());
+  $('#chWeb')?.addEventListener('click', () => openWebChat('').catch((e) => toast('Не открылось: ' + (e.message || e))));
   $('#chSearch').addEventListener('input', renderList);
   $('#chSearch').addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

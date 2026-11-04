@@ -1,7 +1,7 @@
 // ZVONochek для ПК — preload: выполняется раньше скриптов страницы в каждом окне
 // (Tauri: initialization_script; zv-devhost: вставляется первым <script> в web/index.html).
 //  • window.__zvIpc — мост к ядру: call(cmd, args) → Promise, on(префикс события, fn) → отписка.
-//  • Во встроенном веб-клиенте (ui/web): fetch к Worker/TURN — через ядро (Worker отвергает чужой Origin),
+//  • Во встроенном веб-клиенте (ui/web): fetch и WebSocket к Worker/TURN — через ядро (Worker отвергает чужой Origin),
 //    service worker не регистрируется, сырые ключи HKDF запоминаются (секрет комнаты для моста signaling.js),
 //    автоматический вход в звонок и возврат в оболочку по завершении.
 (function () {
@@ -26,7 +26,7 @@
   const tauri = !!window.__TAURI_INTERNALS__;
   if (tauri) {
     // Быстрые команды — синхронной командой Tauri: выполняются по порядку (desc раньше cand).
-    const ORDERED = new Set(['room_send', 'room_join', 'room_leave', 'room_bye']);
+    const ORDERED = new Set(['room_send', 'room_join', 'room_leave', 'room_bye', 'ws_open', 'ws_send', 'ws_close', 'ws_keep']);
     call = (cmd, args = {}) => window.__TAURI_INTERNALS__.invoke(ORDERED.has(cmd) ? 'zv_sync' : 'zv', { cmd, args });
     const sub = () => {
       const ev = window.__TAURI__ && window.__TAURI__.event;
@@ -107,10 +107,13 @@
     if (boot.name) localStorage.zvName = boot.name;
   } catch {}
 
-  // service worker: не нужен (файлы локальные) и опасен — закэшировал бы старую версию приложения
+  // service worker: не нужен (файлы локальные) и опасен — закэшировал бы старую версию приложения.
+  // `ready` без него не наступил бы никогда — веб-чат ждал бы его вечно (подписка на push).
   try {
     if (navigator.serviceWorker) {
-      navigator.serviceWorker.register = () => Promise.reject(new Error('service worker отключён в приложении'));
+      const off = () => Promise.reject(new Error('service worker отключён в приложении'));
+      navigator.serviceWorker.register = off;
+      Object.defineProperty(navigator.serviceWorker, 'ready', { configurable: true, get: off });
       navigator.serviceWorker
         .getRegistrations?.()
         .then((rs) => rs.forEach((r) => r.unregister()))
@@ -202,6 +205,147 @@
     const nobody = r.status === 204 || r.status === 205 || r.status === 304 || method === 'HEAD';
     return new Response(nobody ? null : data, { status: r.status, headers: r.headers || {} });
   };
+
+  // WebSocket к Worker (веб-чаты `#chat=`) — через ядро (ws_open/ws_send/ws_close, события ws:*):
+  // заголовок Origin у сокета WebView не убрать, а Worker пускает только сайт и запросы без Origin.
+  const OrigWS = window.WebSocket;
+  const wsProxied = (u) =>
+    /^wss:\/\/([^/]+\.)?workers\.dev(\/|$|\?)/.test(u) ||
+    (!!boot.proxyLocal && /^ws:\/\/(127\.0\.0\.1|localhost):\d+\//.test(u) && !u.startsWith('ws://' + location.host + '/'));
+  if (OrigWS) {
+    const socks = new Map();
+    let subscribed = false;
+    const rid = () => {
+      const a = crypto.getRandomValues(new Uint8Array(12));
+      return 'w' + Array.from(a, (x) => x.toString(16).padStart(2, '0')).join('');
+    };
+    const ST = { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 };
+    class ZvSocket extends EventTarget {
+      constructor(url, protocols) {
+        super();
+        this.url = url;
+        this.readyState = 0;
+        this.protocol = '';
+        this.extensions = '';
+        this.bufferedAmount = 0;
+        this.binaryType = 'blob';
+        this.onopen = this.onmessage = this.onerror = this.onclose = null;
+        this._id = rid();
+        this._chain = Promise.resolve();
+        socks.set(this._id, this);
+        if (!subscribed) {
+          subscribed = true;
+          window.__zvIpc.on('ws:', (ev, p) => {
+            const sock = p && socks.get(p.id);
+            if (sock) sock._ev(ev, p);
+          });
+        }
+        const list = protocols == null ? [] : [].concat(protocols).map(String);
+        window.__zvIpc
+          .call('ws_open', { id: this._id, url, protocols: list })
+          .catch(() => this._ev('ws:close', { code: 1006, reason: '', clean: false }));
+      }
+      _fire(type, ev) {
+        const h = this['on' + type];
+        if (typeof h === 'function') {
+          try {
+            h.call(this, ev);
+          } catch (e) {
+            console.error('[zv] WebSocket on' + type, e);
+          }
+        }
+        this.dispatchEvent(ev);
+      }
+      _ev(ev, p) {
+        if (ev === 'ws:open') {
+          if (this.readyState !== 0) return;
+          this.readyState = 1;
+          this.protocol = p.protocol || '';
+          this._fire('open', new Event('open'));
+        } else if (ev === 'ws:msg') {
+          if (this.readyState !== 1) return;
+          let data = p.text;
+          if (p.b64 != null) {
+            const u8 = b64.dec(p.b64);
+            data = this.binaryType === 'arraybuffer' ? u8.buffer : new Blob([u8]);
+          }
+          this._fire('message', new MessageEvent('message', { data, origin: new URL(this.url).origin }));
+        } else if (ev === 'ws:close') {
+          if (this.readyState === 3) return;
+          this.readyState = 3;
+          socks.delete(this._id);
+          if (!p.clean) this._fire('error', new Event('error'));
+          this._fire('close', new CloseEvent('close', { code: p.code || 1006, reason: p.reason || '', wasClean: !!p.clean }));
+        }
+      }
+      send(data) {
+        if (this.readyState === 0) throw new DOMException('WebSocket ещё подключается', 'InvalidStateError');
+        if (this.readyState !== 1) return;
+        const id = this._id;
+        this._chain = this._chain
+          .then(async () => {
+            const a =
+              typeof data === 'string'
+                ? { id, text: data }
+                : { id, b64: b64.enc(data instanceof Blob ? new Uint8Array(await data.arrayBuffer()) : bytesOf(data)) };
+            return window.__zvIpc.call('ws_send', a);
+          })
+          .catch(() => {});
+      }
+      close(code, reason) {
+        if (code !== undefined && code !== 1000 && !(code >= 3000 && code <= 4999))
+          throw new DOMException('Недопустимый код закрытия', 'InvalidAccessError');
+        if (this.readyState >= 2) return;
+        this.readyState = 2;
+        window.__zvIpc.call('ws_close', { id: this._id, code: code || 1000, reason: String(reason || '') }).catch(() => {});
+      }
+    }
+    Object.assign(ZvSocket, ST);
+    Object.assign(ZvSocket.prototype, ST);
+    const WS = function WebSocket(url, protocols) {
+      if (!new.target) throw new TypeError("WebSocket: нужен 'new'");
+      let abs;
+      try {
+        abs = new URL(url, location.href).href;
+      } catch {
+        abs = String(url);
+      }
+      if (wsProxied(abs)) return new ZvSocket(abs, protocols);
+      return protocols === undefined ? new OrigWS(url) : new OrigWS(url, protocols);
+    };
+    WS.prototype = OrigWS.prototype;
+    Object.assign(WS, ST);
+    window.WebSocket = WS;
+    // ядро закрывает сокеты, которые страница перестала подтверждать (окно закрыли)
+    setInterval(() => {
+      if (socks.size) window.__zvIpc.call('ws_keep', { ids: [...socks.keys()] }).catch(() => {});
+    }, 30000);
+    addEventListener('pagehide', () => {
+      for (const id of socks.keys()) window.__zvIpc.call('ws_close', { id, code: 1000 }).catch(() => {});
+    });
+  }
+
+  // окно веб-чатов (ссылки `#chat=` сайта): только раздел «Чаты» веб-клиента
+  if (boot.chat) {
+    const css = document.createElement('style');
+    css.textContent = '.tabbar{display:none!important}';
+    (document.head || document.documentElement).appendChild(css);
+    const toChats = () => {
+      if (!/(^#|&)chat=/.test(location.hash)) document.querySelector('[data-home-tab="chats"]')?.click();
+    };
+    if (document.readyState === 'loading') addEventListener('DOMContentLoaded', () => setTimeout(toChats, 0));
+    else setTimeout(toChats, 0);
+    // Android «Назад»: из открытого чата — к списку, из списка — в оболочку
+    window.__zvBack = () => {
+      const back = document.querySelector('#chatBack');
+      if (/(^#|&)chat=/.test(location.hash) && back && back.offsetParent !== null) {
+        back.click();
+        return true;
+      }
+      window.__zvIpc.call('host_call_done', {}).catch(() => {});
+      return true;
+    };
+  }
 
   // звонок контакту без видео: первый запрос «микрофон + камера» — только микрофон
   // (веб-клиент сам выключит кнопку камеры, если видеодорожки нет; включить её можно в звонке)
