@@ -46,7 +46,7 @@ async function waitHttp(port) {
 const browser = await launch();
 
 let run = 0;
-async function scenario(title, only, extraEnv = {}) {
+async function scenario(title, only, extraEnv = {}, offA = false) {
   console.log(`— ${title}`);
   const env = { ZV_TUNNEL_ONLY: only ? '1' : '0', ...extraEnv };
   run++;
@@ -63,6 +63,21 @@ async function scenario(title, only, extraEnv = {}) {
     await page.goto(`http://127.0.0.1:${port}/web/index.html?zvboot=${boot}#k=${secret}`, { waitUntil: 'load' });
     return { ctx, page, tag };
   };
+  if (offA) {
+    // выключаем туннель у A переключателем в настройках оболочки
+    await step('переключатель «Звонки через P2P-туннель» выключает туннель', async () => {
+      const ctx = await browser.newContext();
+      const sh = await ctx.newPage();
+      await sh.goto(`http://127.0.0.1:${PA}/shell/index.html`, { waitUntil: 'load' });
+      await sh.evaluate(() => window.__zvIpc.call('settings_set', { patch: { onboarded: true } }));
+      await sh.reload({ waitUntil: 'load' });
+      await sh.click('.nav[data-page="settings"]');
+      if (!(await sh.isChecked('#setTunnel'))) throw new Error('по умолчанию выключен');
+      await sh.click('#setTunnel + span');
+      await sh.waitForFunction(async () => (await window.__zvIpc.call('settings_get', {})).tunnel === false, null, { timeout: 5000 });
+      await ctx.close();
+    });
+  }
   const a = await mk('a', PA, 'Аня');
   const b = await mk('b', PB, 'Боря');
   const ipc = (x, cmd, args = {}) => x.page.evaluate(([c, g]) => window.__zvIpc.call(c, g), [cmd, args]);
@@ -80,6 +95,10 @@ async function scenario(title, only, extraEnv = {}) {
     const ta = await tunnels(a);
     const tb = await tunnels(b);
     console.log('   туннель A:', JSON.stringify(ta), '\n   туннель B:', JSON.stringify(tb));
+    if (offA) {
+      if (ta.length || tb.length) throw new Error('туннель поднялся, хотя у A выключен');
+      return;
+    }
     if (ta.length !== 1 || tb.length !== 1) throw new Error('нет туннеля у обоих');
     if (only) {
       for (const t of [...ta, ...tb]) if (t.rx < 100 || t.tx < 100) throw new Error('мало пакетов через туннель');
@@ -89,6 +108,26 @@ async function scenario(title, only, extraEnv = {}) {
       if (/Мост|TURN/i.test(q)) throw new Error('путь не туннель: ' + q);
     }
   });
+  if (only)
+    await step('видео через туннель (камеры у обоих)', async () => {
+      for (const x of [a, b]) {
+        const on = await x.page.evaluate(() => document.querySelector('#cCam')?.getAttribute('aria-pressed') === 'true');
+        if (!on) await x.page.click('#cCam');
+      }
+      await a.page.waitForTimeout(6000);
+      const frames = (x) =>
+        x.page.evaluate(() => {
+          const v = document.querySelector('#remote');
+          return { w: v?.videoWidth || 0, n: v?.getVideoPlaybackQuality?.().totalVideoFrames || 0 };
+        });
+      const f1 = [await frames(a), await frames(b)];
+      await a.page.waitForTimeout(3000);
+      const f2 = [await frames(a), await frames(b)];
+      console.log('   видео собеседника:', JSON.stringify(f2), 'туннель A:', JSON.stringify(await tunnels(a)));
+      if (!(f2[0].w > 0 && f2[0].n > f1[0].n && f2[1].w > 0 && f2[1].n > f1[1].n)) throw new Error('видео не идёт');
+      const bridge = await a.page.evaluate(() => !document.querySelector('#bridgeBadge')?.classList.contains('hidden'));
+      if (bridge) throw new Error('включился мост');
+    });
   await step('завершение — туннель закрыт', async () => {
     await a.page.click('#cHang');
     await a.page.waitForTimeout(2500);
@@ -105,6 +144,7 @@ async function scenario(title, only, extraEnv = {}) {
 await scenario('только туннель (ZV_TUNNEL_ONLY=1), iroh — датаграммы', true);
 await scenario('только туннель, линк libp2p — кадры потока', true, { ZV_P2P_ONLY: 'libp2p' });
 await scenario('обычный звонок (туннель как запасной путь)', false);
+await scenario('у A туннель выключен в настройках — звонок без туннеля', false, {}, true);
 await browser.close();
 console.log(failed ? `ОШИБОК: ${failed} (журналы: ${tmp})` : 'всё прошло');
 if (!failed) fs.rmSync(tmp, { recursive: true, force: true });

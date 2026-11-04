@@ -62,6 +62,8 @@ pub(crate) struct Tun {
     rx: AtomicU64,
     tx: AtomicU64,
     tx_frames: AtomicU64,
+    /// не отправлено: линк только через релей libp2p
+    dropped: AtomicU64,
     task: Mutex<Option<tokio::task::AbortHandle>>,
 }
 
@@ -106,6 +108,7 @@ impl Tun {
             "rx": self.rx.load(Ordering::Relaxed),
             "tx": self.tx.load(Ordering::Relaxed),
             "txFrames": self.tx_frames.load(Ordering::Relaxed),
+            "dropped": self.dropped.load(Ordering::Relaxed),
         })
     }
 }
@@ -238,6 +241,12 @@ impl Inner {
         b.extend_from_slice(pkt);
         t.tx.fetch_add(1, Ordering::Relaxed);
         if !node.send_datagram(link, b.into()) {
+            // libp2p через релей: у публичных релеев лимит цепи (~2 мин / 128 КБ) — медиа его съест и
+            // порвёт линк. Пусть браузер выберет другой путь (TURN).
+            if node.transport(link) == Some("libp2p") && node.path(link).0 == "relay" {
+                t.dropped.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
             t.tx_frames.fetch_add(1, Ordering::Relaxed);
             node.send(
                 link,
@@ -305,6 +314,7 @@ impl Inner {
             rx: AtomicU64::new(0),
             tx: AtomicU64::new(0),
             tx_frames: AtomicU64::new(0),
+            dropped: AtomicU64::new(0),
             task: Mutex::new(None),
         });
         let h = self.rt.spawn(pump(Arc::downgrade(self), t.clone()));

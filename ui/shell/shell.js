@@ -573,6 +573,8 @@ function renderSettings() {
   $('#setP2p').checked = s.p2p !== false;
   $('#setLibp2p').checked = s.libp2p !== false;
   $('#setLibp2p').disabled = s.p2p === false;
+  $('#setTunnel').checked = s.tunnel !== false;
+  $('#setTunnel').disabled = s.p2p === false;
   $('#setReceipts').checked = s.readReceipts !== false;
   $('#setAutoImg').checked = s.autoImages !== false;
   $('#setNotify').checked = s.notifications !== false;
@@ -615,6 +617,7 @@ $('#setP2p').addEventListener('change', async (e) => {
   setPatch({ p2p: e.target.checked });
 });
 $('#setLibp2p').addEventListener('change', (e) => setPatch({ libp2p: e.target.checked }));
+$('#setTunnel').addEventListener('change', (e) => setPatch({ tunnel: e.target.checked }));
 $('#setWorker').addEventListener('change', (e) => {
   const v = e.target.value.trim();
   if (v && !/^https:\/\/[^/\s]+/.test(v)) {
@@ -905,6 +908,22 @@ function diagP2p(p) {
             .join(' · ')
         )
       : null,
+    ...(p.tunnels || []).map((t) =>
+      h(
+        'div.muted',
+        { title: `Туннель звонка ${t.room}: адрес для окна звонка ${t.addr}` },
+        [
+          'туннель звонка',
+          t.link != null ? 'линк есть' : 'ждёт линк',
+          t.browser ? 'окно на связи' : 'окно ещё не стучалось',
+          `↑${t.tx} ↓${t.rx}`,
+          t.txFrames ? `кадрами ${t.txFrames}` : null,
+          t.dropped ? `не отправлено ${t.dropped} (только релей libp2p)` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      )
+    ),
     (p.links || []).length
       ? h(
           'div.links',
