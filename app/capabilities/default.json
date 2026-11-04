@@ -2,6 +2,6 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Окна приложения: события ядра (listen) и команды zv/zv_sync.",
-  "windows": ["main", "incoming", "call-*", "unlock"],
+  "windows": ["main", "incoming", "call-*", "unlock", "webchat"],
   "permissions": ["core:event:default"]
 }

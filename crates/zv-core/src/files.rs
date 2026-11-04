@@ -34,7 +34,12 @@ pub(crate) fn safe_name(s: &str) -> String {
     let base = s.rsplit(['/', '\\']).next().unwrap_or("");
     let n: String = base
         .chars()
-        .filter(|c| !c.is_control() && !"<>:\"/\\|?*".contains(*c))
+        .filter(|c| {
+            !c.is_control()
+                && !"<>:\"/\\|?*".contains(*c)
+                // невидимые символы направления текста: «фото\u{202E}gpj.exe» выглядит как «фотоexe.jpg»
+                && !matches!(c, '\u{200E}' | '\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+        })
         .take(150)
         .collect();
     let mut n = n.trim().trim_end_matches(['.', ' ']).to_string();
@@ -764,6 +769,7 @@ mod tests {
         assert_eq!(safe_name("CON.txt"), "_CON.txt");
         assert_eq!(safe_name("   ...  "), "файл");
         assert_eq!(safe_name("отчёт.pdf."), "отчёт.pdf");
+        assert_eq!(safe_name("фото\u{202E}gpj.exe"), "фотоgpj.exe");
         assert_eq!(mime_of("Фото.JPG"), "image/jpeg");
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("a.txt"), "x").unwrap();

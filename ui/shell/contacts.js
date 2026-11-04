@@ -442,6 +442,7 @@ export function addDialog(prefill = '') {
       };
       ok.addEventListener('click', async () => {
         if (!parsed || parsed.kind !== 'contact') return;
+        seq++; // запоздавшая проверка кода не затрёт ответ на «Добавить»
         setBusy(true, `Связываемся с «${parsed.name || 'собеседником'}»…`);
         try {
           await call('contact_add', { code: ta.value.trim(), name: nm.value.trim() });
@@ -474,6 +475,8 @@ export function addDialog(prefill = '') {
           .then((t) => {
             if (!ta.value && /^\s*(zv4c:|zvonochek:\/\/contact)/.test(t || '')) {
               ta.value = t.trim();
+              // выделен: вставка по привычке (Ctrl+V) заменит код, а не допишет второй
+              ta.select();
               check();
             }
           })

@@ -79,14 +79,29 @@ await step('B: добавить по коду (из буфера)', async () => 
 });
 
 await step('повторное добавление — ошибка в диалоге', async () => {
-  await B.page.click('#ctAddBtn');
-  await B.page.fill('.dialog textarea', code);
-  await B.page.waitForFunction(() => document.querySelector('.dialog .hint')?.textContent.includes('Приглашение'));
-  await B.page.click('.dialog .actions .btn.primary');
-  await B.page.waitForFunction(() => document.querySelector('.dialog .hint.bad')?.textContent.includes('Уже в контактах'), null, {
-    timeout: 5000,
-  });
-  await B.page.keyboard.press('Escape');
+  // что видно в диалогах — для сообщения об ошибке
+  const seen = () =>
+    B.page.evaluate(() =>
+      [...document.querySelectorAll('.dialog')]
+        .map((d) => `«${d.querySelector('.hint')?.textContent ?? '—'}» ta=${(d.querySelector('textarea')?.value || '').slice(0, 8)}`)
+        .join(' | ')
+    );
+  const want = async (fn, what, timeout) => {
+    try {
+      await B.page.waitForFunction(fn, null, { timeout });
+    } catch {
+      throw new Error(`нет «${what}»: ${await seen()}`);
+    }
+  };
+  try {
+    await B.page.click('#ctAddBtn');
+    await B.page.fill('.dialog textarea', code);
+    await want(() => document.querySelector('.dialog .hint')?.textContent.includes('Приглашение'), 'Приглашение', 10000);
+    await B.page.click('.dialog .actions .btn.primary');
+    await want(() => document.querySelector('.dialog .hint.bad')?.textContent.includes('Уже в контактах'), 'Уже в контактах', 5000);
+  } finally {
+    await B.page.keyboard.press('Escape');
+  }
 });
 
 await step('«в сети» у обоих', async () => {

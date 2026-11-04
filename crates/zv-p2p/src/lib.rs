@@ -51,6 +51,9 @@ const PENDING_MAX: usize = 512;
 const ENSURE_EVERY_MS: u64 = 25_000;
 /// Что принимается до допуска (ядро проверит доказательства).
 const PRE_AUTH: [&str; 5] = ["bind", "contact_req", "contact_offer", "ping", "pong"];
+/// Остальные кадры до допуска ждут его (ядро допускает чуть позже `LinkUp`): не больше стольких.
+const HELD_MAX: usize = 64;
+const HELD_BYTES: usize = 1 << 20;
 /// libp2p: пустой кадр `pk4` раз в 10 с простоя; тишина 35 с — путь мёртв (поток Yamux не всегда
 /// узнаёт о гибели своего соединения).
 const LP_KEEPALIVE_MS: u64 = 10_000;
@@ -177,6 +180,8 @@ struct Link {
     primary: AtomicU64,
     /// Кадры, пока нет ни одного пути.
     pending: Mutex<VecDeque<Bytes>>,
+    /// Входящие кадры до допуска (и их объём): отдаём ядру при допуске (`admit`).
+    held: Mutex<(VecDeque<Value>, usize)>,
     /// Когда последний раз пробовали добавить путь iroh / libp2p.
     tried: Mutex<[u64; 2]>,
     /// Неудачных попыток подряд (интервал повтора удваивается).
@@ -219,6 +224,15 @@ pub fn encode_frame(v: &Value) -> Bytes {
     b.extend_from_slice(&(body.len() as u32).to_be_bytes());
     b.extend_from_slice(&body);
     Bytes::from(b)
+}
+
+/// Случайный ID сеанса узла (не секрет — только отличить перезапуск собеседника).
+fn session_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u64(now_ms());
+    h.write_u32(std::process::id());
+    format!("{:016x}", h.finish())
 }
 
 fn is_hello4(v: &Value) -> bool {
@@ -305,6 +319,10 @@ impl Node {
         hello.insert("t".into(), json!("hello4"));
         hello.insert("proto".into(), json!(PROTO));
         hello.insert("mp".into(), json!(1));
+        // о закрытии линка поверх libp2p сообщаем кадром `lc4` (см. close_paths)
+        hello.insert("lc".into(), json!(1));
+        // сеанс узла: другой `s` от того же ID — собеседник перезапустился (см. attach)
+        hello.insert("s".into(), json!(session_id()));
         // транспорты этой стороны: недостающий путь не дозваниваем, если у собеседника он выключен
         let tr: Vec<&str> = [(ep.is_some(), "iroh"), (lp.is_some(), "libp2p")]
             .into_iter()
@@ -422,7 +440,7 @@ impl Node {
                     && l.alive.load(Ordering::Relaxed)
                     && l.authorized.load(Ordering::Relaxed)
             })
-            .max_by_key(|l| l.id)
+            .max_by_key(|l| (!l.closing.load(Ordering::Relaxed), l.id))
             .map(|l| l.id)
     }
 
@@ -451,7 +469,7 @@ impl Node {
 
     pub fn authorize(&self, link: LinkId) {
         if let Some(l) = self.inner.get(link) {
-            l.authorized.store(true, Ordering::Relaxed);
+            self.inner.admit(&l);
         }
     }
 
@@ -720,6 +738,7 @@ impl Inner {
             probe: AtomicU64::new(0),
         });
         let mp = remote.get("mp").is_some();
+        let mut stale = None;
         let (link, created) = {
             let mut links = lock(&self.links);
             let found = mp
@@ -735,6 +754,15 @@ impl Inner {
                         .cloned()
                 })
                 .flatten();
+            // другой сеанс (`s` в hello4) — собеседник перезапустился: пути прежнего линка мёртвые,
+            // а их таймаут — десятки секунд тишины. Прежний линк закрываем, новому сеансу — новый линк
+            let found = match found {
+                Some(l) if lock(&l.remote).get("s") != remote.get("s") => {
+                    stale = Some(l);
+                    None
+                }
+                f => f,
+            };
             let (l, created) = match found {
                 Some(l) => (l, false),
                 None => {
@@ -754,6 +782,7 @@ impl Inner {
                         paths: Mutex::new(Vec::new()),
                         primary: AtomicU64::new(0),
                         pending: Mutex::new(VecDeque::new()),
+                        held: Mutex::new((VecDeque::new(), 0)),
                         tried: Mutex::new([0; 2]),
                         fails: Mutex::new([0; 2]),
                     });
@@ -764,8 +793,12 @@ impl Inner {
             lock(&l.paths).push(path.clone());
             (l, created)
         };
+        if let Some(old) = stale {
+            tracing::debug!("p2p: собеседник перезапустился — линк {} закрыт", old.id);
+            self.close_paths(&old, 0, "restart");
+        }
         if outbound {
-            link.authorized.store(true, Ordering::Relaxed);
+            self.admit(&link);
         }
         if !created {
             *lock(&link.remote) = remote.clone();
@@ -855,6 +888,7 @@ impl Inner {
         let me = self.clone();
         tokio::spawn(async move {
             let mut dropped = false;
+            let mut peer_closed = false;
             let (mut reason, mut explicit) = loop {
                 let f = tokio::select! {
                     f = read_frame(&mut recv) => f,
@@ -868,6 +902,9 @@ impl Inner {
                     Ok(Some(v)) if v.get("t").and_then(|t| t.as_str()) == Some("path_drop4") => {
                         dropped = true;
                     }
+                    Ok(Some(v)) if v.get("t").and_then(|t| t.as_str()) == Some("lc4") => {
+                        peer_closed = true;
+                    }
                     Ok(Some(v)) if v.get("t").and_then(|t| t.as_str()) == Some("pk4") => {
                         if v.get("q").is_some()
                             && let Some(tx) = lock(&path.tx).as_ref()
@@ -876,7 +913,16 @@ impl Inner {
                         }
                     }
                     Ok(Some(v)) => me.on_frame(&link, v),
-                    Ok(None) => break ("поток закрыт".to_string(), !dropped),
+                    // libp2p: конец потока бывает и при обрыве (релейное соединение закрыто после DCUtR) —
+                    // закрытие линка собеседник с `lc` объявляет кадром `lc4`, иначе ждём переподключения
+                    Ok(None) => {
+                        let lc =
+                            matches!(path.tr, Tr::Lp(_)) && lock(&link.remote).get("lc").is_some();
+                        break (
+                            "поток закрыт".to_string(),
+                            if lc { peer_closed } else { !dropped },
+                        );
+                    }
                     Err(e) => break (e.to_string(), false),
                 }
             };
@@ -913,14 +959,37 @@ impl Inner {
             *lock(&l.remote) = v;
             return;
         }
-        if !l.authorized.load(Ordering::Relaxed) && !PRE_AUTH.contains(&t) {
-            return;
+        if !PRE_AUTH.contains(&t) && !l.authorized.load(Ordering::Acquire) {
+            let mut h = lock(&l.held);
+            // admit() отдаёт очередь и ставит флаг под этим же замком — порядок кадров сохраняется
+            if !l.authorized.load(Ordering::Acquire) {
+                let n = serde_json::to_vec(&v).map_or(0, |b| b.len());
+                if h.0.len() < HELD_MAX && h.1 + n <= HELD_BYTES {
+                    h.1 += n;
+                    h.0.push_back(v);
+                }
+                return;
+            }
         }
         let _ = self.events.send(Event::Msg {
             link: l.id,
             peer: l.peer_s.clone(),
             msg: v,
         });
+    }
+
+    /// Допустить линк: кадры, пришедшие до допуска, — ядру, по порядку.
+    fn admit(&self, l: &Link) {
+        let mut h = lock(&l.held);
+        for msg in h.0.drain(..) {
+            let _ = self.events.send(Event::Msg {
+                link: l.id,
+                peer: l.peer_s.clone(),
+                msg,
+            });
+        }
+        h.1 = 0;
+        l.authorized.store(true, Ordering::Release);
     }
 
     fn score(&self, p: &Path) -> u8 {
@@ -1100,7 +1169,14 @@ impl Inner {
         if ps.is_empty() {
             self.link_down(l, reason.to_string());
         }
+        let lc = lock(&l.remote).get("lc").is_some();
         for p in ps {
+            if lc
+                && matches!(p.tr, Tr::Lp(_))
+                && let Some(tx) = lock(&p.tx).as_ref()
+            {
+                let _ = tx.send(encode_frame(&json!({"t": "lc4"})));
+            }
             self.kill_path(&p, code, reason);
         }
     }
@@ -1160,6 +1236,7 @@ impl Inner {
             links.remove(&l.id);
         }
         lock(&l.pending).clear();
+        *lock(&l.held) = (VecDeque::new(), 0);
         let _ = self.events.send(Event::LinkDown {
             link: l.id,
             peer: l.peer_s.clone(),
@@ -1527,6 +1604,8 @@ mod tests {
         assert_eq!(m["t"], "bind");
         assert_eq!(b.peer_of(lb).as_deref(), Some(a.id()));
         b.authorize(lb);
+        let (_, m) = next_msg(&mut brx).await;
+        assert_eq!(m["t"], "secret");
         b.send(lb, &json!({"t": "pong", "n": 1}));
         let (_, m) = next_msg(&mut arx).await;
         assert_eq!(m["t"], "pong");
@@ -1563,8 +1642,11 @@ mod tests {
         drop((s, r));
         w.await.unwrap();
         assert_eq!(a.path(la).0, "direct");
+        // закрытие объявлено кадром `lc4` — собеседник не ждёт переподключения (GRACE)
+        let t0 = std::time::Instant::now();
         a.close_link(la, "test");
         wait_down(&mut brx, lb).await;
+        assert!(t0.elapsed() < Duration::from_secs(2), "{:?}", t0.elapsed());
     }
 
     #[tokio::test]
@@ -1752,13 +1834,15 @@ mod tests {
         let (b, mut brx) = node(2).await;
         let hint = b.addr_json();
         let la = a.connect(b.id(), Some(&hint)).await.unwrap();
-        // до допуска проходит только bind
+        // до допуска проходит только bind, остальное ждёт допуска
         a.send(la, &json!({"t": "secret"}));
         a.send(la, &json!({"t": "bind", "r": "x"}));
         let (lb, m) = next_msg(&mut brx).await;
         assert_eq!(m["t"], "bind");
         assert_eq!(b.peer_of(lb).as_deref(), Some(a.id()));
         b.authorize(lb);
+        let (_, m) = next_msg(&mut brx).await;
+        assert_eq!(m["t"], "secret");
         b.send(lb, &json!({"t": "pong", "n": 1}));
         let (_, m) = next_msg(&mut arx).await;
         assert_eq!(m["t"], "pong");
@@ -1913,6 +1997,55 @@ mod tests {
         let got = r.read_to_end(4 << 20).await.unwrap();
         assert_eq!(got.len(), 1 << 20);
         assert!(got.iter().all(|&x| x == 7));
+    }
+
+    /// Собеседник перезапустился (тот же ключ, другой `s`), а старые пути у нас ещё «живы»:
+    /// старый линк закрывается сразу, новый сеанс — отдельный линк; кадры до допуска не теряются.
+    #[tokio::test]
+    async fn peer_restart_new_link() {
+        // старый процесс — только libp2p, новый — только iroh: два сеанса одного ключа не путают транспорт
+        let (a1, _a1rx) = node_with(31, false, Some(LpConfig::local())).await;
+        let (b, mut brx) = node_with(32, true, Some(LpConfig::local())).await;
+        let hint = hint_with_l(&b, "/tcp/").await;
+        a1.connect(b.id(), Some(&hint)).await.unwrap();
+        let lb1 = loop {
+            if let Event::LinkUp { link, .. } =
+                tokio::time::timeout(Duration::from_secs(10), brx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap()
+            {
+                break link;
+            }
+        };
+        b.authorize(lb1);
+        let (a2, _a2rx) = node_with(31, true, None).await;
+        assert_eq!(a2.id(), a1.id());
+        let l2 = a2.connect(b.id(), Some(&b.addr_json())).await.unwrap();
+        a2.send(l2, &json!({"t": "x"}));
+        let (mut up, mut down) = (None, false);
+        let t0 = std::time::Instant::now();
+        while up.is_none() || !down {
+            match tokio::time::timeout(Duration::from_secs(5), brx.recv())
+                .await
+                .unwrap()
+                .unwrap()
+            {
+                Event::LinkUp { link, .. } => up = Some(link),
+                Event::LinkDown { link, .. } => {
+                    assert_eq!(link, lb1);
+                    down = true;
+                }
+                _ => {}
+            }
+        }
+        assert!(t0.elapsed() < Duration::from_secs(3), "{:?}", t0.elapsed());
+        let lb2 = up.unwrap();
+        assert_ne!(lb2, lb1);
+        b.authorize(lb2);
+        let (l, m) = next_msg(&mut brx).await;
+        assert_eq!((l, m["t"].as_str()), (lb2, Some("x")));
+        assert_eq!(b.link_for(a2.id()), Some(lb2));
     }
 
     #[tokio::test]

@@ -17,7 +17,7 @@ pub(crate) enum ConnCmd {
 pub(crate) enum ConnEvent {
     Connected(u64),
     Data(u64, String),
-    PeerJoined(#[allow(dead_code)] u64),
+    PeerJoined,
     Closed(u64),
 }
 
@@ -209,7 +209,7 @@ impl<S: Spawner> Rotator<S> {
                     self.check_budget();
                 }
             }
-            ConnEvent::PeerJoined(_) => out.push(Out::PeerJoined),
+            ConnEvent::PeerJoined => out.push(Out::PeerJoined),
             ConnEvent::Closed(id) => {
                 if self.active.as_ref().map(|a| a.id) == Some(id) {
                     self.active = None;

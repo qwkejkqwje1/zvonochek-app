@@ -7,7 +7,7 @@
 //! ни серверы, ни другие контакты прочитать или подделать его не могут.
 
 use crate::model::{Contact, HistoryEntry, INVITE_TTL_MS, Invite};
-use crate::{Incoming, Inner, RoomRole, ok, s};
+use crate::{Incoming, Inner, RoomRole, s};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
@@ -1544,9 +1544,4 @@ async fn out_pump(w: Weak<Inner>, topic: String, mut rx: mpsc::UnboundedReceiver
             _ => {}
         }
     }
-}
-
-#[allow(dead_code)]
-fn _assert_ok() -> Result<Value, String> {
-    ok(1)
 }

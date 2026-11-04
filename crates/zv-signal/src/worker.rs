@@ -123,7 +123,7 @@ async fn ws_conn(
                             && let Ok(v) = serde_json::from_str::<serde_json::Value>(s)
                             && v.get("type").and_then(|x| x.as_str()) == Some("sys:peer_joined")
                         {
-                            let _ = ev.send(ConnEvent::PeerJoined(id));
+                            let _ = ev.send(ConnEvent::PeerJoined);
                             continue;
                         }
                         bytes.fetch_add(s.len(), Ordering::Relaxed);

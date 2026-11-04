@@ -27,8 +27,13 @@ cp "$TMP"/icons/* "$OUT/icons/"
 sed "s/__WEBVER__/$VER/g" "$ROOT/ui/desktop/signaling.js" > "$OUT/signaling.js"
 # проверка: интерфейс Signaling, который зовёт app.js, не изменился
 grep -q "import { Signaling } from './signaling.js?v=$VER'" "$OUT/app.js" || { echo "app.js импортирует signaling иначе — проверь мост" >&2; exit 1; }
-for api in "S.sig.start()" "S.sig.onTransportUp" "sendByeBeacon" "deliveryStats"; do
+for api in "S.sig.start()" "S.sig.onTransportUp" "sendByeBeacon"; do
   grep -qF "$api" "$OUT/app.js" || { echo "app.js больше не использует $api — проверь мост" >&2; exit 1; }
+done
+# всё, что app.js зовёт у сигнализации (S.sig.X), должно быть в мосте (метод или поле)
+for api in $(grep -oE 'S\.sig\??\.[A-Za-z_]+' "$OUT/app.js" | sed -E 's/.*\.//' | sort -u); do
+  grep -qE "^  (async )?$api\(|this\.$api = " "$ROOT/ui/desktop/signaling.js" ||
+    { echo "app.js зовёт S.sig.$api — в мосте (ui/desktop/signaling.js) его нет" >&2; exit 1; }
 done
 printf 'commit=%s\nver=%s\nsource=https://github.com/ZVONochek/zvonochek.github.io\n' "$COMMIT" "$VER" > "$OUT/WEB_VERSION"
 echo "ui/web ← $COMMIT (v$VER)"
