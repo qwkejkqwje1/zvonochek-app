@@ -128,6 +128,12 @@ await step('приложение → сайт', async () => {
   await send(chat, 'ответ из приложения');
   await waitText(web, 'ответ из приложения');
 });
+await step('файлы: приложение → сайт и сайт → приложение (HTTP к Worker через ядро)', async () => {
+  await chat.setInputFiles('#chatFileInput', { name: 'iz-prilozheniya.txt', mimeType: 'text/plain', buffer: Buffer.from('файл из приложения\n'.repeat(2000)) });
+  await waitText(web, 'iz-prilozheniya.txt');
+  await web.setInputFiles('#chatFileInput', { name: 'iz-brauzera.txt', mimeType: 'text/plain', buffer: Buffer.from('файл из браузера\n'.repeat(2000)) });
+  await waitText(chat, 'iz-brauzera.txt');
+});
 await step('основной канал (WebSocket через ядро), не резервный', async () => {
   const [s, fb, native] = [await status(chat), await fallback(chat), await chat.evaluate(() => /native code/.test(String(WebSocket)))];
   console.log(`   статус приложения «${s.trim()}», резерв: ${fb}`);

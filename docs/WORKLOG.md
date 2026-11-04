@@ -101,6 +101,17 @@
   недоступна. E2E devhost-contacts/chats/groups проходят. Не проверено: UPnP, домашние NAT, Android.
   Релиз v4.1.0 опубликован (exe x64 29,5 МБ, ARM64 26,8 МБ; подпись обновления проверена ключом из `KEYS_HEX`);
   строка про APK в тексте релиза — только когда подписанный APK загружен (android.yml).
+- [x] Ключ подписи Android (4 ноября): PKCS12 RSA-4096, псевдоним `zvonochek`, до 2054 г.; секреты
+  ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS; резервная копия — у владельца (без неё
+  обновить APK поверх нельзя). android.yml: ручной запуск с `release_tag` — APK из тега в выпущенный релиз
+  (так APK 4.1.0 попал в v4.1.0).
+- [x] 4.2: туннель звонка (ADR-0008, `zv-core/src/tunnel.rs`): кандидат ICE ядра, датаграммы `T`, кадры `tun`,
+  через libp2p-релей медиа не гоним; настройка «Звонки через P2P-туннель». E2E `tests/e2e/devhost-tunnel.mjs`
+  (2 devhost, 4 сценария: только туннель iroh/libp2p, обычный звонок, туннель выключен) проходит.
+- [x] 4.2: чаты сайта `#chat=` (ADR-0009): окно встроенного веб-клиента (`host_open_chat`; ПК — окно `webchat`,
+  Android — главное окно), прокси WebSocket в ядре (`zv-core/src/wsproxy.rs`, `ws_open/ws_send/ws_close/ws_keep`),
+  подмена `WebSocket` и `serviceWorker.ready` в preload.js. Живой E2E `tests/e2e/live-webchat.mjs` (сайт ↔ окно
+  «Чаты сайта» devhost): сообщения в обе стороны за ~0,5 с, основной канал. Не проверено: Android, PIN-комнаты, файлы.
 
 ## Решения по ходу
 - ADR-0007: libp2p — второй транспорт с тем же ключом устройства; линк — логический, из путей iroh и libp2p,

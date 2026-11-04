@@ -335,6 +335,8 @@
     };
     if (document.readyState === 'loading') addEventListener('DOMContentLoaded', () => setTimeout(toChats, 0));
     else setTimeout(toChats, 0);
+    // Android: карточку входящего звонка показывает оболочка — вернуться в неё
+    if (boot.mobile) window.__zvIpc.on('call:incoming', () => window.__zvIpc.call('host_call_done', {}).catch(() => {}));
     // Android «Назад»: из открытого чата — к списку, из списка — в оболочку
     window.__zvBack = () => {
       const back = document.querySelector('#chatBack');

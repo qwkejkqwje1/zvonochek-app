@@ -96,7 +96,9 @@ pub fn open_call(app: &AppHandle, secret: &str, boot: Value) -> Result<Value, St
 
 /// Веб-чаты сайта (`#chat=`): встроенный веб-клиент в том же окне; «Назад» из списка чатов —
 /// `host_call_done` (звонка нет — просто обратно в оболочку).
-pub fn open_chat(app: &AppHandle, hash: &str, boot: Value) -> Result<Value, String> {
+pub fn open_chat(app: &AppHandle, hash: &str, mut boot: Value) -> Result<Value, String> {
+    // входящий звонок показывает оболочка: страница чатов вернётся в неё (preload.js)
+    boot["mobile"] = json!(true);
     let st = app.state::<AppState>();
     if st.current_call.lock().unwrap().is_some() {
         return Err("идёт звонок — чаты сайта откроются после него".into());
