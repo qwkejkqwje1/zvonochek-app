@@ -13,7 +13,7 @@ futures = "0.3"
 hickory-resolver = { version = "0.26", default-features = false }
 hkdf = "0.13.0"
 hmac = "0.13.0"
-libp2p = { version = "0.57.1", default-features = false, features = ["tokio", "tcp", "quic", "dns", "noise", "yamux", "identify", "ping", "kad", "relay", "dcutr", "autonat", "upnp", "mdns", "macros", "ed25519"] }
+libp2p = { version = "0.57.1", default-features = false, features = ["tokio", "tcp", "quic", "dns", "noise", "yamux", "identify", "ping", "kad", "relay", "dcutr", "autonat", "upnp", "mdns", "macros", "ed25519", "rsa"] }
 libp2p-stream = "0.5.0-alpha"
 iroh = { version = "1.4.1", default-features = false, features = ["tls-ring", "portmapper"] }
 serde = { version = "1.0.229", features = ["derive"] }

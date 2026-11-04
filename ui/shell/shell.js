@@ -898,7 +898,7 @@ function diagP2p(p) {
             p.libp2p.upnp !== 'off' ? `UPnP ${p.libp2p.upnp}` : null,
             `ретрансляторов ${(p.libp2p.relays || []).filter((r) => r.ok).length}`,
             `адресов ${((p.addr && p.addr.l) || []).length}`,
-            `DHT ${p.libp2p.dht}`,
+            `DHT ${p.libp2p.dht}${p.libp2p.record === 'ok' ? ' ✓' : ''}`,
             p.libp2p.lan ? `рядом ${p.libp2p.lan}` : null,
           ]
             .filter(Boolean)

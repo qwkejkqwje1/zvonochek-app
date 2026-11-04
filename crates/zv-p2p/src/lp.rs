@@ -112,6 +112,8 @@ struct St {
     /// релей → резерв подтверждён
     relays: HashMap<PeerId, bool>,
     dht: usize,
+    /// Запись присутствия в DHT: "" · "…" · "ok" · "ошибка".
+    record: &'static str,
     lan: HashMap<PeerId, Vec<Multiaddr>>,
 }
 
@@ -506,6 +508,7 @@ impl Lp {
             "external": st.external.iter().take(8).map(|a| a.to_string()).collect::<Vec<_>>(),
             "relays": st.relays.iter().map(|(p, ok)| json!({"id": short(p), "ok": ok})).collect::<Vec<_>>(),
             "dht": st.dht,
+            "record": st.record,
             "peers": st.conns.len(),
             "lan": st.lan.len(),
         })
@@ -684,6 +687,7 @@ impl Driver {
                     );
                     m.values().any(|c| c.relayed) && m.values().any(|c| !c.relayed)
                 };
+                tracing::trace!("libp2p: соединение с {peer_id}, релей: {relayed}");
                 for d in self.dials.remove(&peer_id).unwrap_or_default() {
                     let _ = d.send(Ok(()));
                 }
@@ -709,6 +713,7 @@ impl Driver {
                 error,
                 ..
             } => {
+                tracing::trace!("libp2p: {p}: не соединились: {error}");
                 if !self.sw.is_connected(&p) && !self.finds.values().any(|x| *x == p) {
                     self.fail_dials(p, error.to_string());
                 }
@@ -918,10 +923,9 @@ impl Driver {
                 }
             }
             kad::QueryResult::StartProviding(r) => {
-                tracing::debug!(
-                    "libp2p: запись в DHT: {}",
-                    if r.is_ok() { "ok" } else { "ошибка" }
-                );
+                let s = if r.is_ok() { "ok" } else { "ошибка" };
+                tracing::debug!("libp2p: запись в DHT: {s}");
+                self.lock().record = s;
             }
             _ => {}
         }
@@ -948,8 +952,9 @@ impl Driver {
         if due && let Some(k) = self.sw.behaviour_mut().kad.as_mut() {
             self.provided = Some(Instant::now());
             self.ext_changed = false;
-            if let Err(e) = k.start_providing(presence_key(&self.me)) {
-                tracing::debug!("libp2p: DHT: {e}");
+            match k.start_providing(presence_key(&self.me)) {
+                Ok(_) => self.lock().record = "…",
+                Err(e) => tracing::debug!("libp2p: DHT: {e}"),
             }
         }
         if self.failed.len() > 64 {

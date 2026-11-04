@@ -392,7 +392,14 @@ impl Node {
             }
             Err(anyhow::anyhow!(errs.join("; ")))
         };
-        tokio::time::timeout(CONNECT_TIMEOUT, first)
+        // у каждого транспорта свои тайм-ауты (libp2p ищет в DHT дольше); здесь — только страховка
+        let wait = if self.inner.lp.is_some() {
+            LP_CONNECT_TIMEOUT
+        } else {
+            CONNECT_TIMEOUT
+        } + HELLO_TIMEOUT
+            + Duration::from_secs(2);
+        tokio::time::timeout(wait, first)
             .await
             .map_err(|_| anyhow::anyhow!("нет ответа"))?
     }
@@ -1821,7 +1828,7 @@ mod tests {
             let relay = lp["relays"]
                 .as_array()
                 .is_some_and(|r| r.iter().any(|x| x["ok"] == true));
-            if relay || t0.elapsed() > Duration::from_secs(120) {
+            if (relay && lp["record"] == "ok") || t0.elapsed() > Duration::from_secs(180) {
                 println!("a через {:?}: {lp}", t0.elapsed());
                 break;
             }
